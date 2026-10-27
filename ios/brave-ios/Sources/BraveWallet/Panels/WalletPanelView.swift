@@ -238,8 +238,8 @@ struct WalletPanelView: View {
   }
 
   @State private var ethPermittedAccounts: [String] = []
+  @State private var solPermittedAccounts: [String] = []
   @State private var cardanoPermittedAccounts: [String] = []
-  @State private var isConnectHidden: Bool = false
 
   enum ConnectionStatus {
     case connected
@@ -275,7 +275,7 @@ struct WalletPanelView: View {
       if !allowSolProviderAccess.value {
         return .blocked
       } else {
-        return tabDappStore.solConnectedAddresses.contains(selectedAccountDAppPermissionId)
+        return solPermittedAccounts.contains(selectedAccountDAppPermissionId)
           ? .connected : .disconnected
       }
     case .ada:
@@ -304,10 +304,11 @@ struct WalletPanelView: View {
             handler: { accounts in
               if keyringStore.selectedAccount.coin == .eth {
                 ethPermittedAccounts = accounts
+              } else if keyringStore.selectedAccount.coin == .sol {
+                solPermittedAccounts = accounts
               } else if keyringStore.selectedAccount.coin == .ada {
                 cardanoPermittedAccounts = accounts
               }
-              isConnectHidden = isConnectButtonHidden()
             }
           )
         )
@@ -411,33 +412,6 @@ struct WalletPanelView: View {
     .accessibilityLabel(Strings.Wallet.otherWalletActionsAccessibilityTitle)
   }
 
-  /// A boolean value indicates to hide or unhide `Connect` button
-  private func isConnectButtonHidden() -> Bool {
-    let account = keyringStore.selectedAccount
-    switch account.coin {
-    case .eth:
-      return false
-    case .sol:
-      for domain in Domain.allDomainsWithWalletPermissions(for: .sol) {
-        if let accounts = domain.wallet_solanaPermittedAcccounts, !accounts.isEmpty {
-          return false
-        }
-      }
-      return true
-    case .ada:
-      for domain in Domain.allDomainsWithWalletPermissions(for: .ada) {
-        if let accounts = domain.wallet_cardanoPermittedAccounts, !accounts.isEmpty {
-          return false
-        }
-      }
-      return true
-    case .fil, .btc, .zec, .dot:
-      return true
-    default:
-      return true
-    }
-  }
-
   var body: some View {
     ScrollView(.vertical, showsIndicators: false) {
       VStack(spacing: 0) {
@@ -499,9 +473,7 @@ struct WalletPanelView: View {
           HStack {
             VStack(alignment: .leading) {
               networkPickerButton
-              if !isConnectHidden {
-                connectButton
-              }
+              connectButton
             }
             Spacer()
           }
@@ -608,9 +580,6 @@ struct WalletPanelView: View {
         }
       }
     }
-    .onChange(of: keyringStore.selectedAccount) { _, _ in
-      isConnectHidden = isConnectButtonHidden()
-    }
     .onChange(of: tabDappStore.latestPendingPermissionRequest) { _, newValue in
       if let request = newValue, request.requestingOrigin == origin,
         request.coinType == keyringStore.selectedAccount.coin
@@ -622,7 +591,7 @@ struct WalletPanelView: View {
               if request.coinType == .eth {
                 ethPermittedAccounts = accounts
               } else if request.coinType == .sol {
-                isConnectHidden = false
+                solPermittedAccounts = accounts
               } else if request.coinType == .ada {
                 cardanoPermittedAccounts = accounts
               }
@@ -651,7 +620,7 @@ struct WalletPanelView: View {
               if request.coinType == .eth {
                 ethPermittedAccounts = accounts
               } else if request.coinType == .sol {
-                isConnectHidden = false
+                solPermittedAccounts = accounts
               } else if request.coinType == .ada {
                 cardanoPermittedAccounts = accounts
               }
@@ -671,12 +640,13 @@ struct WalletPanelView: View {
         if let ethAccounts = Domain.walletPermissions(forUrl: url, coin: .eth) {
           ethPermittedAccounts = ethAccounts
         }
+        if let solAccounts = Domain.walletPermissions(forUrl: url, coin: .sol) {
+          solPermittedAccounts = solAccounts
+        }
         if let cardanoAccounts = Domain.walletPermissions(forUrl: url, coin: .ada) {
           cardanoPermittedAccounts = cardanoAccounts
         }
       }
-
-      isConnectHidden = isConnectButtonHidden()
 
       accountActivityStore.update()
     }
