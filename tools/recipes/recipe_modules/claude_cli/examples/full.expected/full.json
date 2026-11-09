@@ -24,6 +24,10 @@
       "[WORKSPACE]/rc/claude/claude.jsonl",
       "--logs",
       "[WORKSPACE]/rc/claude",
+      "--must-read",
+      "[WORKSPACE]/b/src/brave/tools/cr/autolift/SKILL.md",
+      "--report",
+      "[WORKSPACE]/rc/claude/report.md",
       "--",
       "claude",
       "--print",
@@ -35,13 +39,18 @@
       "--verbose",
       "--add-dir",
       "[WORKSPACE]/b/src",
+      "--add-dir",
+      "[WORKSPACE]/rc/tmp",
       "--allowedTools",
       "Edit(/[WORKSPACE]/b/src/**)",
-      "Write(/[WORKSPACE]/b/src/**)"
+      "Write(/[WORKSPACE]/b/src/**)",
+      "Edit(/[WORKSPACE]/rc/tmp/**)",
+      "Write(/[WORKSPACE]/rc/tmp/**)"
     ],
     "env": {
       "CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR": "1",
-      "CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS": "0"
+      "CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS": "0",
+      "CLAUDE_CODE_TMPDIR": "[WORKSPACE]/rc/tmp"
     },
     "name": "claude"
   },
