@@ -1,0 +1,53 @@
+name: NG Browser Build Pipeline (Brave-Core)
+
+on:
+  push:
+    branches: [ main, 1.97.x ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-ng-browser:
+    name: Build NG Browser (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    steps:
+      - name: Checkout NGBrowser Codebase
+        uses: actions/checkout@v4
+        with:
+          repository: NayaGramPlatform/NGBrowser
+          ref: main
+          submodules: recursive
+          token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js Environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+
+      - name: Install Depot Tools & Chromium Environment
+        run: |
+          git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git
+          echo "$GITHUB_WORKSPACE/depot_tools" >> $GITHUB_PATH
+
+      - name: Apply Brave-Core Chromium Patches (1,000+ Patches)
+        run: |
+          npm install
+          npm run apply_patches
+
+      - name: Generate GN Build Configuration
+        run: |
+          gn gen out/Release --args='is_official_build=true brave_project_name="NG Browser" enable_brave_shields=true'
+
+      - name: Compile Native Binary with Ninja
+        run: |
+          autoninja -C out/Release brave
+
+      - name: Upload Installer Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NG-Browser-${{ matrix.os }}
+          path: out/Release/NG-Browser*
