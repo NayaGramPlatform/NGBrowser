@@ -1,0 +1,15 @@
+# Copyright (c) 2026 The Brave Authors. All rights reserved.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this file,
+# You can obtain one at https://mozilla.org/MPL/2.0/.
+
+substitutions:
+  - description: |-
+      Create BraveBrowserFrameViewMac instead of BrowserFrameViewMac
+
+      The Brave subclass is declared in
+      brave/browser/ui/views/frame/brave_browser_frame_view_mac.h, which is
+      included by the chromium_src override.
+    regex:
+      pattern: 'std::make_unique<BrowserFrameViewMac>('
+      replace: 'std::make_unique<BraveBrowserFrameViewMac>('

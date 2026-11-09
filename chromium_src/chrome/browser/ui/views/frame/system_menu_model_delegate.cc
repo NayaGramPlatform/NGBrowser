@@ -14,40 +14,4 @@
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/frame/vertical_tab_strip_region_view.h"
 
-#define IsCommandIdChecked IsCommandIdChecked_ChromiumImpl
-#define GetLabelForCommandId GetLabelForCommandId_ChromiumImpl
-
 #include <chrome/browser/ui/views/frame/system_menu_model_delegate.cc>
-
-#undef GetLabelForCommandId
-#undef IsCommandIdChecked
-
-bool SystemMenuModelDelegate::IsCommandIdChecked(int command_id) const {
-  if (command_id == IDC_TOGGLE_VERTICAL_TABS) {
-    auto* vtc = VerticalTabController::From(browser_);
-    return vtc && vtc->ShouldShowBraveVerticalTabs();
-  }
-  if (command_id == IDC_TOGGLE_FOCUS_MODE) {
-    return IsFocusModeEnabled(browser_);
-  }
-  return IsCommandIdChecked_ChromiumImpl(command_id);
-}
-
-std::u16string SystemMenuModelDelegate::GetLabelForCommandId(
-    int command_id) const {
-  if (command_id == IDC_TOGGLE_VERTICAL_TABS) {
-    // We're reusing upstream's |IDC_TOGGLE_VERTICAL_TABS| command id and it's
-    // added to system menu from
-    // BraveSystemMenuModelBuilder::InsertBraveSystemMenuForBrowserWindow(). As
-    // upstream made this command as dynamic, its label is fetched from this
-    // method. Upstream's GetLabelForCommandId() refers
-    // tabs::VerticalTabStripStateController::From(browser_) to get label for
-    // current vertical tab state. However,
-    // tabs::VerticalTabStripStateController::From(browser_) is null now as
-    // we're not using upstream's vertical tab implementation.
-    if (!tabs::VerticalTabStripStateController::From(browser_)) {
-      return l10n_util::GetStringUTF16(IDS_TAB_CXMENU_SHOW_VERTICAL_TABS);
-    }
-  }
-  return GetLabelForCommandId_ChromiumImpl(command_id);
-}

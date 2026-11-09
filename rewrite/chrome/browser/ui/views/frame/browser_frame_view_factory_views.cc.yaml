@@ -1,0 +1,40 @@
+# Copyright (c) 2026 The Brave Authors. All rights reserved.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this file,
+# You can obtain one at https://mozilla.org/MPL/2.0/.
+
+substitutions:
+  - description: |-
+      Create BraveBrowserFrameViewWin for the native frame on Windows
+
+      The Brave headers are included by the chromium_src shadow of this file.
+    regex:
+      pattern: 'std::make_unique<BrowserFrameViewWin>('
+      replace: 'std::make_unique<BraveBrowserFrameViewWin>('
+  - description: |-
+      Create BraveOpaqueBrowserFrameView for the opaque frame on Windows
+
+      Brave customizes the opaque frame view used when the native frame is not
+      used.
+    regex:
+      pattern: 'std::make_unique<OpaqueBrowserFrameView>('
+      replace: 'std::make_unique<BraveOpaqueBrowserFrameView>('
+  - description: |-
+      Return BraveOpaqueBrowserFrameView from the Linux opaque frame factory
+
+      BrowserFrameViewLinux derives from BraveOpaqueBrowserFrameView, so the
+      factory result type must match (checked by a static_assert in the shadow).
+    regex:
+      pattern:
+        'std::unique_ptr<OpaqueBrowserFrameView>
+        CreateOpaqueBrowserFrameViewLinux('
+      replace:
+        'std::unique_ptr<BraveOpaqueBrowserFrameView>
+        CreateOpaqueBrowserFrameViewLinux('
+  - description: |-
+      Create BraveBrowserFrameViewLinuxNative on Linux
+
+      Use Brave's native Linux frame view subclass.
+    regex:
+      pattern: 'std::make_unique<BrowserFrameViewLinuxNative>('
+      replace: 'std::make_unique<BraveBrowserFrameViewLinuxNative>('

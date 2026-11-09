@@ -1,0 +1,16 @@
+# Copyright (c) 2026 The Brave Authors. All rights reserved.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this file,
+# You can obtain one at https://mozilla.org/MPL/2.0/.
+
+substitutions:
+  - description: |-
+      Create BraveBrowserViewTabbedLayoutImpl instead of
+      BrowserViewTabbedLayoutImpl
+
+      The Brave subclass is declared in
+      brave/browser/ui/views/frame/layout/brave_browser_view_tabbed_layout_impl.h,
+      which is included by the chromium_src override.
+    regex:
+      pattern: 'std::make_unique<BrowserViewTabbedLayoutImpl>('
+      replace: 'std::make_unique<BraveBrowserViewTabbedLayoutImpl>('
