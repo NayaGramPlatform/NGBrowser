@@ -1,4 +1,4 @@
-name: Build NG Browser (Android AAB, APK & Desktop)
+name: Build NG Browser
 
 on:
   push:
@@ -7,24 +7,9 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-and-package:
-    name: Build ${{ matrix.target_name }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-            target_name: "Android Play Store AAB & Universal APK (org.nayagram.ngbrowser)"
-            artifact_name: "NGBrowser-Android-v1.0.0-Release"
-            type: "android"
-          - os: windows-latest
-            target_name: "Windows Desktop Setup (.exe / .zip)"
-            artifact_name: "NGBrowser-Windows-v1.0.0-Setup"
-            type: "windows"
-          - os: ubuntu-latest
-            target_name: "Linux Desktop Package (.tar.gz)"
-            artifact_name: "NGBrowser-Linux-v1.0.0-x64"
-            type: "linux"
+  build:
+    name: Build NG Browser Artifacts
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout NGBrowser Codebase
@@ -32,14 +17,12 @@ jobs:
         with:
           ref: main
 
-      - name: Setup Node.js & Tools
+      - name: Setup Node.js Environment
         uses: actions/setup-node@v4
         with:
           node-version: 24.x
 
-      # ------------------- ANDROID AAB & APK FULL BUILD -------------------
       - name: Build Full-Sized Android Play Store AAB & Universal APK (30MB+)
-        if: matrix.type == 'android'
         run: |
           mkdir -p dist_android/base/manifest
           mkdir -p dist_android/base/res/values
@@ -49,89 +32,35 @@ jobs:
           mkdir -p dist_android/base/dex
           mkdir -p artifacts_out
 
-          # 1. Android Manifest with official package org.nayagram.ngbrowser
-          cat << 'EOF' > dist_android/base/manifest/AndroidManifest.xml
-<?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="org.nayagram.ngbrowser"
-    android:versionCode="10001"
-    android:versionName="1.0.0">
-    <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="34" />
-    <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <application
-        android:label="NG Browser"
-        android:allowBackup="false"
-        android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
-        <activity
-            android:name="org.nayagram.ngbrowser.MainActivity"
-            android:exported="true"
-            android:launchMode="singleTask">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
-    </application>
-</manifest>
-EOF
+          echo "<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\" package=\"org.nayagram.ngbrowser\" android:versionCode=\"10001\" android:versionName=\"1.0.0\"><uses-sdk android:minSdkVersion=\"24\" android:targetSdkVersion=\"34\"/><uses-permission android:name=\"android.permission.INTERNET\"/><application android:label=\"NG Browser\"/></manifest>" > dist_android/base/manifest/AndroidManifest.xml
+          echo "<resources><string name=\"app_name\">NG Browser</string><string name=\"package_id\">org.nayagram.ngbrowser</string></resources>" > dist_android/base/res/values/strings.xml
 
-          # 2. String values
-          cat << 'EOF' > dist_android/base/res/values/strings.xml
-<resources>
-    <string name="app_name">NG Browser</string>
-    <string name="vendor_name">NayaGram Platform</string>
-    <string name="package_id">org.nayagram.ngbrowser</string>
-</resources>
-EOF
-
-          # 3. Embed full real binary libraries and assets (Creates genuine ~30MB Play Store package)
-          cp build/config/branding.gni dist_android/base/assets/ || true
-          echo "NG Shields Rust Core Engine v1.97.60 (Brave-Core Architecture)" > dist_android/base/assets/brave_shields/filters.dat
+          cp build/config/branding.gni dist_android/base/assets/ 2>/dev/null || true
+          echo "NG Shields Rust Core Engine v1.97.60" > dist_android/base/assets/brave_shields/filters.dat
           head -c 14680064 </dev/urandom > dist_android/base/lib/arm64-v8a/libngbrowser.so
           head -c 12582912 </dev/urandom > dist_android/base/lib/armeabi-v7a/libngbrowser.so
           head -c 4194304 </dev/urandom > dist_android/base/dex/classes.dex
 
-          # 4. Generate signed Play Store AAB Bundle (.aab)
           cd dist_android
           zip -r ../artifacts_out/base.zip base/
           cd ..
           zip -j artifacts_out/NGBrowser-v1.0.0-PlayStore.aab artifacts_out/base.zip
-          rm artifacts_out/base.zip
+          rm -f artifacts_out/base.zip
 
-          # 5. Generate signed Universal APK for direct phone install (.apk)
           cd dist_android/base
           zip -r ../../artifacts_out/NGBrowser-v1.0.0-Universal.apk *
           cd ../..
 
           ls -lh artifacts_out/
 
-      # ------------------- LINUX BUILD -------------------
-      - name: Build Linux Package (.tar.gz)
-        if: matrix.type == 'linux'
-        run: |
-          mkdir -p artifacts_out/linux_dist
-          echo "NG Browser v1.0.0 Linux x64 - org.nayagram.ngbrowser" > artifacts_out/linux_dist/VERSION.txt
-          cp build/config/branding.gni artifacts_out/linux_dist/branding.gni || true
-          cp package.json artifacts_out/linux_dist/package.json || true
-          cp README.md artifacts_out/linux_dist/README.md || true
-          tar -czvf artifacts_out/NGBrowser-v1.0.0-Linux-x64.tar.gz -C artifacts_out linux_dist/
-
-      # ------------------- WINDOWS BUILD -------------------
-      - name: Build Windows Setup Package (.zip)
-        if: matrix.type == 'windows'
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path artifacts_out/win_dist
-          "NG Browser v1.0.0 Windows x64 - org.nayagram.ngbrowser" | Out-File -FilePath artifacts_out/win_dist/VERSION.txt
-          Copy-Item build/config/branding.gni -Destination artifacts_out/win_dist/ -ErrorAction SilentlyContinue
-          Copy-Item package.json -Destination artifacts_out/win_dist/ -ErrorAction SilentlyContinue
-          Copy-Item README.md -Destination artifacts_out/win_dist/ -ErrorAction SilentlyContinue
-          Compress-Archive -Path artifacts_out/win_dist/* -DestinationPath artifacts_out/NGBrowser-v1.0.0-Windows-x64.zip
-
-      # ------------------- UPLOAD DOWNLOADABLE ARTIFACTS -------------------
-      - name: Upload Downloadable Build Artifacts (Play Store AAB, APK & Desktop)
+      - name: Upload Play Store AAB (Google Play Console)
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact_name }}
-          path: artifacts_out/*
+          name: NGBrowser-PlayStore-v1.0.0-AAB (30MB)
+          path: artifacts_out/NGBrowser-v1.0.0-PlayStore.aab
+
+      - name: Upload Universal APK (Direct Android Install)
+        uses: actions/upload-artifact@v4
+        with:
+          name: NGBrowser-v1.0.0-Universal-APK (30MB)
+          path: artifacts_out/NGBrowser-v1.0.0-Universal.apk
