@@ -1,0 +1,66 @@
+name: Release NG Browser Artifacts
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  package-artifacts:
+    name: Package NG Browser (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux
+            artifact_name: NGBrowser-Linux-Package
+          - os: windows-latest
+            target: windows
+            artifact_name: NGBrowser-Windows-Package
+
+    steps:
+      - name: Checkout NGBrowser Repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+
+      - name: Verify Official Branding & Package ID
+        run: |
+          echo "Package ID: org.nayagram.ngbrowser"
+          echo "Product Name: NG Browser"
+          echo "Vendor: NayaGram Platform"
+
+      - name: Package Distributable Bundle (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p dist
+          echo "NG Browser v1.0.0 (org.nayagram.ngbrowser)" > dist/VERSION.txt
+          echo "Built by NayaGram Platform - CEO NayaGram" >> dist/VERSION.txt
+          cp build/config/branding.gni dist/branding.gni
+          cp package.json dist/package.json
+          cp README.md dist/README.md
+          tar -czvf NGBrowser-Linux.tar.gz dist/
+
+      - name: Package Distributable Bundle (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist
+          "NG Browser v1.0.0 (org.nayagram.ngbrowser)" | Out-File -FilePath dist/VERSION.txt
+          Copy-Item build/config/branding.gni -Destination dist/
+          Copy-Item package.json -Destination dist/
+          Copy-Item README.md -Destination dist/
+          Compress-Archive -Path dist/* -DestinationPath NGBrowser-Windows.zip
+
+      - name: Upload Downloadable Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: NGBrowser-*
