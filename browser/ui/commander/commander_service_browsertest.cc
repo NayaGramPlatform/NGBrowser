@@ -138,11 +138,11 @@ IN_PROC_BROWSER_TEST_F(CommanderServiceBrowserTest, CommandsCanBeSelected) {
   // Wait for commander to process the input and update results
   WaitUntil(base::BindLambdaForTesting([&]() {
     return commander()->GetResultSetId() >= 1 &&
-           commander()->GetItems().size() == 5u;
+           commander()->GetItems().size() == 8u;
   }));
 
   auto items = commander()->GetItems();
-  ASSERT_EQ(5u, items.size());
+  ASSERT_EQ(8u, items.size());
   // For localized IDS_NEW_TAB string, remove & accelerator
   std::u16string expected_new_tab = l10n_util::GetStringUTF16(IDS_NEW_TAB);
   std::u16string::size_type pos = expected_new_tab.find(u"&");
@@ -150,8 +150,10 @@ IN_PROC_BROWSER_TEST_F(CommanderServiceBrowserTest, CommandsCanBeSelected) {
     expected_new_tab.erase(pos, 1);
   }
   EXPECT_EQ(expected_new_tab, items[0].title);
-  EXPECT_EQ(l10n_util::GetStringUTF16(IDS_TAB_CXMENU_NEWTABTORIGHT),
+  EXPECT_EQ(l10n_util::GetStringUTF16(IDS_IDC_NEW_TAB_IN_CONTAINER_1),
             items[1].title);
+  EXPECT_EQ(l10n_util::GetStringUTF16(IDS_TAB_CXMENU_NEWTABTORIGHT),
+            items[5].title);
 
   EXPECT_EQ(1, browser()->tab_strip_model()->count());
   commander()->SelectCommand(0, commander()->GetResultSetId());
