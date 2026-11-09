@@ -1,0 +1,20 @@
+# Copyright (c) 2026 The Brave Authors. All rights reserved.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this file,
+# You can obtain one at https://mozilla.org/MPL/2.0/.
+
+substitutions:
+  - description: |-
+      Create BraveBrowserView in CreateBrowserWindow
+
+      The Brave headers are included by the chromium_src shadow of this file.
+    regex:
+      pattern: 'view = new BrowserView(browser);'
+      replace: 'view = new BraveBrowserView(browser);'
+  - description: |-
+      Create BraveBrowserWidget in CreateBrowserWindow
+
+      Use Brave's BrowserWidget subclass for the browser window.
+    regex:
+      pattern: 'std::make_unique<BrowserWidget>(view)'
+      replace: 'std::make_unique<BraveBrowserWidget>(view)'

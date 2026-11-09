@@ -1,0 +1,20 @@
+# Copyright (c) 2026 The Brave Authors. All rights reserved.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this file,
+# You can obtain one at https://mozilla.org/MPL/2.0/.
+
+substitutions:
+  - description: |-
+      Make BrowserFrameViewLinux extend BraveOpaqueBrowserFrameView
+
+      Both the base class and the METADATA_HEADER parent must be switched so
+      Brave's frame view customizations apply on Linux.
+    regex:
+      re_pattern:
+        'class BrowserFrameViewLinux : public OpaqueBrowserFrameView,(\s*public
+        ui::WindowButtonOrderObserver
+        \{\s*)METADATA_HEADER\(BrowserFrameViewLinux, OpaqueBrowserFrameView\)'
+      replace:
+        'class BrowserFrameViewLinux : public
+        BraveOpaqueBrowserFrameView,\1METADATA_HEADER(BrowserFrameViewLinux,
+        BraveOpaqueBrowserFrameView)'

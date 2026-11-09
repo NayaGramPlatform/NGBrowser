@@ -1,0 +1,21 @@
+# Copyright (c) 2026 The Brave Authors. All rights reserved.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this file,
+# You can obtain one at https://mozilla.org/MPL/2.0/.
+
+substitutions:
+  - description: |-
+      Construct BraveOpaqueBrowserFrameView as the base class
+
+      BrowserFrameViewLinux derives from BraveOpaqueBrowserFrameView (see
+      browser_frame_view_linux.h), so its constructor must initialize that base.
+    regex:
+      pattern: ': OpaqueBrowserFrameView(widget, browser_view, layout)'
+      replace: ': BraveOpaqueBrowserFrameView(widget, browser_view, layout)'
+  - description: |-
+      Call BraveOpaqueBrowserFrameView::NonClientHitTest
+
+      Keeps the base-class call in sync with the renamed base class.
+    regex:
+      pattern: 'OpaqueBrowserFrameView::NonClientHitTest(point)'
+      replace: 'BraveOpaqueBrowserFrameView::NonClientHitTest(point)'

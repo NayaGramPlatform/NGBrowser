@@ -1,0 +1,39 @@
+diff --git a/chrome/browser/ui/views/frame/layout/browser_view_layout.h b/chrome/browser/ui/views/frame/layout/browser_view_layout.h
+index c84c47a1190f9acd9602e6cc06badcbf81cf00a2..3ddc39b788229832eabec8b8d8e56c256f628140 100644
+--- a/chrome/browser/ui/views/frame/layout/browser_view_layout.h
++++ b/chrome/browser/ui/views/frame/layout/browser_view_layout.h
+@@ -86,6 +86,9 @@ struct BrowserViewLayoutViews {
+   // rely on `MultiContentsView` to manage the contents separator when not
+   // overlaid (i.e. no immersive fullscreen).
+   raw_ptr<views::View> top_container_separator = nullptr;
++  raw_ptr<views::View> vertical_tab_strip_host = nullptr;
++  raw_ptr<views::View> focus_mode_title_bar = nullptr;
++  raw_ptr<SidebarContainerView> sidebar_container = nullptr;
+ 
+   // LINT.ThenChange(//chrome/browser/ui/views/frame/browser_view.cc:BrowserViewLayoutViews)
+ 
+@@ -145,6 +148,16 @@ class BrowserViewLayout : public views::LayoutManager {
+   // Used by BrowserView.
+   web_modal::WebContentsModalDialogHost* GetWebContentsModalDialogHost();
+ 
++  void set_vertical_tab_strip_host(views::View* vertical_tab_strip_host) {
++    views_.vertical_tab_strip_host = vertical_tab_strip_host;
++  }
++  void set_focus_mode_title_bar(views::View* focus_mode_title_bar) {
++    views_.focus_mode_title_bar = focus_mode_title_bar;
++  }
++  void set_sidebar_container(SidebarContainerView* sidebar_container) {
++    views_.sidebar_container = sidebar_container;
++  }
++
+  protected:
+   // |browser| may be null in tests.
+   BrowserViewLayout(std::unique_ptr<BrowserViewLayoutDelegate> delegate,
+@@ -163,6 +176,7 @@ class BrowserViewLayout : public views::LayoutManager {
+   void UpdateBubbles();
+ 
+  private:
++  friend class BraveBrowserViewLayout;
+   class BrowserModalDialogHostViews;
+ 
+   // The delegate interface. May be a mock or replaced in tests.

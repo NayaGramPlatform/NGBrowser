@@ -1,0 +1,36 @@
+# Copyright (c) 2026 The Brave Authors. All rights reserved.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this file,
+# You can obtain one at https://mozilla.org/MPL/2.0/.
+
+substitutions:
+  - description: |-
+      Report the checked state of Brave vertical tabs and focus mode commands
+
+      The shadow includes the Brave headers needed by this code.
+    preempt_function_impl:
+      function_name: SystemMenuModelDelegate::IsCommandIdChecked
+      code: |-
+        if (command_id == IDC_TOGGLE_VERTICAL_TABS) {
+          auto* vtc = VerticalTabController::From(browser_);
+          return vtc && vtc->ShouldShowBraveVerticalTabs();
+        }
+        if (command_id == IDC_TOGGLE_FOCUS_MODE) {
+          return IsFocusModeEnabled(browser_);
+        }
+  - description: |-
+      Provide the vertical tabs menu label without upstream vertical tabs
+
+      IDC_TOGGLE_VERTICAL_TABS is reused from upstream and added to the system
+      menu by BraveSystemMenuModelBuilder::InsertBraveSystemMenuForBrowserWindow().
+      As upstream made this command dynamic, its label is fetched from
+      GetLabelForCommandId(), which refers to
+      tabs::VerticalTabStripStateController::From(browser_). That is null here
+      because Brave does not use upstream's vertical tab implementation.
+    preempt_function_impl:
+      function_name: SystemMenuModelDelegate::GetLabelForCommandId
+      code: |-
+        if (command_id == IDC_TOGGLE_VERTICAL_TABS &&
+            !tabs::VerticalTabStripStateController::From(browser_)) {
+          return l10n_util::GetStringUTF16(IDS_TAB_CXMENU_SHOW_VERTICAL_TABS);
+        }

@@ -1,0 +1,29 @@
+diff --git a/chrome/browser/ui/views/frame/system_menu_model_delegate.cc b/chrome/browser/ui/views/frame/system_menu_model_delegate.cc
+index c1eb4d11f57912c6f5a21440899299947a6ef7b3..4cb444696cfa0d2cdd17cccdc170c8a791789d03 100644
+--- a/chrome/browser/ui/views/frame/system_menu_model_delegate.cc
++++ b/chrome/browser/ui/views/frame/system_menu_model_delegate.cc
+@@ -51,6 +51,13 @@ SystemMenuModelDelegate::SystemMenuModelDelegate(
+ SystemMenuModelDelegate::~SystemMenuModelDelegate() = default;
+ 
+ bool SystemMenuModelDelegate::IsCommandIdChecked(int command_id) const {
++  if (command_id == IDC_TOGGLE_VERTICAL_TABS) {
++    auto* vtc = VerticalTabController::From(browser_);
++    return vtc && vtc->ShouldShowBraveVerticalTabs();
++  }
++  if (command_id == IDC_TOGGLE_FOCUS_MODE) {
++    return IsFocusModeEnabled(browser_);
++  }
+ #if BUILDFLAG(IS_LINUX)
+   if (command_id == IDC_USE_SYSTEM_TITLE_BAR) {
+     PrefService* prefs = browser_->GetProfile()->GetPrefs();
+@@ -142,6 +149,10 @@ bool SystemMenuModelDelegate::IsItemForCommandIdDynamic(int command_id) const {
+ 
+ std::u16string SystemMenuModelDelegate::GetLabelForCommandId(
+     int command_id) const {
++  if (command_id == IDC_TOGGLE_VERTICAL_TABS &&
++      !tabs::VerticalTabStripStateController::From(browser_)) {
++    return l10n_util::GetStringUTF16(IDS_TAB_CXMENU_SHOW_VERTICAL_TABS);
++  }
+   CHECK(IsItemForCommandIdDynamic(command_id), base::NotFatalUntil::M162);
+ 
+   int string_id;
