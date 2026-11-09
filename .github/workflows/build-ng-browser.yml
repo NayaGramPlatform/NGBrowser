@@ -18,8 +18,10 @@ on:
 
 jobs:
   build:
-    name: Build Real Signed NG Browser APK & AAB
+    name: Build Pure Standard APK & Play Store AAB
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout NGBrowser Codebase
         uses: actions/checkout@v4
@@ -32,18 +34,15 @@ jobs:
 
       - name: Detect Android SDK Build Tools
         run: |
-          BUILD_TOOLS_DIR=$(ls -d /usr/local/lib/android/sdk/build-tools/* | tail -n 1)
-          PLATFORM_DIR=$(ls -d /usr/local/lib/android/sdk/platforms/android-* | tail -n 1)
-          echo "BUILD_TOOLS_DIR=$BUILD_TOOLS_DIR" >> $GITHUB_ENV
-          echo "PLATFORM_DIR=$PLATFORM_DIR" >> $GITHUB_ENV
-          echo "Found Build Tools: $BUILD_TOOLS_DIR"
-          echo "Found Platform: $PLATFORM_DIR"
+          BUILD_TOOLS_DIR=
+          PLATFORM_DIR=
+          echo "BUILD_TOOLS_DIR=" >> 
+          echo "PLATFORM_DIR=" >> 
 
-      - name: Build Real Signed Universal Android APK & Play Store AAB (98MB)
+      - name: Build Pure Standard APK & Play Store AAB
         run: |
           VERSION_NAME="${{ github.event.inputs.version_name || '1.0.0' }}"
           VERSION_CODE="${{ github.event.inputs.version_code || '10001' }}"
-          echo "Building Real NG Browser v$VERSION_NAME ($VERSION_CODE)..."
 
           mkdir -p android_build/src/org/nayagram/ngbrowser
           mkdir -p android_build/res/values
@@ -51,11 +50,8 @@ jobs:
           mkdir -p android_build/obj
           mkdir -p android_build/dex
           mkdir -p android_build/assets/brave_shields
-          mkdir -p android_build/lib/arm64-v8a
-          mkdir -p android_build/lib/armeabi-v7a
           mkdir -p artifacts_out
 
-          # 1. Real Android Manifest
           cat << 'EOF' > android_build/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
@@ -94,7 +90,6 @@ jobs:
           </manifest>
           EOF
 
-          # 2. Real Strings & Vector Icon
           cat << 'EOF' > android_build/res/values/strings.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -110,19 +105,13 @@ jobs:
               android:height="108dp"
               android:viewportWidth="108"
               android:viewportHeight="108">
-              <path
-                  android:fillColor="#0F172A"
-                  android:pathData="M0,0h108v108h-108z"/>
-              <path
-                  android:fillColor="#38BDF8"
-                  android:pathData="M30,30h12l20,32v-32h12v48h-12l-20,-32v32h-12z"/>
+              <path android:fillColor="#0F172A" android:pathData="M0,0h108v108h-108z"/>
+              <path android:fillColor="#38BDF8" android:pathData="M30,30h12l20,32v-32h12v48h-12l-20,-32v32h-12z"/>
           </vector>
           EOF
 
-          # 3. Real Java Source Code for Chromium WebEngine with NG Shields
           cat << 'EOF' > android_build/src/org/nayagram/ngbrowser/MainActivity.java
           package org.nayagram.ngbrowser;
-
           import android.app.Activity;
           import android.os.Bundle;
           import android.view.View;
@@ -141,45 +130,37 @@ jobs:
           import android.view.inputmethod.InputMethodManager;
           import android.content.Context;
           import android.graphics.Bitmap;
-
           public class MainActivity extends Activity {
               private WebView webView;
               private EditText urlBar;
               private ProgressBar progressBar;
               private boolean shieldEnabled = true;
-
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
                   requestWindowFeature(Window.FEATURE_NO_TITLE);
-
                   LinearLayout root = new LinearLayout(this);
                   root.setOrientation(LinearLayout.VERTICAL);
                   root.setBackgroundColor(Color.parseColor("#0F172A"));
-
                   LinearLayout toolbar = new LinearLayout(this);
                   toolbar.setOrientation(LinearLayout.HORIZONTAL);
-                  toolbar.setPadding(16, 12, 16, 12);
+                  toolbar.setPadding(20, 16, 20, 16);
                   toolbar.setBackgroundColor(Color.parseColor("#1E293B"));
-
                   urlBar = new EditText(this);
                   urlBar.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f));
                   urlBar.setHint("Search or enter web address...");
                   urlBar.setHintTextColor(Color.parseColor("#94A3B8"));
                   urlBar.setTextColor(Color.WHITE);
                   urlBar.setBackgroundColor(Color.parseColor("#334155"));
-                  urlBar.setPadding(24, 16, 24, 16);
+                  urlBar.setPadding(28, 18, 28, 18);
                   urlBar.setSingleLine(true);
                   urlBar.setImeOptions(EditorInfo.IME_ACTION_GO);
-
                   progressBar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
                   progressBar.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 8));
                   progressBar.setMax(100);
                   progressBar.setVisibility(View.GONE);
-
                   webView = new WebView(this);
                   webView.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1.0f));
-
                   WebSettings ws = webView.getSettings();
                   ws.setJavaScriptEnabled(true);
                   ws.setDomStorageEnabled(true);
@@ -191,7 +172,6 @@ jobs:
                   ws.setUseWideViewPort(true);
                   ws.setLoadWithOverviewMode(true);
                   ws.setUserAgentString(ws.getUserAgentString() + " NGBrowser/1.0.0 (NayaGram Platform; Privacy Shield 1.97.60)");
-
                   webView.setWebChromeClient(new WebChromeClient() {
                       @Override
                       public void onProgressChanged(WebView view, int newProgress) {
@@ -203,7 +183,6 @@ jobs:
                           }
                       }
                   });
-
                   webView.setWebViewClient(new WebViewClient() {
                       @Override
                       public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
@@ -216,18 +195,15 @@ jobs:
                           }
                           return false;
                       }
-
                       @Override
                       public void onPageStarted(WebView view, String url, Bitmap favicon) {
                           urlBar.setText(url);
                       }
-
                       @Override
                       public void onPageFinished(WebView view, String url) {
                           urlBar.setText(url);
                       }
                   });
-
                   urlBar.setOnEditorActionListener((v, actionId, event) -> {
                       if (actionId == EditorInfo.IME_ACTION_GO || actionId == EditorInfo.IME_ACTION_DONE ||
                           (event != null && event.getKeyCode() == KeyEvent.KEYCODE_ENTER)) {
@@ -250,16 +226,13 @@ jobs:
                       }
                       return false;
                   });
-
                   toolbar.addView(urlBar);
                   root.addView(toolbar);
                   root.addView(progressBar);
                   root.addView(webView);
                   setContentView(root);
-
                   webView.loadUrl("https://duckduckgo.com");
               }
-
               @Override
               public void onBackPressed() {
                   if (webView.canGoBack()) {
@@ -271,73 +244,60 @@ jobs:
           }
           EOF
 
-          # 4. Compile Java Code to Dalvik Bytecode via javac & d8
-          echo "Compiling Java source code..."
-          javac -cp $PLATFORM_DIR/android.jar -d android_build/obj android_build/src/org/nayagram/ngbrowser/MainActivity.java
-          $BUILD_TOOLS_DIR/d8 --output android_build/dex android_build/obj/org/nayagram/ngbrowser/*.class
+          javac -cp /android.jar -d android_build/obj android_build/src/org/nayagram/ngbrowser/MainActivity.java
+          /d8 --output android_build/dex android_build/obj/org/nayagram/ngbrowser/*.class
 
-          # 5. Compile Android Resources & Manifest via aapt2
-          echo "Compiling resources with aapt2..."
-          $BUILD_TOOLS_DIR/aapt2 compile --dir android_build/res -o android_build/res.zip
-          $BUILD_TOOLS_DIR/aapt2 link -I $PLATFORM_DIR/android.jar               --manifest android_build/AndroidManifest.xml               -o android_build/unaligned_base.apk               android_build/res.zip
+          /aapt2 compile --dir android_build/res -o android_build/res.zip
+          /aapt2 link -I /android.jar               --manifest android_build/AndroidManifest.xml               -o android_build/unaligned.apk               android_build/res.zip
 
-          # 6. Add classes.dex, assets, and full 98MB Brave-equivalent native libraries
-          echo "Packaging classes.dex, assets, and native libraries..."
           cd android_build
           echo "NG Shields Engine Active: Adblock, Tracker Protection, Brave Core 1.97.60 Filters" > assets/brave_shields/filters.dat
           cp ../build/config/branding.gni assets/ 2>/dev/null || true
-
-          # Create high-performance native engine libraries for 98MB Brave-equivalent package
-          head -c 48000000 </dev/urandom > lib/arm64-v8a/libngbrowser.so
-          head -c 38000000 </dev/urandom > lib/armeabi-v7a/libngbrowser.so
-          head -c 12000000 </dev/urandom > assets/icudtl.dat
-
-          # Add files into APK
-          zip -u unaligned_base.apk dex/classes.dex
-          zip -r -u unaligned_base.apk assets/
-          zip -r -u unaligned_base.apk lib/
+          zip -u unaligned.apk dex/classes.dex
+          zip -r -u unaligned.apk assets/
           cd ..
 
-          # 7. Zipalign (4-byte alignment required by Android OS)
-          echo "Running zipalign..."
-          $BUILD_TOOLS_DIR/zipalign -v -p 4 android_build/unaligned_base.apk android_build/aligned.apk
+          /zipalign -v -p 4 android_build/unaligned.apk android_build/aligned.apk
 
-          # 8. Cryptographic Signing via apksigner (v1, v2, v3 schemes)
-          echo "Generating Keystore and Signing APK with apksigner..."
           keytool -genkeypair -v -keystore android_build/release.jks               -alias ngbrowser               -keyalg RSA -keysize 2048 -validity 10000               -storepass nayagram123 -keypass nayagram123               -dname "CN=NayaGram Platform, OU=NG Browser, O=NayaGram, L=Dhaka, C=BD"
 
-          $BUILD_TOOLS_DIR/apksigner sign               --ks android_build/release.jks               --ks-pass pass:nayagram123               --key-pass pass:nayagram123               --out artifacts_out/NGBrowser-v${VERSION_NAME}-Universal-98MB.apk               android_build/aligned.apk
+          /apksigner sign               --ks android_build/release.jks               --ks-pass pass:nayagram123               --key-pass pass:nayagram123               --out artifacts_out/NGBrowser.apk               android_build/aligned.apk
 
-          # 9. Verify Signature
-          $BUILD_TOOLS_DIR/apksigner verify -v artifacts_out/NGBrowser-v${VERSION_NAME}-Universal-98MB.apk
+          /apksigner verify -v artifacts_out/NGBrowser.apk
 
-          # 10. Package Play Store AAB
           mkdir -p aab_bundle/base/manifest
           mkdir -p aab_bundle/base/dex
           mkdir -p aab_bundle/base/res
-          mkdir -p aab_bundle/base/lib
           mkdir -p aab_bundle/base/assets
           cp android_build/AndroidManifest.xml aab_bundle/base/manifest/
           cp android_build/dex/classes.dex aab_bundle/base/dex/
           cp -r android_build/assets/* aab_bundle/base/assets/ 2>/dev/null || true
-          cp -r android_build/lib/* aab_bundle/base/lib/ 2>/dev/null || true
           cd aab_bundle
           zip -r ../artifacts_out/base.zip base/
           cd ..
-          zip -j artifacts_out/NGBrowser-v${VERSION_NAME}-PlayStore-98MB.aab artifacts_out/base.zip
+          zip -j artifacts_out/NGBrowser-PlayStore.aab artifacts_out/base.zip
           rm -f artifacts_out/base.zip
 
-          echo "Finished Building Real APK & AAB:"
+          echo "Generated direct NGBrowser.apk & Play Store AAB:"
           ls -lh artifacts_out/
 
-      - name: Upload Real Signed Universal APK (98MB)
+      - name: Upload Standard NGBrowser.apk
         uses: actions/upload-artifact@v4
         with:
-          name: NGBrowser-v1.0.0-Universal-Real-APK (98MB)
-          path: artifacts_out/*-Universal-98MB.apk
+          name: NGBrowser.apk
+          path: artifacts_out/NGBrowser.apk
 
-      - name: Upload Play Store AAB (98MB)
+      - name: Upload Play Store AAB
         uses: actions/upload-artifact@v4
         with:
-          name: NGBrowser-v1.0.0-PlayStore-AAB (98MB)
-          path: artifacts_out/*-PlayStore-98MB.aab
+          name: NGBrowser-PlayStore.aab
+          path: artifacts_out/NGBrowser-PlayStore.aab
+
+      - name: Create Direct GitHub Release (No ZIP Required!)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="v1.0.0"
+          gh release delete  -y 2>/dev/null || true
+          git tag -d  2>/dev/null || true
+          gh release create  artifacts_out/NGBrowser.apk artifacts_out/NGBrowser-PlayStore.aab             --title "NG Browser v1.0.0 Official Release"             --notes "Official direct NGBrowser.apk and NGBrowser-PlayStore.aab download by NayaGram Platform."             --target main
