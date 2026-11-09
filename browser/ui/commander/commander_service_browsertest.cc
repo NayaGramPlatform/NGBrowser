@@ -150,8 +150,10 @@ IN_PROC_BROWSER_TEST_F(CommanderServiceBrowserTest, CommandsCanBeSelected) {
     expected_new_tab.erase(pos, 1);
   }
   EXPECT_EQ(expected_new_tab, items[0].title);
-  EXPECT_EQ(l10n_util::GetStringUTF16(IDS_TAB_CXMENU_NEWTABTORIGHT),
+  EXPECT_EQ(l10n_util::GetStringUTF16(IDS_IDC_NEW_TAB_IN_CONTAINER_1),
             items[1].title);
+  EXPECT_EQ(l10n_util::GetStringUTF16(IDS_TAB_CXMENU_NEWTABTORIGHT),
+            items[5].title);
 
   EXPECT_EQ(1, browser()->tab_strip_model()->count());
   commander()->SelectCommand(0, commander()->GetResultSetId());
