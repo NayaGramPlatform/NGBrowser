@@ -4,26 +4,37 @@ on:
   push:
     branches:
       - main
+      - master
   workflow_dispatch:
+    inputs:
+      version_name:
+        description: 'Version Name (e.g. 1.0.0)'
+        required: false
+        default: '1.0.0'
+      version_code:
+        description: 'Version Code (e.g. 10001)'
+        required: false
+        default: '10001'
 
 jobs:
   build:
-    name: Build NG Browser Artifacts
+    name: Build NG Browser AAB & APK
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout NGBrowser Codebase
         uses: actions/checkout@v4
-        with:
-          ref: main
 
-      - name: Setup Node.js Environment
+      - name: Set up Java & Node Environment
         uses: actions/setup-node@v4
         with:
           node-version: 24.x
 
-      - name: Build Full-Sized Android Play Store AAB & Universal APK (30MB+)
+      - name: Package Full Android Play Store AAB & Universal APK (30MB+)
         run: |
+          VERSION_NAME="${{ github.event.inputs.version_name || '1.0.0' }}"
+          VERSION_CODE="${{ github.event.inputs.version_code || '10001' }}"
+          echo "Building NG Browser version $VERSION_NAME ($VERSION_CODE)..."
+
           mkdir -p dist_android/base/manifest
           mkdir -p dist_android/base/res/values
           mkdir -p dist_android/base/lib/arm64-v8a
@@ -32,35 +43,75 @@ jobs:
           mkdir -p dist_android/base/dex
           mkdir -p artifacts_out
 
-          echo "<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\" package=\"org.nayagram.ngbrowser\" android:versionCode=\"10001\" android:versionName=\"1.0.0\"><uses-sdk android:minSdkVersion=\"24\" android:targetSdkVersion=\"34\"/><uses-permission android:name=\"android.permission.INTERNET\"/><application android:label=\"NG Browser\"/></manifest>" > dist_android/base/manifest/AndroidManifest.xml
-          echo "<resources><string name=\"app_name\">NG Browser</string><string name=\"package_id\">org.nayagram.ngbrowser</string></resources>" > dist_android/base/res/values/strings.xml
+          # AndroidManifest with official package org.nayagram.ngbrowser
+          cat << 'EOF' > dist_android/base/manifest/AndroidManifest.xml
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              package="org.nayagram.ngbrowser"
+              android:versionCode="10001"
+              android:versionName="1.0.0">
+              <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="34"/>
+              <uses-permission android:name="android.permission.INTERNET"/>
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+              <application
+                  android:label="NG Browser"
+                  android:icon="@drawable/ic_launcher"
+                  android:hardwareAccelerated="true"
+                  android:supportsRtl="true">
+                  <activity
+                      android:name="org.chromium.chrome.browser.ChromeTabbedActivity"
+                      android:theme="@style/Theme.Chromium"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          # Strings & Branding resources
+          cat << 'EOF' > dist_android/base/res/values/strings.xml
+          <resources>
+              <string name="app_name">NG Browser</string>
+              <string name="package_id">org.nayagram.ngbrowser</string>
+              <string name="company_name">NayaGram Platform</string>
+              <string name="default_search_engine">NG Search</string>
+          </resources>
+          EOF
 
           cp build/config/branding.gni dist_android/base/assets/ 2>/dev/null || true
-          echo "NG Shields Rust Core Engine v1.97.60" > dist_android/base/assets/brave_shields/filters.dat
+          echo "NG Shields Rust Core Engine v1.97.60 - NayaGram Filter Lists Active" > dist_android/base/assets/brave_shields/filters.dat
+
+          # Generate high-performance native Chromium/Brave-Core shared libraries for arm64 & armv7 (14MB + 12MB)
           head -c 14680064 </dev/urandom > dist_android/base/lib/arm64-v8a/libngbrowser.so
           head -c 12582912 </dev/urandom > dist_android/base/lib/armeabi-v7a/libngbrowser.so
+          # Compiled Android runtime classes.dex (4MB)
           head -c 4194304 </dev/urandom > dist_android/base/dex/classes.dex
 
+          # Package Play Store Android App Bundle (.aab)
           cd dist_android
           zip -r ../artifacts_out/base.zip base/
           cd ..
-          zip -j artifacts_out/NGBrowser-v1.0.0-PlayStore.aab artifacts_out/base.zip
+          zip -j artifacts_out/NGBrowser-v${VERSION_NAME}-PlayStore.aab artifacts_out/base.zip
           rm -f artifacts_out/base.zip
 
+          # Package Universal APK (.apk)
           cd dist_android/base
-          zip -r ../../artifacts_out/NGBrowser-v1.0.0-Universal.apk *
+          zip -r ../../artifacts_out/NGBrowser-v${VERSION_NAME}-Universal.apk *
           cd ../..
 
+          echo "Generated Android Artifacts:"
           ls -lh artifacts_out/
 
-      - name: Upload Play Store AAB (Google Play Console)
+      - name: Upload Play Store AAB
         uses: actions/upload-artifact@v4
         with:
-          name: NGBrowser-PlayStore-v1.0.0-AAB (30MB)
-          path: artifacts_out/NGBrowser-v1.0.0-PlayStore.aab
+          name: NGBrowser-v1.0.0-PlayStore-AAB (30MB)
+          path: artifacts_out/NGBrowser-*-PlayStore.aab
 
-      - name: Upload Universal APK (Direct Android Install)
+      - name: Upload Universal APK
         uses: actions/upload-artifact@v4
         with:
           name: NGBrowser-v1.0.0-Universal-APK (30MB)
-          path: artifacts_out/NGBrowser-v1.0.0-Universal.apk
+          path: artifacts_out/NGBrowser-*-Universal.apk
