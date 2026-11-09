@@ -201,6 +201,20 @@ class BraveBrowserViewTest : public InProcessBrowserTest {
     EXPECT_EQ(lower_left, radii.lower_left());
     EXPECT_EQ(lower_right, radii.lower_right());
   }
+
+  void ExpectContentsViewRadii(float upper_left,
+                               float upper_right,
+                               float lower_left,
+                               float lower_right) {
+    auto radii = browser_view()
+                     ->GetActiveContentsContainerView()
+                     ->contents_view()
+                     ->GetBackgroundRadii();
+    EXPECT_EQ(upper_left, radii.upper_left());
+    EXPECT_EQ(upper_right, radii.upper_right());
+    EXPECT_EQ(lower_left, radii.lower_left());
+    EXPECT_EQ(lower_right, radii.lower_right());
+  }
 };
 
 // Tests bookmark/infobar/contents container layout with vertical tab.
@@ -514,25 +528,11 @@ class BraveBrowserViewWithRoundedCornersTest
               browser_view()->GetLocalBounds().bottom());
   }
 
-  void ExpectContentsViewRadii(float upper_left,
-                               float upper_right,
-                               float lower_left,
-                               float lower_right) {
-    auto radii = browser_view()
-                     ->GetActiveContentsContainerView()
-                     ->contents_view()
-                     ->GetBackgroundRadii();
-    EXPECT_EQ(upper_left, radii.upper_left());
-    EXPECT_EQ(upper_right, radii.upper_right());
-    EXPECT_EQ(lower_left, radii.lower_left());
-    EXPECT_EQ(lower_right, radii.lower_right());
-  }
-
  private:
   const gfx::AnimationTestApi::RenderModeResetter disable_rich_animations_;
 };
 
-// Test 1: Rounded corners behavior with side panel toggled
+// Test 1: An open side panel uses rounded corners regardless of the pref.
 IN_PROC_BROWSER_TEST_P(BraveBrowserViewWithRoundedCornersTest,
                        RoundedCornersWithSidePanelTest) {
 #if BUILDFLAG(IS_MAC)
@@ -553,39 +553,18 @@ IN_PROC_BROWSER_TEST_P(BraveBrowserViewWithRoundedCornersTest,
   const auto rounded_corners_border_radius_at_window_corner =
       GetRoundedCornersBorderRadiusAtWindowCorner();
 
-  if (IsRoundedCornersEnabled()) {
-    // Check contents container has margin
-    ExpectContentsContainerMargins(contents_container, rounded_corners_margin);
-    EXPECT_EQ(rounded_corners_margin,
-              BraveContentsViewUtil::GetRoundedCornersWebViewMargin(browser()));
+  // The open panel is itself a rounded-corners trigger, so the pref value
+  // makes no difference here.
+  ExpectContentsContainerMargins(contents_container, rounded_corners_margin);
+  EXPECT_EQ(rounded_corners_margin,
+            BraveContentsViewUtil::GetRoundedCornersWebViewMargin(browser()));
 
-    // Check contents view radii
-    const auto contents_view_radii = browser_view()
-                                         ->GetActiveContentsContainerView()
-                                         ->contents_view()
-                                         ->GetBackgroundRadii();
-    EXPECT_EQ(rounded_corners_border_radius, contents_view_radii.upper_left());
-    EXPECT_EQ(rounded_corners_border_radius, contents_view_radii.upper_right());
-
-    // lower-left radius should be radius around window as there is no ui
-    // between browser window border and contents.
-    EXPECT_EQ(rounded_corners_border_radius_at_window_corner,
-              contents_view_radii.lower_left());
-    EXPECT_EQ(rounded_corners_border_radius, contents_view_radii.lower_right());
-  } else {
-    // Check contents container doesn't have any margin
-    EXPECT_EQ(contents_container->bounds().x(),
-              browser_view()->GetLocalBounds().x());
-    EXPECT_EQ(contents_container->bounds().bottom(),
-              browser_view()->GetLocalBounds().bottom());
-    EXPECT_EQ(0,
-              BraveContentsViewUtil::GetRoundedCornersWebViewMargin(browser()));
-
-    EXPECT_EQ(gfx::RoundedCornersF(), browser_view()
-                                          ->GetActiveContentsContainerView()
-                                          ->contents_view()
-                                          ->GetBackgroundRadii());
-  }
+  // lower-left radius should be radius around window as there is no ui
+  // between browser window border and contents.
+  ExpectContentsViewRadii(rounded_corners_border_radius,
+                          rounded_corners_border_radius,
+                          rounded_corners_border_radius_at_window_corner,
+                          rounded_corners_border_radius);
 }
 
 // Regression test: the Chromium side panel can be visible while
@@ -632,13 +611,10 @@ IN_PROC_BROWSER_TEST_P(
   ASSERT_TRUE(browser_view()->side_panel()->GetVisible());
   EXPECT_FALSE(brave_browser_view()->IsSidebarVisible());
 
-  if (IsRoundedCornersEnabled()) {
-    // Panel is on the right -> lower-right rounded, lower-left at window edge.
-    ExpectContentsViewRadii(border_radius, border_radius, window_corner_radius,
-                            border_radius);
-  } else {
-    ExpectContentsViewRadii(0, 0, 0, 0);
-  }
+  // Panel is on the right -> lower-right rounded, lower-left at window edge.
+  // The open panel forces rounded corners, so the pref is irrelevant.
+  ExpectContentsViewRadii(border_radius, border_radius, window_corner_radius,
+                          border_radius);
 
   panel_ui->Toggle();
   RunScheduledLayouts();
@@ -654,13 +630,9 @@ IN_PROC_BROWSER_TEST_P(
       base::test::RunUntil([&]() { return panel_ui->IsSidePanelShowing(); }));
   EXPECT_FALSE(brave_browser_view()->IsSidebarVisible());
 
-  if (IsRoundedCornersEnabled()) {
-    // Panel is on the left -> lower-left rounded, lower-right at window edge.
-    ExpectContentsViewRadii(border_radius, border_radius, border_radius,
-                            window_corner_radius);
-  } else {
-    ExpectContentsViewRadii(0, 0, 0, 0);
-  }
+  // Panel is on the left -> lower-left rounded, lower-right at window edge.
+  ExpectContentsViewRadii(border_radius, border_radius, border_radius,
+                          window_corner_radius);
 }
 
 // Test 2: Rounded corners in split tab mode
@@ -885,6 +857,127 @@ INSTANTIATE_TEST_SUITE_P(
     /* no prefix */,
     BraveBrowserViewWithRoundedCornersTest,
     testing::Bool());
+
+// The side panel is a rounded-corners trigger on its own: opening it rounds
+// the contents even with the pref off, and closing it restores square corners.
+// Animations are disabled here, so this covers the non-animated transition
+// (what users with OS reduce-motion get).
+IN_PROC_BROWSER_TEST_F(BraveBrowserViewTest, RoundedCornersFollowSidePanel) {
+#if BUILDFLAG(IS_MAC)
+  // TODO(https://github.com/brave/brave-browser/issues/55995): Re-enable on
+  // macOS 26.
+  if (base::mac::MacOSMajorVersion() >= 26) {
+    GTEST_SKIP() << "Disabled on macOS Tahoe and later.";
+  }
+#endif
+
+  const gfx::AnimationTestApi::RenderModeResetter disable_rich_animations =
+      gfx::AnimationTestApi::SetRichAnimationRenderMode(
+          gfx::Animation::RichAnimationRenderMode::FORCE_DISABLED);
+
+  browser()->GetProfile()->GetPrefs()->SetBoolean(kWebViewRoundedCorners,
+                                                  false);
+  RunScheduledLayouts();
+
+  auto* side_panel = browser_view()->side_panel();
+  ASSERT_FALSE(side_panel->GetVisible());
+  EXPECT_FALSE(BraveBrowserView::ShouldUseBraveWebViewRoundedCornersForContents(
+      browser()));
+  ExpectContentsViewRadii(0, 0, 0, 0);
+
+  auto* panel_ui = SidePanelUI::From(browser());
+  panel_ui->Toggle();
+  ASSERT_TRUE(base::test::RunUntil([&]() { return side_panel->GetVisible(); }));
+  RunScheduledLayouts();
+
+  EXPECT_TRUE(BraveBrowserView::ShouldUseBraveWebViewRoundedCornersForContents(
+      browser()));
+  ExpectContentsViewRadii(GetRoundedCornersBorderRadius(),
+                          GetRoundedCornersBorderRadius(),
+                          GetRoundedCornersBorderRadiusAtWindowCorner(),
+                          GetRoundedCornersBorderRadius());
+
+  panel_ui->Toggle();
+  ASSERT_TRUE(
+      base::test::RunUntil([&]() { return !side_panel->GetVisible(); }));
+  RunScheduledLayouts();
+
+  EXPECT_FALSE(BraveBrowserView::ShouldUseBraveWebViewRoundedCornersForContents(
+      browser()));
+  ExpectContentsViewRadii(0, 0, 0, 0);
+}
+
+// With animations on, the treatment is keyed to the panel's visibility alone:
+// it stays on for the whole close animation (the panel still occupies layout
+// space) and turns off in one step when the panel finally hides. This is what
+// lets BraveBrowserView ignore the animation state entirely.
+IN_PROC_BROWSER_TEST_F(BraveBrowserViewTest,
+                       RoundedCornersPersistWhileSidePanelAnimatesClosed) {
+#if BUILDFLAG(IS_MAC)
+  // TODO(https://github.com/brave/brave-browser/issues/55995): Re-enable on
+  // macOS 26.
+  if (base::mac::MacOSMajorVersion() >= 26) {
+    GTEST_SKIP() << "Disabled on macOS Tahoe and later.";
+  }
+#endif
+
+  const gfx::AnimationTestApi::RenderModeResetter enable_rich_animations =
+      gfx::AnimationTestApi::SetRichAnimationRenderMode(
+          gfx::Animation::RichAnimationRenderMode::FORCE_ENABLED);
+
+  browser()->GetProfile()->GetPrefs()->SetBoolean(kWebViewRoundedCorners,
+                                                  false);
+
+  auto* side_panel = browser_view()->side_panel();
+  auto* panel_ui = SidePanelUI::From(browser());
+
+  panel_ui->Toggle();
+  ASSERT_TRUE(base::test::RunUntil([&]() { return side_panel->GetVisible(); }));
+  EXPECT_TRUE(BraveBrowserView::ShouldUseBraveWebViewRoundedCornersForContents(
+      browser()))
+      << "visible as soon as the open animation starts";
+
+  panel_ui->Toggle();
+
+  ASSERT_EQ(SidePanel::State::kClosing, side_panel->state());
+  ASSERT_TRUE(side_panel->GetVisible());
+  EXPECT_TRUE(BraveBrowserView::ShouldUseBraveWebViewRoundedCornersForContents(
+      browser()))
+      << "still rounded while sliding out";
+
+  ASSERT_TRUE(
+      base::test::RunUntil([&]() { return !side_panel->GetVisible(); }));
+  RunScheduledLayouts();
+
+  EXPECT_FALSE(BraveBrowserView::ShouldUseBraveWebViewRoundedCornersForContents(
+      browser()));
+  ExpectContentsViewRadii(0, 0, 0, 0);
+}
+
+// Regression test: the side panel is also closed from ~BrowserWidget (see
+// SidePanelCoordinator::TearDownPreBrowserWindowDestruction()), which used to
+// drive a rounded-corners refresh through the vertical tab strip's minimum
+// size - and that queries the widget's fullscreen state after the native
+// widget is gone.
+IN_PROC_BROWSER_TEST_F(BraveBrowserViewTest,
+                       ClosingWindowWithOpenSidePanelDoesNotCrash) {
+  // The vertical tab strip is what makes the refresh ask the widget about
+  // fullscreen, so it has to be on for this to be a regression test.
+  browser()->GetProfile()->GetPrefs()->SetBoolean(
+      brave_tabs::kVerticalTabsEnabled, true);
+
+  BrowserWindowInterface* second_browser =
+      CreateBrowser(browser()->GetProfile());
+  ASSERT_TRUE(VerticalTabController::From(second_browser)
+                  ->ShouldShowBraveVerticalTabs());
+
+  auto* panel_ui = SidePanelUI::From(second_browser);
+  panel_ui->Toggle();
+  ASSERT_TRUE(
+      base::test::RunUntil([&]() { return panel_ui->IsSidePanelShowing(); }));
+
+  CloseBrowserSynchronously(second_browser);
+}
 
 IN_PROC_BROWSER_TEST_F(BraveBrowserViewTest,
                        BoundingBoxStableWithSidePanelTest) {
