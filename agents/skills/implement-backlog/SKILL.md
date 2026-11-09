@@ -172,6 +172,11 @@ fixtures, and relevant production functions; inspect assertion strength,
 malformed-input rejection stages, async completion/lifetimes, and final-HEAD
 interactions. Reviewers must not edit, build, push, or modify GitHub.
 
+- Compare what the tests exercised before and after each fix. Preserve coverage
+  of fields, branches, inputs, and observable behavior when replacing assertions
+  or switching to public APIs. Any loss must be intentional and justified in the
+  review and PR description; otherwise restore equivalent coverage before
+  accepting the fix. Passing tests alone do not establish coverage preservation.
 - Bound concurrency to available capacity. Start a small batch and wait for its
   reports before starting more if the provider is rate-limited. Avoid starting
   30 reviewers at once merely to have them all fail together.
@@ -283,7 +288,12 @@ Honor any no-push/no-PR instruction instead.
 
 The concise PR body must include:
 
-- Summary and full issue links, with closing keywords only for completed fixes.
+- Summary and a separate GitHub closing reference for every fully fixed issue in
+  the PR description, for example
+  `Fixes https://github.com/brave/brave-browser/issues/12345`. Commit-message
+  references alone are insufficient. Check the description against the ledger so
+  every completed issue has a closing reference; use ordinary links without
+  closing keywords for partial or skipped issues.
 - Partial/skipped issues and reasons (summarize long skip lists in the report).
 - For test disables, a table of test, filter file, flake rate and lookback,
   whether Chromium also disabled it, and related Brave modifications.
