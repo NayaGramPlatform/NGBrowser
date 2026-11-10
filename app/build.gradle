@@ -21,7 +21,7 @@ android {
 
     signingConfigs {
         release {
-            storeFile file("../../keystore/release.jks")
+            storeFile rootProject.file("keystore/release.jks")
             storePassword System.getenv("KEYSTORE_PASSWORD") ?: "NayaGram2026SecurePass!"
             keyAlias System.getenv("KEY_ALIAS") ?: "ngbrowser"
             keyPassword System.getenv("KEY_PASSWORD") ?: "NayaGram2026SecurePass!"
