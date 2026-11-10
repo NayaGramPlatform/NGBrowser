@@ -26,6 +26,9 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      - name: Grant Execute Permissions on Gradlew
+        run: chmod +x gradlew || true
+
       - name: Prepare Persistent Release Keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -49,7 +52,7 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'ngbrowser' }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'NayaGram2026SecurePass!' }}
         run: |
-          gradle assembleRelease --no-daemon --stacktrace \
+          ./gradlew assembleRelease --no-daemon --stacktrace \
             -Dorg.gradle.internal.http.connectionTimeout=120000 \
             -Dorg.gradle.internal.http.socketTimeout=120000
 
@@ -59,7 +62,7 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'ngbrowser' }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'NayaGram2026SecurePass!' }}
         run: |
-          gradle bundleRelease --no-daemon --stacktrace \
+          ./gradlew bundleRelease --no-daemon --stacktrace \
             -Dorg.gradle.internal.http.connectionTimeout=120000 \
             -Dorg.gradle.internal.http.socketTimeout=120000
 
