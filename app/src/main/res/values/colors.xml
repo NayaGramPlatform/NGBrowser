@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ng_cyan_primary">#00E5FF</color>
+    <color name="ng_sky_blue">#0288D1</color>
+    <color name="ng_white">#FFFFFF</color>
+    <color name="ng_bg_white">#F5F7FA</color>
+    <color name="ng_text_dark">#102A43</color>
+    <color name="ng_text_hint">#627D98</color>
+</resources>
