@@ -43,13 +43,23 @@ jobs:
               -dname "CN=NayaGram Platform, OU=NG Browser, O=NayaGram Platform, L=Dhaka, C=BD"
           fi
 
-      - name: Build Signed APK & Play Store AAB via Gradle
+      - name: Build Signed Release APK via Gradle
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || 'NayaGram2026SecurePass!' }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'ngbrowser' }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'NayaGram2026SecurePass!' }}
         run: |
-          gradle assembleRelease bundleRelease --no-daemon --stacktrace \
+          gradle assembleRelease --no-daemon --stacktrace \
+            -Dorg.gradle.internal.http.connectionTimeout=120000 \
+            -Dorg.gradle.internal.http.socketTimeout=120000
+
+      - name: Build Signed Play Store AAB via Gradle
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || 'NayaGram2026SecurePass!' }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'ngbrowser' }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'NayaGram2026SecurePass!' }}
+        run: |
+          gradle bundleRelease --no-daemon --stacktrace \
             -Dorg.gradle.internal.http.connectionTimeout=120000 \
             -Dorg.gradle.internal.http.socketTimeout=120000
 
