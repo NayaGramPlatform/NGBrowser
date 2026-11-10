@@ -10,15 +10,23 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: ng-browser-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     name: Build & Package NG Browser
     runs-on: ubuntu-latest
+    env:
+      KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || 'NayaGram2026SecurePass!' }}
+      KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'ngbrowser' }}
+      KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'NayaGram2026SecurePass!' }}
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 1   # full history of this huge repo is not needed
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -26,8 +34,13 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      - name: Set up Gradle 8.9 (compatible with AGP 8.7)
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
       - name: Grant Execute Permissions on Gradlew
-        run: chmod +x gradlew || true
+        run: chmod +x gradlew
 
       - name: Prepare Persistent Release Keystore
         env:
@@ -38,73 +51,45 @@ jobs:
             echo "Decoding persistent keystore from GitHub Secrets..."
             echo "$KEYSTORE_BASE64" | base64 -d > keystore/release.jks
           else
-            echo "Using persistent repository release keystore..."
+            echo "WARNING: ANDROID_KEYSTORE_BASE64 not set - generating a temporary keystore."
             keytool -genkeypair -v -keystore keystore/release.jks \
-              -alias ngbrowser -keyalg RSA -keysize 2048 -validity 10000 \
-              -storepass "${{ secrets.KEYSTORE_PASSWORD || 'NayaGram2026SecurePass!' }}" \
-              -keypass "${{ secrets.KEY_PASSWORD || 'NayaGram2026SecurePass!' }}" \
+              -alias "$KEY_ALIAS" -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass "$KEYSTORE_PASSWORD" -keypass "$KEY_PASSWORD" \
               -dname "CN=NayaGram Platform, OU=NG Browser, O=NayaGram Platform, L=Dhaka, C=BD"
           fi
 
-      - name: Build Signed Release APK via Gradle
-        env:
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || 'NayaGram2026SecurePass!' }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'ngbrowser' }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'NayaGram2026SecurePass!' }}
-        run: |
-          ./gradlew assembleRelease --no-daemon --stacktrace \
-            -Dorg.gradle.internal.http.connectionTimeout=120000 \
-            -Dorg.gradle.internal.http.socketTimeout=120000
-
-      - name: Build Signed Play Store AAB via Gradle
-        env:
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || 'NayaGram2026SecurePass!' }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'ngbrowser' }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'NayaGram2026SecurePass!' }}
-        run: |
-          ./gradlew bundleRelease --no-daemon --stacktrace \
-            -Dorg.gradle.internal.http.connectionTimeout=120000 \
-            -Dorg.gradle.internal.http.socketTimeout=120000
+      - name: Build Signed Release APK & AAB via Gradle
+        run: ./gradlew :app:assembleRelease :app:bundleRelease --no-daemon --stacktrace
 
       - name: Verify Signed Artifacts & Validate Signature
         run: |
           mkdir -p artifacts_out
-          cp app/build/outputs/apk/release/app-release.apk artifacts_out/NGBrowser-Release-APK.apk
-          cp app/build/outputs/bundle/release/app-release.aab artifacts_out/NGBrowser-Release-AAB.aab
-          
           VERSION_NAME="1.0.0"
-          cp artifacts_out/NGBrowser-Release-APK.apk artifacts_out/NGBrowser-v${VERSION_NAME}-Release.apk
-          cp artifacts_out/NGBrowser-Release-AAB.aab artifacts_out/NGBrowser-v${VERSION_NAME}-Release.aab
-
-          echo "=== ARTIFACT EVIDENCE ==="
+          cp app/build/outputs/apk/release/app-release.apk artifacts_out/NGBrowser-v${VERSION_NAME}-Release.apk
+          cp app/build/outputs/bundle/release/app-release.aab artifacts_out/NGBrowser-v${VERSION_NAME}-Release.aab
           ls -lh artifacts_out/
-          
-          echo "Verifying APK Signatures..."
-          $ANDROID_HOME/build-tools/34.0.0/apksigner verify -v artifacts_out/NGBrowser-Release-APK.apk
-
-      - name: Upload NGBrowser-Release-AAB
-        uses: actions/upload-artifact@v4
-        with:
-          name: NGBrowser-Release-AAB
-          path: artifacts_out/NGBrowser-Release-AAB.aab
+          APKSIGNER=$(ls -d $ANDROID_HOME/build-tools/*/ | sort -V | tail -1)apksigner
+          "$APKSIGNER" verify -v artifacts_out/NGBrowser-v${VERSION_NAME}-Release.apk
 
       - name: Upload NGBrowser-Release-APK
         uses: actions/upload-artifact@v4
         with:
           name: NGBrowser-Release-APK
-          path: artifacts_out/NGBrowser-Release-APK.apk
+          path: artifacts_out/*.apk
+
+      - name: Upload NGBrowser-Release-AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: NGBrowser-Release-AAB
+          path: artifacts_out/*.aab
 
       - name: Publish GitHub Release
+        if: github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="v1.0.0"
-          echo "Creating or updating GitHub Release $TAG..."
-          gh release create $TAG \
-            artifacts_out/NGBrowser-Release-APK.apk \
-            artifacts_out/NGBrowser-v1.0.0-Release.apk \
-            artifacts_out/NGBrowser-Release-AAB.aab \
-            artifacts_out/NGBrowser-v1.0.0-Release.aab \
-            --title "NG Browser v1.0.0 Official Release" \
-            --notes "Official Chromium & Brave-Core powered Android APK and Play Store AAB release by NayaGram Platform. Package: org.nayagram.ngbrowser." \
-            --target main || true
+          TAG="v1.0.0-build${{ github.run_number }}"
+          gh release create "$TAG" artifacts_out/* \
+            --title "NG Browser 1.0.0 (build ${{ github.run_number }})" \
+            --notes "NG Browser Android APK and Play Store AAB by NayaGram Platform. Package: org.nayagram.ngbrowser." \
+            --target "${{ github.sha }}"

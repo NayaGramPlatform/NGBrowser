@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- NG Browser launcher icon (vector, no PNG mipmaps required) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:fillColor="#0288D1" android:pathData="M54,4a50,50 0,1 1,0 100a50,50 0,1 1,0 -100z"/>
+    <path android:fillColor="#00E5FF" android:pathData="M54,18a36,36 0,1 1,0 72a36,36 0,1 1,0 -72z"/>
+    <path android:fillColor="#FFFFFF" android:pathData="M34,74V34h8l16,26V34h8v40h-8L42,48v26z"/>
+</vector>
