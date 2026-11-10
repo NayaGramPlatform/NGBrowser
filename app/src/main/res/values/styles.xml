@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.NGBrowser" parent="Theme.MaterialComponents.Light.NoActionBar">
+        <item name="colorPrimary">@color/ng_cyan_primary</item>
+        <item name="colorPrimaryDark">@color/ng_sky_blue</item>
+        <item name="colorAccent">@color/ng_cyan_primary</item>
+        <item name="android:statusBarColor">@color/ng_sky_blue</item>
+    </style>
+</resources>
