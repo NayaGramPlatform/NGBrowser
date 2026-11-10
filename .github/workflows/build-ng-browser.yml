@@ -2,9 +2,9 @@ name: Build Signed NG Browser (AAB & APK)
 
 on:
   push:
-    branches: [ master, main, MasterPro ]
+    branches: [ MasterPro, main ]
   pull_request:
-    branches: [ master, main, MasterPro ]
+    branches: [ MasterPro, main ]
   workflow_dispatch:
 
 permissions:
@@ -97,4 +97,4 @@ jobs:
             artifacts_out/NGBrowser-v1.0.0-Release.aab \
             --title "NG Browser v1.0.0 Official Release" \
             --notes "Official Chromium & Brave-Core powered Android APK and Play Store AAB release by NayaGram Platform. Package: org.nayagram.ngbrowser." \
-            --target master || true
+            --target MasterPro || true
