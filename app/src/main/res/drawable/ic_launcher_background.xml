@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- NG Browser icon background: cyan to blue, matching the logo ring. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <gradient
+        android:angle="315"
+        android:startColor="#00E5FF"
+        android:endColor="#0051FE"
+        android:type="linear" />
+</shape>

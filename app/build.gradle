@@ -2,16 +2,22 @@ plugins {
     id 'com.android.application'
 }
 
+// Every Play Store upload needs a higher versionCode. CI passes GITHUB_RUN_NUMBER,
+// so each GitHub build gets a new number automatically (100 + run number).
+def ciRun = (System.getenv("GITHUB_RUN_NUMBER") ?: "0").toInteger()
+def releaseKeystore = rootProject.file("keystore/release.jks")
+
 android {
     namespace 'org.nayagram.ngbrowser'
-    compileSdk 34
+    compileSdk 35
 
     defaultConfig {
         applicationId "org.nayagram.ngbrowser"
         minSdk 24
-        targetSdk 34
-        versionCode 100
-        versionName "1.0.0"
+        // Google Play requires new apps and updates to target a recent Android version.
+        targetSdk 35
+        versionCode 100 + ciRun
+        versionName "1.0.${ciRun}"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         ndk {
@@ -21,21 +27,22 @@ android {
 
     signingConfigs {
         release {
-            storeFile rootProject.file("keystore/release.jks")
-            storePassword System.getenv("KEYSTORE_PASSWORD") ?: "NayaGram2026SecurePass!"
+            // Passwords come ONLY from environment variables / GitHub Secrets.
+            // Never write keystore passwords in this public repository.
+            storeFile releaseKeystore
+            storePassword System.getenv("KEYSTORE_PASSWORD")
             keyAlias System.getenv("KEY_ALIAS") ?: "ngbrowser"
-            keyPassword System.getenv("KEY_PASSWORD") ?: "NayaGram2026SecurePass!"
+            keyPassword System.getenv("KEY_PASSWORD")
         }
     }
 
     buildTypes {
         release {
             minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            signingConfig signingConfigs.release
-        }
-        debug {
-            signingConfig signingConfigs.release
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt')
+            if (releaseKeystore.exists() && System.getenv("KEYSTORE_PASSWORD")) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 
