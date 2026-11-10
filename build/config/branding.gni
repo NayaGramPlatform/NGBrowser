@@ -1,18 +1,6 @@
-# Copyright (c) 2026 NayaGram Platform. All rights reserved.
-# Official Final Branding Configuration for NG Browser
-
+# NG Browser Official Branding Configurations by NayaGram Platform
 brave_product_name = "NG Browser"
-brave_project_name = "NG Browser"
+brave_project_name = "ngbrowser"
 brave_company_name = "NayaGram Platform"
-brave_exe = "ngbrowser"
-brave_desktop_shortcut_name = "NG Browser"
-
-# Package and Bundle Identifiers (Official: org.nayagram.ngbrowser)
 brave_android_package = "org.nayagram.ngbrowser"
-brave_mac_bundle_id = "org.nayagram.ngbrowser"
-brave_ios_bundle_id = "org.nayagram.ngbrowser.ios"
-brave_windows_app_id = "NayaGram.NGBrowser"
-
-# Search engine and update endpoints
-brave_default_search_engine_name = "NG Search"
-brave_default_search_engine_url = "https://duckduckgo.com/?q={searchTerms}"
+brave_exe = "ngbrowser"
