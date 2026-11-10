@@ -35,57 +35,34 @@ jobs:
         run: |
           mkdir -p keystore
           if [ -n "$KEYSTORE_BASE64" ]; then
-            echo "Decoding persistent keystore from GitHub Secrets..."
-            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/ngbrowser-release.jks"
+            echo "Decoding persistent keystore from GitHub Secrets to keystore/release.jks..."
+            echo "$KEYSTORE_BASE64" | base64 -d > keystore/release.jks
           else
-            echo "Generating fallback release keystore..."
-            keytool -genkeypair -v -keystore "$RUNNER_TEMP/ngbrowser-release.jks" \
+            echo "Generating fallback release keystore at keystore/release.jks..."
+            keytool -genkeypair -v -keystore keystore/release.jks \
               -alias ngbrowser -keyalg RSA -keysize 2048 -validity 10000 \
               -storepass "NayaGram2026SecurePass!" \
               -keypass "NayaGram2026SecurePass!" \
               -dname "CN=NayaGram Platform, OU=NG Browser, O=NayaGram Platform, L=Dhaka, C=BD"
           fi
+          ls -lh keystore/
 
-      - name: Build Unsigned/Standard Release APK and AAB via Gradle
+      - name: Build Signed Release APK and AAB via Gradle
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || secrets.STORE_PASSWORD || 'NayaGram2026SecurePass!' }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD || secrets.KEYSTORE_PASSWORD || 'NayaGram2026SecurePass!' }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'ngbrowser' }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'NayaGram2026SecurePass!' }}
         run: |
           ./gradlew clean assembleRelease bundleRelease --no-daemon --stacktrace \
             -Dorg.gradle.internal.http.connectionTimeout=120000 \
             -Dorg.gradle.internal.http.socketTimeout=120000
 
-      - name: Sign release APK
-        env:
-          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD || secrets.KEYSTORE_PASSWORD || 'NayaGram2026SecurePass!' }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'NayaGram2026SecurePass!' }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'ngbrowser' }}
-        run: |
-          # Locate built APK
-          APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
-          if [ -z "$APK_PATH" ]; then
-            echo "Error: Release APK not found!"
-            exit 1
-          fi
-          echo "Found APK at: $APK_PATH"
-
-          # Use Android build-tools apksigner
-          APKSIGNER=$ANDROID_HOME/build-tools/34.0.0/apksigner
-          
-          $APKSIGNER sign \
-            --ks "$RUNNER_TEMP/ngbrowser-release.jks" \
-            --ks-key-alias "$KEY_ALIAS" \
-            --ks-pass "pass:$STORE_PASSWORD" \
-            --key-pass "pass:$KEY_PASSWORD" \
-            "$APK_PATH"
-
-          echo "APK successfully signed with apksigner!"
-
       - name: Verify Signed Artifacts & Validate Signature
         run: |
           mkdir -p artifacts_out
-          APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
-          AAB_PATH=$(find app/build/outputs/bundle/release -name "*.aab" | head -n 1)
-          
-          cp "$APK_PATH" artifacts_out/NGBrowser-Release-APK.apk
-          cp "$AAB_PATH" artifacts_out/NGBrowser-Release-AAB.aab
+          cp app/build/outputs/apk/release/app-release.apk artifacts_out/NGBrowser-Release-APK.apk
+          cp app/build/outputs/bundle/release/app-release.aab artifacts_out/NGBrowser-Release-AAB.aab
           
           VERSION_NAME="1.0.0"
           cp artifacts_out/NGBrowser-Release-APK.apk artifacts_out/NGBrowser-v${VERSION_NAME}-Release.apk
