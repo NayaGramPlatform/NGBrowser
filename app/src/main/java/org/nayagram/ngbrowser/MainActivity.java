@@ -1,18 +1,19 @@
 package org.nayagram.ngbrowser;
 
 import android.annotation.SuppressLint;
-import android.app.DownloadManager;
-import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
+import android.net.http.SslError;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.view.KeyEvent;
-import android.view.MenuItem;
 import android.view.View;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.webkit.CookieManager;
+import android.webkit.GeolocationPermissions;
+import android.webkit.PermissionRequest;
+import android.webkit.SslErrorHandler;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
@@ -31,8 +32,9 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import org.nayagram.ngbrowser.db.NGBrowserDbHelper;
-import org.nayagram.ngbrowser.manager.DownloadHandler;
 import org.nayagram.ngbrowser.model.TabItem;
+import org.nayagram.ngbrowser.security.SecureDownloadHandler;
+import org.nayagram.ngbrowser.security.ShieldsManager;
 
 import java.io.ByteArrayInputStream;
 import java.net.URLEncoder;
@@ -53,19 +55,15 @@ public class MainActivity extends AppCompatActivity {
     private final List<TabItem> tabsList = new ArrayList<>();
     private int currentTabIndex = -1;
 
-    private boolean isShieldActive = true;
+    private final ShieldsManager shieldsManager = new ShieldsManager();
     private boolean isDesktopMode = false;
     private boolean isDarkMode = false;
+    private boolean isHttpsOnlyMode = true;
 
     private NGBrowserDbHelper dbHelper;
     private SharedPreferences prefs;
 
     private static final String DESKTOP_USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
-    private static final String[] AD_DOMAINS = new String[]{
-            "doubleclick.net", "googleadservices.com", "adservice.google.com",
-            "facebook.com/tr", "analytics.google.com", "googletagmanager.com",
-            "ad-delivery.net", "adnxs.com", "pagead2.googlesyndication.com"
-    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -78,7 +76,7 @@ public class MainActivity extends AppCompatActivity {
         initViews();
         setupListeners();
 
-        // Create initial default tab
+        // Create default initial tab
         createNewTab("https://duckduckgo.com", false);
     }
 
@@ -112,13 +110,14 @@ public class MainActivity extends AppCompatActivity {
         WebSettings settings = webView.getSettings();
 
         settings.setJavaScriptEnabled(true);
-        settings.setDomStorageEnabled(true);
+        settings.setDomStorageEnabled(!isIncognito);
         settings.setDatabaseEnabled(!isIncognito);
         settings.setUseWideViewPort(true);
         settings.setLoadWithOverviewMode(true);
         settings.setBuiltInZoomControls(true);
         settings.setDisplayZoomControls(false);
 
+        // Security & Isolation Policy
         settings.setAllowFileAccess(false);
         settings.setAllowContentAccess(false);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
@@ -132,7 +131,7 @@ public class MainActivity extends AppCompatActivity {
         }
 
         webView.setDownloadListener((url, userAgent, contentDisposition, mimetype, contentLength) ->
-                DownloadHandler.startDownload(MainActivity.this, url, userAgent, contentDisposition, mimetype));
+                SecureDownloadHandler.processDownload(MainActivity.this, url, userAgent, contentDisposition, mimetype));
 
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
@@ -157,26 +156,67 @@ public class MainActivity extends AppCompatActivity {
                     }
                 }
             }
+
+            @Override
+            public void onPermissionRequest(final PermissionRequest request) {
+                // Safe Site Permission Management
+                runOnUiThread(() -> {
+                    AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
+                    builder.setTitle("Site Permission Request");
+                    builder.setMessage("This site requests permission for: " + String.join(", ", request.getResources()));
+                    builder.setPositiveButton("Allow", (dialog, which) -> request.grant(request.getResources()));
+                    builder.setNegativeButton("Block", (dialog, which) -> request.deny());
+                    builder.show();
+                });
+            }
+
+            @Override
+            public void onGeolocationPermissionsShowPrompt(String origin, GeolocationPermissions.Callback callback) {
+                AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
+                builder.setTitle("Location Access Prompt");
+                builder.setMessage("Allow " + origin + " to access your location?");
+                builder.setPositiveButton("Allow", (dialog, which) -> callback.invoke(origin, true, false));
+                builder.setNegativeButton("Block", (dialog, which) -> callback.invoke(origin, false, false));
+                builder.show();
+            }
         });
 
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                if (isHttpsOnlyMode && request.getUrl() != null) {
+                    String url = request.getUrl().toString();
+                    if (url.startsWith("http://")) {
+                        view.loadUrl(url.replace("http://", "https://"));
+                        return true;
+                    }
+                }
                 return false;
             }
 
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
-                if (isShieldActive && request.getUrl() != null) {
-                    String url = request.getUrl().toString().toLowerCase();
-                    for (String adDomain : AD_DOMAINS) {
-                        if (url.contains(adDomain)) {
-                            return new WebResourceResponse("text/plain", "UTF-8",
-                                    new ByteArrayInputStream("".getBytes(StandardCharsets.UTF_8)));
-                        }
+                if (request.getUrl() != null) {
+                    String url = request.getUrl().toString();
+                    if (shieldsManager.shouldBlockUrl(url)) {
+                        return new WebResourceResponse("text/plain", "UTF-8",
+                                new ByteArrayInputStream("".getBytes(StandardCharsets.UTF_8)));
                     }
                 }
                 return super.shouldInterceptRequest(view, request);
+            }
+
+            @Override
+            public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
+                AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
+                builder.setTitle("🔒 Security Warning: SSL Certificate Error");
+                builder.setMessage("The security certificate for this site is invalid or untrusted. Access blocked for your protection.");
+                builder.setPositiveButton("Go Back", (dialog, which) -> {
+                    handler.cancel();
+                    if (view.canGoBack()) view.goBack();
+                });
+                builder.setNegativeButton("Proceed Anyway (Unsafe)", (dialog, which) -> handler.proceed());
+                builder.show();
             }
 
             @Override
@@ -202,7 +242,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void createNewTab(String url, boolean isIncognito) {
         WebView webView = createWebViewInstance(isIncognito);
-        TabItem tab = new TabItem(UUID.randomUUID().toString(), "New Tab", url, webView, isIncognito);
+        TabItem tab = new TabItem(UUID.randomUUID().toString(), isIncognito ? "Private Tab" : "New Tab", url, webView, isIncognito);
         tabsList.add(tab);
         switchToTab(tabsList.size() - 1);
         webView.loadUrl(url);
@@ -226,17 +266,9 @@ public class MainActivity extends AppCompatActivity {
             if (current != null) current.reload();
         });
 
-        btnShields.setOnClickListener(v -> {
-            isShieldActive = !isShieldActive;
-            btnShields.setAlpha(isShieldActive ? 1.0f : 0.4f);
-            String status = isShieldActive ? "NG Shields Active (AdBlock ON)" : "NG Shields Paused";
-            Toast.makeText(MainActivity.this, status, Toast.LENGTH_SHORT).show();
-            WebView current = getCurrentWebView();
-            if (current != null) current.reload();
-        });
+        btnShields.setOnClickListener(v -> showShieldsStatusDialog());
 
         btnTabsCount.setOnClickListener(v -> showTabsManagerDialog());
-
         btnMenu.setOnClickListener(this::showPopupMenu);
 
         urlEditText.setOnEditorActionListener((v, actionId, event) -> {
@@ -262,6 +294,24 @@ public class MainActivity extends AppCompatActivity {
             WebView current = getCurrentWebView();
             if (current != null) current.loadUrl("https://duckduckgo.com");
         });
+    }
+
+    private void showShieldsStatusDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("🛡️ NG Shields & Privacy Control");
+        String message = "Status: " + (shieldsManager.isShieldEnabled() ? "ACTIVE (AdBlock ON)" : "PAUSED") +
+                "\nTrackers & Ads Blocked: " + shieldsManager.getBlockedCount() +
+                "\nHTTPS-Only Navigation: " + (isHttpsOnlyMode ? "ACTIVE" : "OFF") +
+                "\n3rd-Party Tracking Cookies: BLOCKED";
+        builder.setMessage(message);
+        builder.setPositiveButton(shieldsManager.isShieldEnabled() ? "Pause Shields" : "Enable Shields", (dialog, which) -> {
+            shieldsManager.setShieldEnabled(!shieldsManager.isShieldEnabled());
+            btnShields.setAlpha(shieldsManager.isShieldEnabled() ? 1.0f : 0.4f);
+            WebView current = getCurrentWebView();
+            if (current != null) current.reload();
+        });
+        builder.setNeutralButton("Reset Counters", (dialog, which) -> shieldsManager.resetBlockedCount());
+        builder.show();
     }
 
     private void loadEnteredUrl() {
@@ -297,13 +347,14 @@ public class MainActivity extends AppCompatActivity {
     private void showPopupMenu(View anchor) {
         PopupMenu popup = new PopupMenu(this, anchor);
         popup.getMenu().add("➕ New Tab");
-        popup.getMenu().add("🕶️ Private Tab");
+        popup.getMenu().add("🕶️ Private Tab (Incognito)");
         popup.getMenu().add("⭐ Add Bookmark");
         popup.getMenu().add("📚 Bookmarks & History");
+        popup.getMenu().add("🔒 HTTPS-Only Mode (" + (isHttpsOnlyMode ? "ON" : "OFF") + ")");
         popup.getMenu().add("🖥️ Desktop Mode (" + (isDesktopMode ? "ON" : "OFF") + ")");
         popup.getMenu().add("🌙 Dark Mode (" + (isDarkMode ? "ON" : "OFF") + ")");
-        popup.getMenu().add("⚙️ Search Engine Settings");
-        popup.getMenu().add("🗑️ Clear Browsing History");
+        popup.getMenu().add("⚙️ Privacy & Search Settings");
+        popup.getMenu().add("🗑️ Clear Browsing History & Cookies");
 
         popup.setOnMenuItemClickListener(item -> {
             String title = item.getTitle().toString();
@@ -311,24 +362,28 @@ public class MainActivity extends AppCompatActivity {
                 createNewTab("https://duckduckgo.com", false);
             } else if (title.contains("Private Tab")) {
                 createNewTab("https://duckduckgo.com", true);
-                Toast.makeText(this, "Private Tab Created", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "Isolated Private Tab Active 🕶️", Toast.LENGTH_SHORT).show();
             } else if (title.contains("Add Bookmark")) {
                 WebView current = getCurrentWebView();
                 if (current != null) {
                     dbHelper.addBookmark(current.getTitle(), current.getUrl());
-                    Toast.makeText(this, "Bookmark Added! ⭐", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, "Bookmark Saved ⭐", Toast.LENGTH_SHORT).show();
                 }
             } else if (title.contains("Bookmarks & History")) {
                 showBookmarksHistoryDialog();
+            } else if (title.contains("HTTPS-Only Mode")) {
+                isHttpsOnlyMode = !isHttpsOnlyMode;
+                Toast.makeText(this, "HTTPS-Only Mode: " + (isHttpsOnlyMode ? "Enabled 🔒" : "Disabled"), Toast.LENGTH_SHORT).show();
             } else if (title.contains("Desktop Mode")) {
                 toggleDesktopMode();
             } else if (title.contains("Dark Mode")) {
                 toggleDarkMode();
-            } else if (title.contains("Search Engine Settings")) {
+            } else if (title.contains("Privacy & Search Settings")) {
                 showSearchEngineDialog();
             } else if (title.contains("Clear Browsing History")) {
                 dbHelper.clearHistory();
-                Toast.makeText(this, "History Cleared!", Toast.LENGTH_SHORT).show();
+                CookieManager.getInstance().removeAllCookies(null);
+                Toast.makeText(this, "History & Cookies Cleared! 🗑️", Toast.LENGTH_SHORT).show();
             }
             return true;
         });
@@ -355,7 +410,7 @@ public class MainActivity extends AppCompatActivity {
                 current.reload();
             }
         }
-        Toast.makeText(this, "Webpage Dark Mode: " + (isDarkMode ? "ON" : "OFF"), Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, "Dark Mode: " + (isDarkMode ? "ON" : "OFF"), Toast.LENGTH_SHORT).show();
     }
 
     private void showTabsManagerDialog() {
@@ -366,7 +421,7 @@ public class MainActivity extends AppCompatActivity {
         }
 
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle("Open Tabs (" + tabsList.size() + ")");
+        builder.setTitle("Active Tabs (" + tabsList.size() + ")");
         builder.setItems(tabTitles.toArray(new String[0]), (dialog, which) -> switchToTab(which));
         builder.setPositiveButton("➕ New Tab", (dialog, which) -> createNewTab("https://duckduckgo.com", false));
         if (tabsList.size() > 1) {
