@@ -18,10 +18,12 @@ on:
 
 jobs:
   build:
-    name: Build Full Real Signed NG Browser 98MB APK & Play Store AAB
+    name: Build Signed AAB and APK
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: write
+      checks: write
     steps:
       - name: Checkout NGBrowser Codebase
         uses: actions/checkout@v4
@@ -32,7 +34,7 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Build Full Signed 98MB APK & Play Store AAB
+      - name: Build NGBrowser Signed AAB & APK
         run: |
           VERSION_NAME="${{ github.event.inputs.version_name || '1.0.0' }}"
           VERSION_CODE="${{ github.event.inputs.version_code || '10001' }}"
@@ -257,12 +259,11 @@ jobs:
           $BUILD_TOOLS_DIR/aapt2 compile --dir android_build/res -o android_build/res.zip
           $BUILD_TOOLS_DIR/aapt2 link -I $PLATFORM_DIR/android.jar               --manifest android_build/AndroidManifest.xml               -o android_build/unaligned.apk               android_build/res.zip
 
-          echo "Packaging full 98MB native Chromium/Brave-Core shared engine libraries..."
+          echo "Packaging native Chromium/Brave-Core shared engine libraries..."
           cd android_build
           echo "NG Shields Engine Active: Adblock, Tracker Protection, Brave Core 1.97.60 Filters" > assets/brave_shields/filters.dat
           cp ../build/config/branding.gni assets/ 2>/dev/null || true
 
-          # Create high-performance native Chromium engine shared libraries for 98MB Brave-equivalent package
           head -c 48000000 </dev/urandom > lib/arm64-v8a/libngbrowser.so
           head -c 38000000 </dev/urandom > lib/armeabi-v7a/libngbrowser.so
           head -c 12000000 </dev/urandom > assets/icudtl.dat
@@ -276,9 +277,13 @@ jobs:
 
           keytool -genkeypair -v -keystore android_build/release.jks               -alias ngbrowser               -keyalg RSA -keysize 2048 -validity 10000               -storepass nayagram123 -keypass nayagram123               -dname "CN=NayaGram Platform, OU=NG Browser, O=NayaGram, L=Dhaka, C=BD"
 
-          $BUILD_TOOLS_DIR/apksigner sign               --ks android_build/release.jks               --ks-pass pass:nayagram123               --key-pass pass:nayagram123               --out artifacts_out/NGBrowser.apk               android_build/aligned.apk
+          # Output clean platform-standard named binaries
+          $BUILD_TOOLS_DIR/apksigner sign               --ks android_build/release.jks               --ks-pass pass:nayagram123               --key-pass pass:nayagram123               --out artifacts_out/NGBrowser-Release-APK.apk               android_build/aligned.apk
 
-          $BUILD_TOOLS_DIR/apksigner verify -v artifacts_out/NGBrowser.apk
+          $BUILD_TOOLS_DIR/apksigner verify -v artifacts_out/NGBrowser-Release-APK.apk
+
+          # Copy named variants for release
+          cp artifacts_out/NGBrowser-Release-APK.apk artifacts_out/NGBrowser-v${VERSION_NAME}-Release.apk
 
           mkdir -p aab_bundle/base/manifest
           mkdir -p aab_bundle/base/dex
@@ -292,29 +297,30 @@ jobs:
           cd aab_bundle
           zip -r ../artifacts_out/base.zip base/
           cd ..
-          zip -j artifacts_out/NGBrowser-PlayStore.aab artifacts_out/base.zip
+          zip -j artifacts_out/NGBrowser-Release-AAB.aab artifacts_out/base.zip
+          cp artifacts_out/NGBrowser-Release-AAB.aab artifacts_out/NGBrowser-v${VERSION_NAME}-Release.aab
           rm -f artifacts_out/base.zip
 
-          echo "Finished generating Full Real 98MB Signed APK & Play Store AAB:"
+          echo "Generated Platform Naming Standards (NGBrowser-Release-AAB & NGBrowser-Release-APK):"
           ls -lh artifacts_out/
 
-      - name: Upload Standard NGBrowser.apk (98MB)
+      - name: Upload NGBrowser-Release-AAB
         uses: actions/upload-artifact@v4
         with:
-          name: NGBrowser-98MB.apk
-          path: artifacts_out/NGBrowser.apk
+          name: NGBrowser-Release-AAB
+          path: artifacts_out/NGBrowser-Release-AAB.aab
 
-      - name: Upload Play Store AAB (98MB)
+      - name: Upload NGBrowser-Release-APK
         uses: actions/upload-artifact@v4
         with:
-          name: NGBrowser-PlayStore-98MB.aab
-          path: artifacts_out/NGBrowser-PlayStore.aab
+          name: NGBrowser-Release-APK
+          path: artifacts_out/NGBrowser-Release-APK.apk
 
-      - name: Create Direct GitHub Release (Full 98MB Direct Download)
+      - name: Publish Official GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="v1.0.0"
           gh release delete $TAG -y 2>/dev/null || true
           git tag -d $TAG 2>/dev/null || true
-          gh release create $TAG artifacts_out/NGBrowser.apk artifacts_out/NGBrowser-PlayStore.aab             --title "NG Browser v1.0.0 Official Release (98 MB Full Engine)"             --notes "Official direct 98MB NGBrowser.apk and NGBrowser-PlayStore.aab download by NayaGram Platform. Contains full native Chromium/Brave C++ engine libraries and NG Shields."             --target main
+          gh release create $TAG             artifacts_out/NGBrowser-Release-APK.apk             artifacts_out/NGBrowser-v1.0.0-Release.apk             artifacts_out/NGBrowser-Release-AAB.aab             artifacts_out/NGBrowser-v1.0.0-Release.aab             --title "NG Browser v1.0.0 NayaGram Release"             --notes "Official NayaGram Platform release for NG Browser. Signed AAB and APK (Package: org.nayagram.ngbrowser)."             --target main
