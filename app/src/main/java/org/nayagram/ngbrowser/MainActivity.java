@@ -3,7 +3,6 @@ package org.nayagram.ngbrowser;
 import android.annotation.SuppressLint;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
-import android.net.http.SslError;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.view.KeyEvent;
@@ -13,7 +12,6 @@ import android.view.inputmethod.InputMethodManager;
 import android.webkit.CookieManager;
 import android.webkit.GeolocationPermissions;
 import android.webkit.PermissionRequest;
-import android.webkit.SslErrorHandler;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
@@ -76,7 +74,7 @@ public class MainActivity extends AppCompatActivity {
         initViews();
         setupListeners();
 
-        // Create default initial tab
+        // Create default initial tab with Brave/DuckDuckGo clean UI
         createNewTab("https://duckduckgo.com", false);
     }
 
@@ -117,7 +115,6 @@ public class MainActivity extends AppCompatActivity {
         settings.setBuiltInZoomControls(true);
         settings.setDisplayZoomControls(false);
 
-        // Security & Isolation Policy
         settings.setAllowFileAccess(false);
         settings.setAllowContentAccess(false);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
@@ -156,29 +153,6 @@ public class MainActivity extends AppCompatActivity {
                     }
                 }
             }
-
-            @Override
-            public void onPermissionRequest(final PermissionRequest request) {
-                // Safe Site Permission Management
-                runOnUiThread(() -> {
-                    AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
-                    builder.setTitle("Site Permission Request");
-                    builder.setMessage("This site requests permission for: " + String.join(", ", request.getResources()));
-                    builder.setPositiveButton("Allow", (dialog, which) -> request.grant(request.getResources()));
-                    builder.setNegativeButton("Block", (dialog, which) -> request.deny());
-                    builder.show();
-                });
-            }
-
-            @Override
-            public void onGeolocationPermissionsShowPrompt(String origin, GeolocationPermissions.Callback callback) {
-                AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
-                builder.setTitle("Location Access Prompt");
-                builder.setMessage("Allow " + origin + " to access your location?");
-                builder.setPositiveButton("Allow", (dialog, which) -> callback.invoke(origin, true, false));
-                builder.setNegativeButton("Block", (dialog, which) -> callback.invoke(origin, false, false));
-                builder.show();
-            }
         });
 
         webView.setWebViewClient(new WebViewClient() {
@@ -204,19 +178,6 @@ public class MainActivity extends AppCompatActivity {
                     }
                 }
                 return super.shouldInterceptRequest(view, request);
-            }
-
-            @Override
-            public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
-                AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
-                builder.setTitle("🔒 Security Warning: SSL Certificate Error");
-                builder.setMessage("The security certificate for this site is invalid or untrusted. Access blocked for your protection.");
-                builder.setPositiveButton("Go Back", (dialog, which) -> {
-                    handler.cancel();
-                    if (view.canGoBack()) view.goBack();
-                });
-                builder.setNegativeButton("Proceed Anyway (Unsafe)", (dialog, which) -> handler.proceed());
-                builder.show();
             }
 
             @Override
@@ -267,7 +228,6 @@ public class MainActivity extends AppCompatActivity {
         });
 
         btnShields.setOnClickListener(v -> showShieldsStatusDialog());
-
         btnTabsCount.setOnClickListener(v -> showTabsManagerDialog());
         btnMenu.setOnClickListener(this::showPopupMenu);
 
@@ -298,11 +258,10 @@ public class MainActivity extends AppCompatActivity {
 
     private void showShieldsStatusDialog() {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle("🛡️ NG Shields & Privacy Control");
+        builder.setTitle("🛡️ NG Shields & Privacy");
         String message = "Status: " + (shieldsManager.isShieldEnabled() ? "ACTIVE (AdBlock ON)" : "PAUSED") +
                 "\nTrackers & Ads Blocked: " + shieldsManager.getBlockedCount() +
-                "\nHTTPS-Only Navigation: " + (isHttpsOnlyMode ? "ACTIVE" : "OFF") +
-                "\n3rd-Party Tracking Cookies: BLOCKED";
+                "\nHTTPS-Only Mode: " + (isHttpsOnlyMode ? "ACTIVE" : "OFF");
         builder.setMessage(message);
         builder.setPositiveButton(shieldsManager.isShieldEnabled() ? "Pause Shields" : "Enable Shields", (dialog, which) -> {
             shieldsManager.setShieldEnabled(!shieldsManager.isShieldEnabled());
@@ -347,14 +306,13 @@ public class MainActivity extends AppCompatActivity {
     private void showPopupMenu(View anchor) {
         PopupMenu popup = new PopupMenu(this, anchor);
         popup.getMenu().add("➕ New Tab");
-        popup.getMenu().add("🕶️ Private Tab (Incognito)");
+        popup.getMenu().add("🕶️ Private Tab");
         popup.getMenu().add("⭐ Add Bookmark");
         popup.getMenu().add("📚 Bookmarks & History");
         popup.getMenu().add("🔒 HTTPS-Only Mode (" + (isHttpsOnlyMode ? "ON" : "OFF") + ")");
         popup.getMenu().add("🖥️ Desktop Mode (" + (isDesktopMode ? "ON" : "OFF") + ")");
         popup.getMenu().add("🌙 Dark Mode (" + (isDarkMode ? "ON" : "OFF") + ")");
-        popup.getMenu().add("⚙️ Privacy & Search Settings");
-        popup.getMenu().add("🗑️ Clear Browsing History & Cookies");
+        popup.getMenu().add("🗑️ Clear History & Cookies");
 
         popup.setOnMenuItemClickListener(item -> {
             String title = item.getTitle().toString();
@@ -362,7 +320,6 @@ public class MainActivity extends AppCompatActivity {
                 createNewTab("https://duckduckgo.com", false);
             } else if (title.contains("Private Tab")) {
                 createNewTab("https://duckduckgo.com", true);
-                Toast.makeText(this, "Isolated Private Tab Active 🕶️", Toast.LENGTH_SHORT).show();
             } else if (title.contains("Add Bookmark")) {
                 WebView current = getCurrentWebView();
                 if (current != null) {
@@ -373,14 +330,25 @@ public class MainActivity extends AppCompatActivity {
                 showBookmarksHistoryDialog();
             } else if (title.contains("HTTPS-Only Mode")) {
                 isHttpsOnlyMode = !isHttpsOnlyMode;
-                Toast.makeText(this, "HTTPS-Only Mode: " + (isHttpsOnlyMode ? "Enabled 🔒" : "Disabled"), Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "HTTPS-Only: " + (isHttpsOnlyMode ? "ON" : "OFF"), Toast.LENGTH_SHORT).show();
             } else if (title.contains("Desktop Mode")) {
-                toggleDesktopMode();
+                isDesktopMode = !isDesktopMode;
+                WebView current = getCurrentWebView();
+                if (current != null) {
+                    current.getSettings().setUserAgentString(isDesktopMode ? DESKTOP_USER_AGENT : null);
+                    current.reload();
+                }
             } else if (title.contains("Dark Mode")) {
-                toggleDarkMode();
-            } else if (title.contains("Privacy & Search Settings")) {
-                showSearchEngineDialog();
-            } else if (title.contains("Clear Browsing History")) {
+                isDarkMode = !isDarkMode;
+                WebView current = getCurrentWebView();
+                if (current != null) {
+                    if (isDarkMode) {
+                        current.evaluateJavascript("document.body.style.backgroundColor='#121212'; document.body.style.color='#FFFFFF';", null);
+                    } else {
+                        current.reload();
+                    }
+                }
+            } else if (title.contains("Clear History")) {
                 dbHelper.clearHistory();
                 CookieManager.getInstance().removeAllCookies(null);
                 Toast.makeText(this, "History & Cookies Cleared! 🗑️", Toast.LENGTH_SHORT).show();
@@ -388,29 +356,6 @@ public class MainActivity extends AppCompatActivity {
             return true;
         });
         popup.show();
-    }
-
-    private void toggleDesktopMode() {
-        isDesktopMode = !isDesktopMode;
-        WebView current = getCurrentWebView();
-        if (current != null) {
-            current.getSettings().setUserAgentString(isDesktopMode ? DESKTOP_USER_AGENT : null);
-            current.reload();
-        }
-        Toast.makeText(this, "Desktop Mode: " + (isDesktopMode ? "Enabled" : "Disabled"), Toast.LENGTH_SHORT).show();
-    }
-
-    private void toggleDarkMode() {
-        isDarkMode = !isDarkMode;
-        WebView current = getCurrentWebView();
-        if (current != null) {
-            if (isDarkMode) {
-                current.evaluateJavascript("document.body.style.backgroundColor='#121212'; document.body.style.color='#FFFFFF';", null);
-            } else {
-                current.reload();
-            }
-        }
-        Toast.makeText(this, "Dark Mode: " + (isDarkMode ? "ON" : "OFF"), Toast.LENGTH_SHORT).show();
     }
 
     private void showTabsManagerDialog() {
@@ -421,87 +366,52 @@ public class MainActivity extends AppCompatActivity {
         }
 
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle("Active Tabs (" + tabsList.size() + ")");
+        builder.setTitle("Tabs (" + tabsList.size() + ")");
         builder.setItems(tabTitles.toArray(new String[0]), (dialog, which) -> switchToTab(which));
         builder.setPositiveButton("➕ New Tab", (dialog, which) -> createNewTab("https://duckduckgo.com", false));
         if (tabsList.size() > 1) {
-            builder.setNegativeButton("❌ Close Current Tab", (dialog, which) -> closeCurrentTab());
+            builder.setNegativeButton("❌ Close Tab", (dialog, which) -> {
+                tabsList.remove(currentTabIndex);
+                switchToTab(Math.max(0, currentTabIndex - 1));
+            });
         }
         builder.show();
-    }
-
-    private void closeCurrentTab() {
-        if (tabsList.size() <= 1) return;
-        tabsList.remove(currentTabIndex);
-        int nextIndex = Math.max(0, currentTabIndex - 1);
-        switchToTab(nextIndex);
     }
 
     private void showBookmarksHistoryDialog() {
-        CharSequence[] options = new CharSequence[]{"⭐ Bookmarks", "📚 Browsing History"};
+        CharSequence[] options = new CharSequence[]{"⭐ Bookmarks", "📚 History"};
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle("Saved Data");
         builder.setItems(options, (dialog, which) -> {
-            if (which == 0) showBookmarksList();
-            else showHistoryList();
-        });
-        builder.show();
-    }
-
-    private void showBookmarksList() {
-        List<NGBrowserDbHelper.Item> bookmarks = dbHelper.getBookmarks();
-        List<String> titles = new ArrayList<>();
-        for (NGBrowserDbHelper.Item b : bookmarks) {
-            titles.add(b.title + "\n" + b.url);
-        }
-        if (titles.isEmpty()) titles.add("No bookmarks saved yet.");
-
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle("Bookmarks");
-        builder.setItems(titles.toArray(new String[0]), (dialog, which) -> {
-            if (!bookmarks.isEmpty() && which < bookmarks.size()) {
-                WebView current = getCurrentWebView();
-                if (current != null) current.loadUrl(bookmarks.get(which).url);
+            if (which == 0) {
+                List<NGBrowserDbHelper.Item> bks = dbHelper.getBookmarks();
+                List<String> titles = new ArrayList<>();
+                for (NGBrowserDbHelper.Item b : bks) titles.add(b.title + "\n" + b.url);
+                if (titles.isEmpty()) titles.add("No bookmarks.");
+                AlertDialog.Builder b2 = new AlertDialog.Builder(this);
+                b2.setTitle("Bookmarks");
+                b2.setItems(titles.toArray(new String[0]), (d2, w2) -> {
+                    if (!bks.isEmpty() && w2 < bks.size()) {
+                        WebView current = getCurrentWebView();
+                        if (current != null) current.loadUrl(bks.get(w2).url);
+                    }
+                });
+                b2.show();
+            } else {
+                List<NGBrowserDbHelper.Item> hist = dbHelper.getHistory();
+                List<String> titles = new ArrayList<>();
+                for (NGBrowserDbHelper.Item h : hist) titles.add(h.title + "\n" + h.url);
+                if (titles.isEmpty()) titles.add("No history.");
+                AlertDialog.Builder b2 = new AlertDialog.Builder(this);
+                b2.setTitle("History");
+                b2.setItems(titles.toArray(new String[0]), (d2, w2) -> {
+                    if (!hist.isEmpty() && w2 < hist.size()) {
+                        WebView current = getCurrentWebView();
+                        if (current != null) current.loadUrl(hist.get(w2).url);
+                    }
+                });
+                b2.show();
             }
-        });
-        builder.show();
-    }
-
-    private void showHistoryList() {
-        List<NGBrowserDbHelper.Item> history = dbHelper.getHistory();
-        List<String> titles = new ArrayList<>();
-        for (NGBrowserDbHelper.Item h : history) {
-            titles.add(h.title + "\n" + h.url);
-        }
-        if (titles.isEmpty()) titles.add("No browsing history found.");
-
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle("Browsing History");
-        builder.setItems(titles.toArray(new String[0]), (dialog, which) -> {
-            if (!history.isEmpty() && which < history.size()) {
-                WebView current = getCurrentWebView();
-                if (current != null) current.loadUrl(history.get(which).url);
-            }
-        });
-        builder.setPositiveButton("Clear History", (dialog, which) -> {
-            dbHelper.clearHistory();
-            Toast.makeText(this, "History Cleared!", Toast.LENGTH_SHORT).show();
-        });
-        builder.show();
-    }
-
-    private void showSearchEngineDialog() {
-        String[] engines = new String[]{"DuckDuckGo (Privacy Default)", "Google", "Brave Search", "Bing"};
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle("Select Default Search Engine");
-        builder.setItems(engines, (dialog, which) -> {
-            String selected = "DuckDuckGo";
-            if (which == 1) selected = "Google";
-            else if (which == 2) selected = "Brave";
-            else if (which == 3) selected = "Bing";
-
-            prefs.edit().putString("search_engine", selected).apply();
-            Toast.makeText(this, "Search Engine set to: " + selected, Toast.LENGTH_SHORT).show();
         });
         builder.show();
     }
