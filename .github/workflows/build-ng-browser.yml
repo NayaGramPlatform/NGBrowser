@@ -49,7 +49,9 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'ngbrowser' }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'NayaGram2026SecurePass!' }}
         run: |
-          gradle assembleRelease bundleRelease --stacktrace
+          gradle assembleRelease bundleRelease --no-daemon --stacktrace \
+            -Dorg.gradle.internal.http.connectionTimeout=120000 \
+            -Dorg.gradle.internal.http.socketTimeout=120000
 
       - name: Verify Signed Artifacts & Validate Signature
         run: |
