@@ -25,13 +25,6 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
-
-      - name: Set up Android SDK & NDK
-        uses: android-actions/setup-android@v3
-
-      - name: Grant Execute Permissions for Gradlew
-        run: chmod +x gradlew || true
 
       - name: Prepare Persistent Release Keystore
         env:
@@ -47,7 +40,7 @@ jobs:
               -alias ngbrowser -keyalg RSA -keysize 2048 -validity 10000 \
               -storepass "${{ secrets.KEYSTORE_PASSWORD || 'NayaGram2026SecurePass!' }}" \
               -keypass "${{ secrets.KEY_PASSWORD || 'NayaGram2026SecurePass!' }}" \
-              -dname "CN=NayaGram Platform, OU=NG Browser, O=NayaGram Platform, L=Dhaka, C=BD" || true
+              -dname "CN=NayaGram Platform, OU=NG Browser, O=NayaGram Platform, L=Dhaka, C=BD"
           fi
 
       - name: Build Signed APK & Play Store AAB via Gradle
@@ -56,9 +49,9 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'ngbrowser' }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'NayaGram2026SecurePass!' }}
         run: |
-          ./gradlew assembleRelease bundleRelease --stacktrace
+          gradle assembleRelease bundleRelease --stacktrace
 
-      - name: Verify Signed Artifacts & Validate AAB
+      - name: Verify Signed Artifacts & Validate Signature
         run: |
           mkdir -p artifacts_out
           cp app/build/outputs/apk/release/app-release.apk artifacts_out/NGBrowser-Release-APK.apk
@@ -91,7 +84,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="v1.0.0"
-          echo "Creating or updating GitHub Release $TAG safely without deletion..."
+          echo "Creating or updating GitHub Release $TAG..."
           gh release create $TAG \
             artifacts_out/NGBrowser-Release-APK.apk \
             artifacts_out/NGBrowser-v1.0.0-Release.apk \
@@ -99,4 +92,4 @@ jobs:
             artifacts_out/NGBrowser-v1.0.0-Release.aab \
             --title "NG Browser v1.0.0 Official Release" \
             --notes "Official Chromium & Brave-Core powered Android APK and Play Store AAB release by NayaGram Platform. Package: org.nayagram.ngbrowser." \
-            --target main
+            --target main || true
