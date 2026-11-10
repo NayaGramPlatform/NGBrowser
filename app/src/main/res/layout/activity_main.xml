@@ -5,7 +5,7 @@
     android:orientation="vertical"
     android:background="@color/ng_bg_white">
 
-    <!-- Top Navigation Toolbar (Bright Cyan, Sky Blue Accent) -->
+    <!-- Top Navigation Toolbar (Bright Cyan #00E5FF & Sky Blue #0288D1 Accent) -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="56dp"
@@ -28,8 +28,8 @@
             android:id="@+id/url_edit_text"
             android:layout_width="0dp"
             android:layout_height="40dp"
-            android:layout_marginStart="8dp"
-            android:layout_marginEnd="8dp"
+            android:layout_marginStart="6dp"
+            android:layout_marginEnd="6dp"
             android:layout_weight="1"
             android:background="@drawable/bg_url_bar"
             android:hint="Search or type URL"
@@ -42,13 +42,39 @@
             android:textColorHint="@color/ng_text_hint"
             android:textSize="14sp" />
 
+        <FrameLayout
+            android:layout_width="40dp"
+            android:layout_height="40dp">
+
+            <ImageButton
+                android:id="@+id/btn_tabs_count"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Tabs"
+                android:src="@android:drawable/ic_menu_slideshow"
+                android:tint="@color/ng_white" />
+
+            <TextView
+                android:id="@+id/tv_tabs_count"
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:layout_gravity="center"
+                android:background="@drawable/bg_tab_count_badge"
+                android:gravity="center"
+                android:text="1"
+                android:textColor="@color/ng_cyan_primary"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+        </FrameLayout>
+
         <ImageButton
-            android:id="@+id/btn_home"
+            android:id="@+id/btn_menu"
             android:layout_width="40dp"
             android:layout_height="40dp"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Home"
-            android:src="@android:drawable/ic_menu_search"
+            android:contentDescription="Menu"
+            android:src="@android:drawable/ic_menu_more"
             android:tint="@color/ng_white" />
     </LinearLayout>
 
@@ -66,8 +92,8 @@
         android:layout_height="0dp"
         android:layout_weight="1">
 
-        <WebView
-            android:id="@+id/web_view"
+        <FrameLayout
+            android:id="@+id/web_container"
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
     </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
@@ -88,6 +114,16 @@
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="Back"
             android:src="@android:drawable/ic_media_previous"
+            android:tint="@color/ng_white" />
+
+        <ImageButton
+            android:id="@+id/btn_home"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Home"
+            android:src="@android:drawable/ic_menu_search"
             android:tint="@color/ng_white" />
 
         <ImageButton
