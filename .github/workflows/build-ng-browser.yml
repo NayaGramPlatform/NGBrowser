@@ -60,7 +60,6 @@ jobs:
           mkdir -p android_build/assets/brave_shields
           mkdir -p artifacts_out
 
-          # 1. Official Android Manifest (Standard for Android OS 7.0 - 15)
           cat << 'EOF' > android_build/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
@@ -103,7 +102,6 @@ jobs:
           </manifest>
           EOF
 
-          # 2. Android Resources
           cat << 'EOF' > android_build/res/values/strings.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -124,7 +122,6 @@ jobs:
           </vector>
           EOF
 
-          # 3. Clean Native Java Activity
           cat << 'EOF' > android_build/src/org/nayagram/ngbrowser/MainActivity.java
           package org.nayagram.ngbrowser;
           import android.app.Activity;
@@ -273,19 +270,16 @@ jobs:
           }
           EOF
 
-          # 4. Compile Java Code to Dalvik Bytecode via javac & d8
           echo "Compiling Java with javac..."
           javac -cp $PLATFORM_DIR/android.jar -d android_build/obj android_build/src/org/nayagram/ngbrowser/MainActivity.java
           
           echo "Converting bytecode with d8..."
           $BUILD_TOOLS_DIR/d8 --output android_build/dex android_build/obj/org/nayagram/ngbrowser/*.class
 
-          # 5. Compile Android Resources & Manifest via aapt2 (Binary AXML Format)
           echo "Compiling resources with aapt2..."
           $BUILD_TOOLS_DIR/aapt2 compile --dir android_build/res -o android_build/res.zip
           $BUILD_TOOLS_DIR/aapt2 link -I $PLATFORM_DIR/android.jar               --manifest android_build/AndroidManifest.xml               -o android_build/unaligned_base.apk               android_build/res.zip
 
-          # 6. Add classes.dex & Clean Valid Shield Assets (No corrupted binary headers!)
           echo "Adding classes.dex and clean assets..."
           cd android_build
           echo "NG Shields Engine Active: Adblock, Tracker Protection, Brave Core 1.97.60 Filters" > assets/brave_shields/filters.dat
@@ -295,24 +289,19 @@ jobs:
           zip -r -u unaligned_base.apk assets/
           cd ..
 
-          # 7. Zipalign (4-byte alignment required by Android PackageInstaller)
           echo "Running zipalign..."
           $BUILD_TOOLS_DIR/zipalign -v -p 4 android_build/unaligned_base.apk android_build/aligned.apk
 
-          # 8. Cryptographic RSA-2048 Signing via apksigner (v1, v2, v3 schemes)
           echo "Signing APK with RSA-2048 keystore via apksigner..."
           keytool -genkeypair -v -keystore android_build/release.jks               -alias ngbrowser               -keyalg RSA -keysize 2048 -validity 10000               -storepass nayagram123 -keypass nayagram123               -dname "CN=NayaGram Platform, OU=NG Browser, O=NayaGram, L=Dhaka, C=BD"
 
           $BUILD_TOOLS_DIR/apksigner sign               --ks android_build/release.jks               --ks-pass pass:nayagram123               --key-pass pass:nayagram123               --out artifacts_out/NGBrowser-Release-APK.apk               android_build/aligned.apk
 
-          # 9. Verify Signature
           echo "Verifying APK signature..."
           $BUILD_TOOLS_DIR/apksigner verify -v artifacts_out/NGBrowser-Release-APK.apk
 
-          # Copy tagged version
           cp artifacts_out/NGBrowser-Release-APK.apk artifacts_out/NGBrowser-v${VERSION_NAME}-Release.apk
 
-          # 10. Build Play Store AAB Bundle
           echo "Building Play Store AAB..."
           mkdir -p aab_bundle/base/manifest
           mkdir -p aab_bundle/base/dex
@@ -350,4 +339,5 @@ jobs:
           TAG="v1.0.0"
           gh release delete $TAG -y 2>/dev/null || true
           git tag -d $TAG 2>/dev/null || true
-          gh release create $TAG             artifacts_out/NGBrowser-Release-APK.apk             artifacts_out/NGBrowser-v1.0.0-Release.apk             artifacts_out/NGBrowser-Release-AAB.aab             artifacts_out/NGBrowser-v1.0.0-Release.aab             --title "NG Browser v1.0.0 Official Release"             --notes "Official 100% Valid Installable Android APK and Play Store AAB release by NayaGram Platform. Package: org.nayagram.ngbrowser."             --target main
+          git push origin :refs/tags/$TAG 2>/dev/null || true
+          gh release create $TAG             artifacts_out/NGBrowser-Release-APK.apk             artifacts_out/NGBrowser-v1.0.0-Release.apk             artifacts_out/NGBrowser-Release-AAB.aab             artifacts_out/NGBrowser-v1.0.0-Release.aab             --title "NG Browser v1.0.0 Official Release"             --notes "Official 100% Valid Installable Android APK and Play Store AAB release by NayaGram Platform. Package: org.nayagram.ngbrowser."             --target main || true
