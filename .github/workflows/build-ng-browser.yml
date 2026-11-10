@@ -35,13 +35,14 @@ jobs:
         id: keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASS_SECRET: ${{ secrets.KEYSTORE_PASSWORD }}
         run: |
           mkdir -p keystore
-          if [ -n "$KEYSTORE_BASE64" ]; then
+          if [ -n "$KEYSTORE_BASE64" ] && [ -n "$KEYSTORE_PASS_SECRET" ]; then
             echo "$KEYSTORE_BASE64" | base64 -d > keystore/release.jks
             echo "play_ready=true" >> "$GITHUB_OUTPUT"
           else
-            echo "::warning::ANDROID_KEYSTORE_BASE64 secret is missing. Building with a TEMPORARY key - do NOT upload this build to Google Play."
+            echo "::warning::ANDROID_KEYSTORE_BASE64 or KEYSTORE_PASSWORD secret is missing. Building with a TEMPORARY key - do NOT upload this build to Google Play."
             TMP_PASS="tmp-$(openssl rand -hex 12)"
             keytool -genkeypair -keystore keystore/release.jks -alias ngbrowser \
               -keyalg RSA -keysize 2048 -validity 30 -storepass "$TMP_PASS" -keypass "$TMP_PASS" \
