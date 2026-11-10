@@ -21,10 +21,13 @@ android {
 
     signingConfigs {
         release {
-            storeFile rootProject.file("keystore/release.jks")
-            storePassword System.getenv("KEYSTORE_PASSWORD") ?: "NayaGram2026SecurePass!"
-            keyAlias System.getenv("KEY_ALIAS") ?: "ngbrowser"
-            keyPassword System.getenv("KEY_PASSWORD") ?: "NayaGram2026SecurePass!"
+            def keystoreFile = file("keystore/release.jks")
+            if (keystoreFile.exists()) {
+                storeFile keystoreFile
+                storePassword System.getenv("KEYSTORE_PASSWORD") ?: System.getenv("STORE_PASSWORD") ?: "NayaGram2026SecurePass!"
+                keyAlias System.getenv("KEY_ALIAS") ?: "ngbrowser"
+                keyPassword System.getenv("KEY_PASSWORD") ?: "NayaGram2026SecurePass!"
+            }
         }
     }
 
@@ -32,10 +35,16 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            signingConfig signingConfigs.release
+            def keystoreFile = file("keystore/release.jks")
+            if (keystoreFile.exists()) {
+                signingConfig signingConfigs.release
+            }
         }
         debug {
-            signingConfig signingConfigs.release
+            def keystoreFile = file("keystore/release.jks")
+            if (keystoreFile.exists()) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 
