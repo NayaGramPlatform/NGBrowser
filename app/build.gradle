@@ -25,10 +25,17 @@ android {
             if (storeFilePath) {
                 def storeFileObj = file(storeFilePath)
                 if (storeFileObj.exists()) {
+                    def sp = (project.findProperty('RELEASE_STORE_PASSWORD') ?: System.getenv('RELEASE_STORE_PASSWORD') ?: '').toString().trim()
+                    def ka = (project.findProperty('RELEASE_KEY_ALIAS') ?: System.getenv('RELEASE_KEY_ALIAS') ?: '').toString().trim()
+                    def kp = (project.findProperty('RELEASE_KEY_PASSWORD') ?: System.getenv('RELEASE_KEY_PASSWORD') ?: '').toString().trim()
+                    
+                    println(">>> DEBUG SIGNING CONFIG: storeFile=" + storeFileObj.absolutePath + " exists=" + storeFileObj.exists())
+                    println(">>> DEBUG SIGNING CONFIG: storePassword length=" + sp.length() + ", alias=" + ka + ", keyPassword length=" + kp.length())
+                    
                     storeFile storeFileObj
-                    storePassword project.findProperty('RELEASE_STORE_PASSWORD') ?: System.getenv('RELEASE_STORE_PASSWORD')
-                    keyAlias project.findProperty('RELEASE_KEY_ALIAS') ?: System.getenv('RELEASE_KEY_ALIAS')
-                    keyPassword project.findProperty('RELEASE_KEY_PASSWORD') ?: System.getenv('RELEASE_KEY_PASSWORD')
+                    storePassword sp
+                    keyAlias ka
+                    keyPassword kp
                 }
             }
         }
@@ -44,7 +51,6 @@ android {
             }
         }
     }
-
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
