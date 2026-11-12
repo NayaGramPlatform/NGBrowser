@@ -1,0 +1,78 @@
+name: Android Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    name: Build & Sign Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: 1. Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 2. Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: 3. Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: 4. Decode keystore
+        env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+        run: |
+          if [ -z "$RELEASE_KEYSTORE_BASE64" ]; then
+            echo "::error::Secret RELEASE_KEYSTORE_BASE64 is empty or not configured!"
+            exit 1
+          fi
+          echo "$RELEASE_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/ngbrowser-release.jks"
+          if [ ! -s "$RUNNER_TEMP/ngbrowser-release.jks" ]; then
+            echo "::error::Failed to decode keystore file or file is empty!"
+            exit 1
+          fi
+          echo "Keystore successfully decoded to $RUNNER_TEMP/ngbrowser-release.jks"
+          keytool -list -keystore "$RUNNER_TEMP/ngbrowser-release.jks" \
+            -storepass "$RELEASE_STORE_PASSWORD" \
+            -alias "$RELEASE_KEY_ALIAS"
+
+      - name: 5. Grant execute permissions on gradlew
+        run: chmod +x ./gradlew
+
+      - name: 6. Build signed release
+        env:
+          RELEASE_STORE_FILE: ${{ runner.temp }}/ngbrowser-release.jks
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD_2 }}
+        run: |
+          ./gradlew bundleRelease assembleRelease --no-daemon --stacktrace \
+            -PRELEASE_STORE_FILE="$RUNNER_TEMP/ngbrowser-release.jks" \
+            -PRELEASE_KEY_ALIAS="${{ secrets.RELEASE_KEY_ALIAS }}" \
+            -PRELEASE_STORE_PASSWORD="${{ secrets.RELEASE_STORE_PASSWORD }}" \
+            -PRELEASE_KEY_PASSWORD="${{ secrets.RELEASE_STORE_PASSWORD_2 }}"
+
+      - name: 7. Upload signed AAB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-aab
+          path: app/build/outputs/bundle/release/*.aab
+          if-no-files-found: error
+
+      - name: 7. Upload signed APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-apk
+          path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+
+      - name: 8. Cleanup keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/ngbrowser-release.jks"
