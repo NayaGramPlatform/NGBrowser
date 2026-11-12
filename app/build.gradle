@@ -21,12 +21,15 @@ android {
 
     signingConfigs {
         release {
-            def keystoreFile = file("keystore/release.jks")
-            if (keystoreFile.exists()) {
-                storeFile keystoreFile
-                storePassword System.getenv("KEYSTORE_PASSWORD") ?: System.getenv("STORE_PASSWORD") ?: "NayaGram2026SecurePass!"
-                keyAlias System.getenv("KEY_ALIAS") ?: "ngbrowser"
-                keyPassword System.getenv("KEY_PASSWORD") ?: "NayaGram2026SecurePass!"
+            def storeFilePath = project.findProperty('RELEASE_STORE_FILE') ?: System.getenv('RELEASE_STORE_FILE')
+            if (storeFilePath) {
+                def storeFileObj = file(storeFilePath)
+                if (storeFileObj.exists()) {
+                    storeFile storeFileObj
+                    storePassword project.findProperty('RELEASE_STORE_PASSWORD') ?: System.getenv('RELEASE_STORE_PASSWORD')
+                    keyAlias project.findProperty('RELEASE_KEY_ALIAS') ?: System.getenv('RELEASE_KEY_ALIAS')
+                    keyPassword project.findProperty('RELEASE_KEY_PASSWORD') ?: System.getenv('RELEASE_KEY_PASSWORD')
+                }
             }
         }
     }
@@ -35,14 +38,14 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            def keystoreFile = file("keystore/release.jks")
-            if (keystoreFile.exists()) {
+            def storeFilePath = project.findProperty('RELEASE_STORE_FILE') ?: System.getenv('RELEASE_STORE_FILE')
+            if (storeFilePath && file(storeFilePath).exists()) {
                 signingConfig signingConfigs.release
             }
         }
         debug {
-            def keystoreFile = file("keystore/release.jks")
-            if (keystoreFile.exists()) {
+            def storeFilePath = project.findProperty('RELEASE_STORE_FILE') ?: System.getenv('RELEASE_STORE_FILE')
+            if (storeFilePath && file(storeFilePath).exists()) {
                 signingConfig signingConfigs.release
             }
         }
