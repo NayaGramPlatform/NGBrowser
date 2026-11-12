@@ -31,48 +31,60 @@ jobs:
             echo "::error::Secret RELEASE_KEYSTORE_BASE64 is empty or not configured!"
             exit 1
           fi
-          echo "$RELEASE_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/ngbrowser-release.jks"
+          echo "$RELEASE_KEYSTORE_BASE64" | tr -d '\r\n ' | base64 -d > "$RUNNER_TEMP/ngbrowser-release.jks"
           if [ ! -s "$RUNNER_TEMP/ngbrowser-release.jks" ]; then
             echo "::error::Failed to decode keystore file or file is empty!"
             exit 1
           fi
-          echo "Keystore successfully decoded to $RUNNER_TEMP/ngbrowser-release.jks"
+          echo "Keystore successfully decoded to $RUNNER_TEMP/ngbrowser-release.jks ($(wc -c < "$RUNNER_TEMP/ngbrowser-release.jks") bytes)"
+
+          # Trim potential trailing whitespace in secrets
+          CLEAN_STORE_PASS=$(printf "%s" "$RELEASE_STORE_PASSWORD" | tr -d '\r\n')
+          CLEAN_KEY_ALIAS=$(printf "%s" "$RELEASE_KEY_ALIAS" | tr -d '\r\n')
+          CLEAN_KEY_PASS=$(printf "%s" "$RELEASE_KEY_PASSWORD" | tr -d '\r\n')
+
+          echo "Store pass len: ${#CLEAN_STORE_PASS}, Alias: $CLEAN_KEY_ALIAS, Key pass len: ${#CLEAN_KEY_PASS}"
 
           # Verify keystore store password and alias
           keytool -list -keystore "$RUNNER_TEMP/ngbrowser-release.jks" \
-            -storepass "$RELEASE_STORE_PASSWORD" \
-            -alias "$RELEASE_KEY_ALIAS"
+            -storepass "$CLEAN_STORE_PASS" \
+            -alias "$CLEAN_KEY_ALIAS"
 
-          # Determine whether RELEASE_STORE_PASSWORD_2 or RELEASE_STORE_PASSWORD unlocks the private key
-          ACTUAL_KEY_PASS="$RELEASE_KEY_PASSWORD"
-          if ! keytool -certreq -keystore "$RUNNER_TEMP/ngbrowser-release.jks" -storepass "$RELEASE_STORE_PASSWORD" -alias "$RELEASE_KEY_ALIAS" -keypass "$RELEASE_KEY_PASSWORD" -file /dev/null 2>/dev/null; then
-            echo "RELEASE_STORE_PASSWORD_2 did not match key. Checking RELEASE_STORE_PASSWORD..."
-            if keytool -certreq -keystore "$RUNNER_TEMP/ngbrowser-release.jks" -storepass "$RELEASE_STORE_PASSWORD" -alias "$RELEASE_KEY_ALIAS" -keypass "$RELEASE_STORE_PASSWORD" -file /dev/null 2>/dev/null; then
-              echo "Key entry matches RELEASE_STORE_PASSWORD!"
-              ACTUAL_KEY_PASS="$RELEASE_STORE_PASSWORD"
-            fi
+          # Test both passwords with keytool
+          echo "Testing keypass with CLEAN_KEY_PASS..."
+          if keytool -certreq -keystore "$RUNNER_TEMP/ngbrowser-release.jks" -storepass "$CLEAN_STORE_PASS" -alias "$CLEAN_KEY_ALIAS" -keypass "$CLEAN_KEY_PASS" -file /dev/null; then
+            echo "MATCH: CLEAN_KEY_PASS matches key!"
+            FINAL_KEY_PASS="$CLEAN_KEY_PASS"
+          elif keytool -certreq -keystore "$RUNNER_TEMP/ngbrowser-release.jks" -storepass "$CLEAN_STORE_PASS" -alias "$CLEAN_KEY_ALIAS" -keypass "$CLEAN_STORE_PASS" -file /dev/null; then
+            echo "MATCH: CLEAN_STORE_PASS matches key!"
+            FINAL_KEY_PASS="$CLEAN_STORE_PASS"
           else
-            echo "Key entry matches RELEASE_STORE_PASSWORD_2!"
+            echo "::error::Could not unlock private key with either password!"
+            exit 1
           fi
 
-          echo "RESOLVED_KEY_PASSWORD=$ACTUAL_KEY_PASS" >> "$GITHUB_ENV"
+          # Export to environment file
+          echo "KEYSTORE_PATH=$RUNNER_TEMP/ngbrowser-release.jks" >> "$GITHUB_ENV"
+          echo "SAFE_STORE_PASS=$CLEAN_STORE_PASS" >> "$GITHUB_ENV"
+          echo "SAFE_KEY_ALIAS=$CLEAN_KEY_ALIAS" >> "$GITHUB_ENV"
+          echo "SAFE_KEY_PASS=$FINAL_KEY_PASS" >> "$GITHUB_ENV"
 
       - name: 5. Grant execute permissions on gradlew
         run: chmod +x ./gradlew
 
       - name: 6. Build signed release
         env:
-          RELEASE_STORE_FILE: ${{ runner.temp }}/ngbrowser-release.jks
-          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
-          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
-          RELEASE_KEY_PASSWORD: ${{ env.RESOLVED_KEY_PASSWORD || secrets.RELEASE_STORE_PASSWORD_2 }}
+          RELEASE_STORE_FILE: ${{ env.KEYSTORE_PATH }}
+          RELEASE_KEY_ALIAS: ${{ env.SAFE_KEY_ALIAS }}
+          RELEASE_STORE_PASSWORD: ${{ env.SAFE_STORE_PASS }}
+          RELEASE_KEY_PASSWORD: ${{ env.SAFE_KEY_PASS }}
         run: |
-          KEY_PASS="${RESOLVED_KEY_PASSWORD:-${{ secrets.RELEASE_STORE_PASSWORD_2 }}}"
           ./gradlew bundleRelease assembleRelease --no-daemon --stacktrace \
-            -PRELEASE_STORE_FILE="$RUNNER_TEMP/ngbrowser-release.jks" \
-            -PRELEASE_KEY_ALIAS="${{ secrets.RELEASE_KEY_ALIAS }}" \
-            -PRELEASE_STORE_PASSWORD="${{ secrets.RELEASE_STORE_PASSWORD }}" \
-            -PRELEASE_KEY_PASSWORD="$KEY_PASS"
+            "-PRELEASE_STORE_FILE=$SAFE_STORE_PASS" \
+            "-PRELEASE_STORE_FILE=$KEYSTORE_PATH" \
+            "-PRELEASE_KEY_ALIAS=$SAFE_KEY_ALIAS" \
+            "-PRELEASE_STORE_PASSWORD=$SAFE_STORE_PASS" \
+            "-PRELEASE_KEY_PASSWORD=$SAFE_KEY_PASS"
 
       - name: 7. Upload signed AAB artifact
         uses: actions/upload-artifact@v4
