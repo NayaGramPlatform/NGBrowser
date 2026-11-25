@@ -17,7 +17,7 @@
 | **Signing Keystore** | `ngbrowser-release.jks` (RSA 2048, ২০৬৪ সাল পর্যন্ত বৈধ) | ✅ প্লে অ্যাপ সাইনিং রেডি |
 | **রেন্ডারিং ইঞ্জিন** | Standalone Mozilla GeckoView 140 ESR (C++/Rust) | ✅ আসল নেটিভ ইঞ্জিন |
 | **Play Store AAB ডেলিভারি সাইজ** | ~73 MB প্রতি ডিভাইসে (মোট AAB ~146 MB, ২০০ MB লিমিটের অনেক নিচে) | ✅ অপটিমাইজড |
-| **Privacy Policy লিংক** | `https://github.com/NayaGramPlatform/NGBrowser/blob/MasterPro/PRIVACY_POLICY.md` | ✅ প্রস্তুত |
+| **Privacy Policy লিংক** | `https://nayagramplatform.github.io/NGBrowser/privacy-policy.html` | ✅ প্রস্তুত |
 
 ---
 
@@ -26,6 +26,6 @@
 1. **Google Play Console**-এ লগইন করে **Create App** ক্লিক করুন (App Name: `NG Browser`, Category: `Communication`, Free)।
 2. **Store Listing**-এ `store/play_store_icon_512.png` (512×512 আইকন), স্ক্রিনশট এবং ফিচার গ্রাফিক (1024×500) আপলোড করুন।
 3. **App Content → Privacy Policy**-তে এই লিংকটি দিন:  
-   `https://github.com/NayaGramPlatform/NGBrowser/blob/MasterPro/PRIVACY_POLICY.md`
+   `https://nayagramplatform.github.io/NGBrowser/privacy-policy.html`
 4. **Data Safety** ফর্মে দিন: *"Does your app collect or share any of the required user data types?"* → **No** (কারণ সব ডেটা শুধুমাত্র ইউজারের ডিভাইসেই থাকে)।
 5. **Production / Closed Testing → Create new release**-এ **`app-release.aab`** ফাইলটি আপলোড করে সাবমিট করুন।

@@ -56,6 +56,9 @@ import org.nayagram.ngbrowser.util.SearchEngineHelper;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
 import java.util.UUID;
 
 /**
@@ -901,23 +904,86 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showHistoryDialog() {
-        List<NGBrowserDbHelper.Item> list = dbHelper.getHistory();
+        showHistoryDialogFiltered(null);
+    }
+
+    private void showHistoryDialogFiltered(@Nullable String query) {
+        List<NGBrowserDbHelper.Item> list = (query == null || query.trim().isEmpty())
+                ? dbHelper.getHistory()
+                : dbHelper.searchHistory(query);
         if (list.isEmpty()) {
-            Toast.makeText(this, "History is empty", Toast.LENGTH_SHORT).show();
+            String msg = (query == null || query.trim().isEmpty())
+                    ? "History is empty"
+                    : "No history matching \"" + query.trim() + "\"";
+            Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
             return;
         }
+        SimpleDateFormat fmt = new SimpleDateFormat("MMM dd, HH:mm", Locale.US);
         String[] labels = new String[list.size()];
         for (int i = 0; i < list.size(); i++) {
-            labels[i] = list.get(i).title + "\n" + list.get(i).url;
+            NGBrowserDbHelper.Item item = list.get(i);
+            String when = fmt.format(new Date(item.timestamp));
+            labels[i] = item.title + "\n" + item.url + "  ·  " + when;
         }
+        String title = (query == null || query.trim().isEmpty())
+                ? "Browsing History (" + list.size() + ")"
+                : "History: \"" + query.trim() + "\" (" + list.size() + ")";
+
         new AlertDialog.Builder(this)
-                .setTitle("History (" + list.size() + ")")
-                .setItems(labels, (d, which) -> navigateCurrentTab(list.get(which).url))
-                .setNeutralButton("Clear History", (d, w) -> {
-                    dbHelper.clearHistory();
-                    Toast.makeText(this, "History cleared", Toast.LENGTH_SHORT).show();
+                .setTitle(title)
+                .setItems(labels, (d, which) -> {
+                    NGBrowserDbHelper.Item selected = list.get(which);
+                    String[] actions = {"Open Page", "Open in New Tab", "Remove from History"};
+                    new AlertDialog.Builder(this)
+                            .setTitle(selected.title)
+                            .setItems(actions, (ad, act) -> {
+                                if (act == 0) {
+                                    navigateCurrentTab(selected.url);
+                                } else if (act == 1) {
+                                    createNewTab(selected.url, false);
+                                } else if (act == 2) {
+                                    dbHelper.deleteHistoryItem(selected.id);
+                                    Toast.makeText(this, "Removed from history", Toast.LENGTH_SHORT).show();
+                                    showHistoryDialogFiltered(query);
+                                }
+                            })
+                            .setNegativeButton("Cancel", null)
+                            .show();
                 })
+                .setPositiveButton("Search", (d, w) -> showHistorySearchPrompt())
+                .setNeutralButton("Clear...", (d, w) -> showClearHistoryOptions())
                 .setNegativeButton("Close", null)
+                .show();
+    }
+
+    private void showHistorySearchPrompt() {
+        EditText input = new EditText(this);
+        input.setHint("Search title or URL...");
+        int pad = (int) (16 * getResources().getDisplayMetrics().density);
+        input.setPadding(pad, pad, pad, pad);
+        new AlertDialog.Builder(this)
+                .setTitle("Search History")
+                .setView(input)
+                .setPositiveButton("Search", (d, w) -> showHistoryDialogFiltered(input.getText().toString()))
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void showClearHistoryOptions() {
+        String[] choices = {"Clear Last 24 Hours", "Clear All History"};
+        new AlertDialog.Builder(this)
+                .setTitle("Clear Browsing History")
+                .setItems(choices, (d, which) -> {
+                    if (which == 0) {
+                        long cutoff = System.currentTimeMillis() - (24L * 60L * 60L * 1000L);
+                        dbHelper.clearHistorySince(cutoff);
+                        Toast.makeText(this, "Last 24 hours history cleared", Toast.LENGTH_SHORT).show();
+                    } else {
+                        dbHelper.clearHistory();
+                        Toast.makeText(this, "All browsing history cleared", Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .setNegativeButton("Cancel", null)
                 .show();
     }
 
@@ -951,6 +1017,7 @@ public class MainActivity extends AppCompatActivity {
         String[] options = {
                 "Default Search Engine: " + SearchEngineHelper.getSelectedEngineName(this),
                 "Web Page Theme (System / Dark / Light)",
+                "Privacy Policy (Official Website)",
                 "About NG Browser Engine"
         };
         new AlertDialog.Builder(this)
@@ -961,12 +1028,14 @@ public class MainActivity extends AppCompatActivity {
                     } else if (which == 1) {
                         showThemePicker();
                     } else if (which == 2) {
+                        navigateCurrentTab("https://nayagramplatform.github.io/NGBrowser/privacy-policy.html");
+                    } else if (which == 3) {
                         new AlertDialog.Builder(this)
                                 .setTitle("NG Browser v3.12.18 NG")
                                 .setMessage(
                                         "NayaGram Platform Official Browser\n\n" +
                                         "• Standalone Native Engine: Mozilla GeckoView 140 ESR (C++/Rust)\n" +
-                                        "• Upstream Core Sync: Brave-Core 1.102.37 / Chromium 159\n" +
+                                        "• Upstream Core Sync: Brave-Core 1.102.39 / Chromium 159\n" +
                                         "• Built-in Enhanced Tracking Protection & Total Cookie Isolation\n" +
                                         "• Version Code: 3578 (Android 16 / API 36 Ready · 16 KB Aligned)\n" +
                                         "• Package: org.nayagram.ngbrowser"

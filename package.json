@@ -1,7 +1,7 @@
 {
-  "name": "ng-browser",
-  "version": "1.102.37",
-  "description": "NG Browser - Next-generation privacy web browser engine powered by Brave-Core, GeckoView, and NayaGram Platform",
+  "name": "brave-core",
+  "version": "1.102.39",
+  "description": "Brave browser for Android, iOS, Linux, macOS, and Windows",
   "main": "index.js",
   "type": "module",
   "scripts": {
@@ -53,9 +53,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/NayaGramPlatform/NGBrowser.git"
+    "url": "git+https://github.com/brave/brave-core.git"
   },
-  "author": "NayaGram Platform <support@nayagram.org>",
+  "author": {
+    "name": "Brave Software <support@brave.com>"
+  },
   "license": "MPL-2.0",
   "bugs": {
     "url": "https://github.com/brave/brave-browser/issues"
@@ -72,7 +74,7 @@
       "onFail": "error"
     }
   },
-  "homepage": "https://github.com/NayaGramPlatform/NGBrowser#readme",
+  "homepage": "https:/github.com/brave/brave-core#readme",
   "config": {
     "projects": {
       "chrome": {

@@ -3,7 +3,8 @@
 **Last Updated:** November 25, 2026  
 **Developer:** NayaGram Platform  
 **Package Name:** `org.nayagram.ngbrowser`  
-**Contact:** nghuzayfa@gmail.com
+**Contact:** nghuzayfa@gmail.com  
+**Official Web Policy URL (Play Console):** https://nayagramplatform.github.io/NGBrowser/privacy-policy.html
 
 ## 1. Overview
 NG Browser is a privacy-focused Android web browser developed by NayaGram Platform. We do **not** collect, sell, rent, or transmit your personal browsing history, bookmarks, passwords, or search queries to NayaGram Platform servers.

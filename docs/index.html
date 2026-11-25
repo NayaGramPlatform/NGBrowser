@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NG Browser — Private Standalone Android Browser by NayaGram Platform</title>
+  <meta name="description" content="NG Browser is a privacy-focused Android browser powered by the standalone Mozilla GeckoView 140 native C++/Rust engine. Zero tracking, total cookie isolation, and Android 16 compliance.">
+  <meta property="og:title" content="NG Browser — NayaGram Platform">
+  <meta property="og:description" content="Private standalone Android browser powered by Mozilla GeckoView 140 ESR. Built for Android 16 with 16 KB page-size alignment and zero data collection.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://nayagramplatform.github.io/NGBrowser/">
+  <meta property="og:image" content="https://nayagramplatform.github.io/NGBrowser/assets/icon-512.png">
+  <link rel="icon" type="image/png" href="assets/icon-512.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <a href="index.html" class="brand-mark">NG Browser</a>
+      <nav class="primary-nav" aria-label="Primary">
+        <a href="index.html" aria-current="page">Overview</a>
+        <a href="privacy-policy.html">Privacy Policy</a>
+        <a href="data-safety.html">Data Safety</a>
+        <a href="terms.html">Terms</a>
+      </nav>
+      <a href="https://github.com/NayaGramPlatform/NGBrowser/releases/download/v3.12.18-NG/app-release.apk" class="header-cta">Download APK</a>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="container hero-grid">
+        <div>
+          <div class="meta-line">
+            <span>NayaGram Platform</span>
+            <span aria-hidden="true">&middot;</span>
+            <span class="meta-mono">org.nayagram.ngbrowser</span>
+            <span aria-hidden="true">&middot;</span>
+            <span class="meta-mono">v3.12.18 NG (Build 3578)</span>
+          </div>
+          <h1>Private Android browsing on a standalone native engine.</h1>
+          <p class="hero-lead">
+            NG Browser runs on Mozilla GeckoView 140 ESR rather than Android WebView. Every tab enforces Enhanced Tracking Protection, Total Cookie Isolation, and HTTPS-Only upgrades locally on your device—with zero telemetry sent to NayaGram Platform servers.
+          </p>
+          <div class="cta-row">
+            <a href="https://github.com/NayaGramPlatform/NGBrowser/releases/download/v3.12.18-NG/app-release.apk" class="btn-primary">Download Signed APK</a>
+            <a href="https://github.com/NayaGramPlatform/NGBrowser/releases/download/v3.12.18-NG/app-release.aab" class="btn-secondary">Play Store AAB Bundle</a>
+          </div>
+        </div>
+
+        <aside class="hero-visual" aria-label="Release specifications">
+          <div class="app-identity">
+            <img src="assets/icon-512.png" alt="NG Browser application icon" class="app-icon" width="84" height="84" referrerpolicy="no-referrer">
+            <div>
+              <div class="app-identity-title">NG Browser</div>
+              <div class="app-identity-sub">Official Release by NayaGram Platform</div>
+            </div>
+          </div>
+          <ul class="spec-list">
+            <li><span class="spec-key">Package ID</span><span class="spec-val">org.nayagram.ngbrowser</span></li>
+            <li><span class="spec-key">Version</span><span class="spec-val">v3.12.18 NG (3578)</span></li>
+            <li><span class="spec-key">Render Engine</span><span class="spec-val">GeckoView 140 ESR</span></li>
+            <li><span class="spec-key">Target SDK</span><span class="spec-val">Android 16 (API 36)</span></li>
+            <li><span class="spec-key">Minimum SDK</span><span class="spec-val">Android 5.0 (API 21)</span></li>
+            <li><span class="spec-key">Page Alignment</span><span class="spec-val">16 KB ELF Verified</span></li>
+          </ul>
+        </aside>
+      </div>
+    </section>
+
+    <section class="section" id="capabilities">
+      <div class="container">
+        <div class="section-header">
+          <h2>Core architecture and privacy controls</h2>
+          <p>Engineered for everyday speed while keeping bookmarks, browsing history, and site storage strictly under your control.</p>
+        </div>
+
+        <div class="bento-grid">
+          <article class="bento-card span-2">
+            <h3>01. Standalone C++ and Rust browser engine</h3>
+            <p>
+              Unlike lightweight wrapper browsers that rely on system WebView, NG Browser bundles the complete Mozilla GeckoView 140 ESR runtime for both 64-bit (arm64-v8a) and 32-bit (armeabi-v7a) Android devices. You get independent security patches, modern web standards, multi-tab isolation, and desktop-mode rendering across Android 5.0 through Android 16.
+            </p>
+          </article>
+
+          <article class="bento-card">
+            <h3>02. NG Shields protection</h3>
+            <p>
+              Switch between Strict, Standard, and Off modes at any time. Strict mode blocks cross-site trackers, social widgets, and cryptominers while isolating cookies per top-level site.
+            </p>
+          </article>
+
+          <article class="bento-card">
+            <h3>03. Searchable local history</h3>
+            <p>
+              Bookmarks, deduplicated browsing history, and download records live solely in your device's private SQLite database. Search entries by keyword, delete individual links, or wipe the last 24 hours in one tap.
+            </p>
+          </article>
+
+          <article class="bento-card span-2">
+            <h3>04. Built for Android 16 and Google Play standards</h3>
+            <p>
+              Every release bundle is signed with NayaGram Platform's RSA 2048 release keystore (valid through 2064), verified with jarsigner, and packaged with uncompressed 16 KB page-size aligned native libraries and full Edge-to-Edge WindowInsets handling. Play Store ABI splits keep per-device installs around 73 MB.
+            </p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container">
+        <div class="section-header">
+          <h2>Google Play Store documentation</h2>
+          <p>Direct public references for app reviewers, security auditors, and NG Browser users.</p>
+        </div>
+
+        <div class="data-table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Document</th>
+                <th>Purpose</th>
+                <th>Public URL</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Privacy Policy</strong></td>
+                <td>Full data handling disclosure (English &amp; Bangla)</td>
+                <td class="mono"><a href="privacy-policy.html">privacy-policy.html</a></td>
+              </tr>
+              <tr>
+                <td><strong>Data Safety &amp; Deletion</strong></td>
+                <td>Google Play Data Safety summary &amp; local wipe guide</td>
+                <td class="mono"><a href="data-safety.html">data-safety.html</a></td>
+              </tr>
+              <tr>
+                <td><strong>Terms &amp; Open Source</strong></td>
+                <td>Terms of use, MPL-2.0 engine licenses, and developer contact</td>
+                <td class="mono"><a href="terms.html">terms.html</a></td>
+              </tr>
+              <tr>
+                <td><strong>Signed Releases</strong></td>
+                <td>Verified AAB and APK downloads on GitHub</td>
+                <td class="mono"><a href="https://github.com/NayaGramPlatform/NGBrowser/releases/tag/v3.12.18-NG">v3.12.18-NG Release</a></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <div>&copy; 2026 NayaGram Platform. NG Browser (<span class="meta-mono">org.nayagram.ngbrowser</span>).</div>
+      <div class="footer-links">
+        <a href="privacy-policy.html">Privacy Policy</a>
+        <a href="data-safety.html">Data Safety</a>
+        <a href="terms.html">Terms</a>
+        <a href="https://github.com/NayaGramPlatform/NGBrowser">GitHub</a>
+        <a href="mailto:nghuzayfa@gmail.com">nghuzayfa@gmail.com</a>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

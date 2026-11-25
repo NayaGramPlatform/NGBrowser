@@ -118,7 +118,7 @@ jobs:
             - **Standalone Native Engine:** Mozilla GeckoView 140 ESR (C++/Rust)
             - **Privacy First:** Strict Enhanced Tracking Protection, Total Cookie Isolation, HTTPS-Only mode, Private Tabs
             - **ProGuard Rules & Verified Signing:** RSA 2048 JKS verified via `jarsigner`
-            - **Upstream Core Sync:** `brave/brave-core 1.102.37` (Chromium 159)
+            - **Upstream Core Sync:** `brave/brave-core 1.102.39` (Chromium 159)
 
             ### Download Assets
             - **Release AAB (`app-release.aab`)**: Google Play Store upload bundle (~73 MB per-device delivery via ABI split)

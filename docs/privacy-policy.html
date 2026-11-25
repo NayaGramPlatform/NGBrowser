@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy — NG Browser (NayaGram Platform)</title>
+  <meta name="description" content="Official Privacy Policy for NG Browser (org.nayagram.ngbrowser) developed by NayaGram Platform. Zero personal data collection, local-only storage, and transparent Android permissions.">
+  <link rel="icon" type="image/png" href="assets/icon-512.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <a href="index.html" class="brand-mark">NG Browser</a>
+      <nav class="primary-nav" aria-label="Primary">
+        <a href="index.html">Overview</a>
+        <a href="privacy-policy.html" aria-current="page">Privacy Policy</a>
+        <a href="data-safety.html">Data Safety</a>
+        <a href="terms.html">Terms</a>
+      </nav>
+      <a href="https://github.com/NayaGramPlatform/NGBrowser/releases/download/v3.12.18-NG/app-release.apk" class="header-cta">Download APK</a>
+    </div>
+  </header>
+
+  <section class="doc-hero">
+    <div class="container-narrow">
+      <div class="meta-line">
+        <span>Effective Date: November 25, 2026</span>
+        <span aria-hidden="true">&middot;</span>
+        <span>Developer: NayaGram Platform</span>
+        <span aria-hidden="true">&middot;</span>
+        <span class="meta-mono">org.nayagram.ngbrowser</span>
+      </div>
+      <h1>Privacy Policy for NG Browser</h1>
+      <p style="color: var(--ink-secondary); max-width: 66ch;">
+        This Privacy Policy explains how NayaGram Platform handles information when you use the NG Browser Android application (<span class="meta-mono">org.nayagram.ngbrowser</span>).
+      </p>
+      <div class="lang-switch" role="group" aria-label="Language selection">
+        <button type="button" id="btn-en" class="lang-btn active" onclick="setLang('en')">English</button>
+        <button type="button" id="btn-bn" class="lang-btn" onclick="setLang('bn')">বাংলা</button>
+      </div>
+    </div>
+  </section>
+
+  <main class="doc-body">
+    <div class="container-narrow" id="policy-en">
+      <div class="summary-box">
+        <h3>Plain-Language Summary</h3>
+        <p>
+          NG Browser does <strong>not</strong> collect, store, sell, rent, or transmit your personal information, browsing history, bookmarks, search queries, or device identifiers to NayaGram Platform servers. All browser data stays locally on your Android device.
+        </p>
+      </div>
+
+      <article class="doc-section">
+        <h2>1. Information We Do Not Collect</h2>
+        <p>NayaGram Platform operates NG Browser with a strict zero-telemetry architecture. When you browse with NG Browser:</p>
+        <ul>
+          <li>We do <strong>not</strong> require account registration, login, phone numbers, or email addresses.</li>
+          <li>We do <strong>not</strong> collect or upload your browsing history, open tabs, bookmarks, downloads, or form inputs.</li>
+          <li>We do <strong>not</strong> embed third-party advertising SDKs, behavioral analytics trackers, or cross-app profiling libraries.</li>
+          <li>We do <strong>not</strong> sell or share any user data with data brokers or third parties.</li>
+        </ul>
+      </article>
+
+      <article class="doc-section">
+        <h2>2. Data Stored Locally on Your Device</h2>
+        <p>To provide core browser functionality, NG Browser stores certain data strictly inside your device's private application sandbox:</p>
+        <ul>
+          <li><strong>Bookmarks, Browsing History &amp; Download Records:</strong> Saved in a local SQLite database (<span class="meta-mono">ngbrowser.db</span>) on your device. This file is never synced to external servers and Android cloud backup is disabled (<span class="meta-mono">android:allowBackup="false"</span>).</li>
+          <li><strong>Cookies, Cache &amp; Site Storage:</strong> Managed locally by the embedded Mozilla GeckoView 140 runtime with Total Cookie Isolation enabled by default.</li>
+          <li><strong>Private Browsing Mode:</strong> Tabs opened in Private Mode do not record browsing history and isolate session storage so data is cleared when you close private sessions.</li>
+          <li><strong>User Preferences:</strong> Selected search engine, theme preference, and NG Shields protection level (Strict, Standard, or Off) are stored locally in Android SharedPreferences.</li>
+        </ul>
+      </article>
+
+      <article class="doc-section">
+        <h2>3. Android Permissions Explained</h2>
+        <p>NG Browser requests only the permissions required for web browsing. Sensitive permissions are strictly optional and requested at runtime only when a website explicitly asks for them:</p>
+        <div class="data-table-wrap" style="margin-top: 16px;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Permission</th>
+                <th>Requirement</th>
+                <th>Purpose</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="mono">INTERNET / ACCESS_NETWORK_STATE</td>
+                <td>Required</td>
+                <td>Load websites, perform searches, and download files requested by you.</td>
+              </tr>
+              <tr>
+                <td class="mono">ACCESS_FINE_LOCATION / COARSE_LOCATION</td>
+                <td>Optional (On Demand)</td>
+                <td>Shared only with a specific website if you explicitly approve its location prompt (e.g., maps or weather). Never collected by NayaGram Platform.</td>
+              </tr>
+              <tr>
+                <td class="mono">CAMERA</td>
+                <td>Optional (On Demand)</td>
+                <td>Used only when you grant camera permission to a website (e.g., QR scanners or video calls).</td>
+              </tr>
+              <tr>
+                <td class="mono">RECORD_AUDIO / MODIFY_AUDIO_SETTINGS</td>
+                <td>Optional (On Demand)</td>
+                <td>Used only when you grant microphone access to a website for voice search or audio/video calls.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+
+      <article class="doc-section">
+        <h2>4. Third-Party Websites and Search Engines</h2>
+        <p>
+          NG Browser connects directly from your device to the websites and search engines you choose to visit (such as DuckDuckGo, Brave Search, Google, Startpage, or Bing). Those independent websites and search providers receive the standard web requests you send to them (including IP address and search queries) and are governed by their own privacy policies.
+        </p>
+        <p>
+          To help protect your privacy while visiting external websites, NG Browser enables Mozilla GeckoView Enhanced Tracking Protection, Query Parameter Stripping, Cookie Banner Handling, Total Cookie Isolation, and HTTPS-Only automatic upgrades by default.
+        </p>
+      </article>
+
+      <article class="doc-section">
+        <h2>5. Data Retention and Deletion Controls</h2>
+        <p>Because all data is stored locally on your device, you maintain full control over retention and deletion at any time:</p>
+        <ul>
+          <li><strong>Delete Specific History Items:</strong> Open <strong>Menu &rarr; History</strong>, tap any entry, and select <strong>Remove from History</strong>.</li>
+          <li><strong>Clear Recent or All History:</strong> Open <strong>Menu &rarr; History &rarr; Clear...</strong> to clear the last 24 hours or all browsing history.</li>
+          <li><strong>Wipe All Cookies, Cache &amp; Site Data:</strong> Tap the <strong>NG Shields</strong> icon in the toolbar and choose <strong>Clear All Browsing Data</strong>.</li>
+          <li><strong>Complete Removal:</strong> Uninstalling NG Browser from Android permanently deletes all local databases, cookies, cache, and preferences.</li>
+        </ul>
+        <p>For more details, review our <a href="data-safety.html">Data Safety &amp; Deletion Guide</a>.</p>
+      </article>
+
+      <article class="doc-section">
+        <h2>6. Children's Privacy</h2>
+        <p>
+          NG Browser is a general-purpose web browser and does not knowingly collect personal information from children under the age of 13 (or the applicable age of digital consent in your jurisdiction). Because we do not collect user accounts or personal data on our servers, no personal information from children is stored by NayaGram Platform.
+        </p>
+      </article>
+
+      <article class="doc-section">
+        <h2>7. Security Practices</h2>
+        <p>
+          NG Browser uses HTTPS-Only mode by default to encrypt connections between your device and websites whenever supported. Application updates are cryptographically signed with NayaGram Platform's RSA 2048 release key and verified prior to distribution.
+        </p>
+      </article>
+
+      <article class="doc-section">
+        <h2>8. Changes to This Privacy Policy</h2>
+        <p>
+          We may update this Privacy Policy from time to time to reflect improvements to NG Browser or legal requirements. Any updates will be published on this page with a revised Effective Date.
+        </p>
+      </article>
+
+      <article class="doc-section">
+        <h2>9. Contact Information</h2>
+        <p>If you have any questions, privacy inquiries, or support requests regarding NG Browser, please contact the developer:</p>
+        <ul>
+          <li><strong>Developer:</strong> NayaGram Platform</li>
+          <li><strong>Application:</strong> NG Browser (<span class="meta-mono">org.nayagram.ngbrowser</span>)</li>
+          <li><strong>Email:</strong> <a href="mailto:nghuzayfa@gmail.com">nghuzayfa@gmail.com</a></li>
+          <li><strong>Official Repository:</strong> <a href="https://github.com/NayaGramPlatform/NGBrowser">github.com/NayaGramPlatform/NGBrowser</a></li>
+        </ul>
+      </article>
+    </div>
+
+    <div class="container-narrow hidden" id="policy-bn" lang="bn">
+      <div class="summary-box">
+        <h3>সংক্ষিপ্ত সারসংক্ষেপ</h3>
+        <p>
+          <strong>NG Browser</strong> আপনার কোনো ব্যক্তিগত তথ্য, ব্রাউজিং হিস্ট্রি, বুকমার্ক, পাসওয়ার্ড বা সার্চ কোয়েরি NayaGram Platform-এর কোনো সার্ভারে সংগ্রহ, সংরক্ষণ, বিক্রি বা শেয়ার করে না। আপনার সব তথ্য সম্পূর্ণরূপে আপনার নিজের অ্যান্ড্রয়েড ডিভাইসেই সুরক্ষিত থাকে।
+        </p>
+      </div>
+
+      <article class="doc-section">
+        <h2>১. আমরা যে তথ্য সংগ্রহ করি না</h2>
+        <ul>
+          <li>NG Browser ব্যবহার করতে কোনো অ্যাকাউন্ট, লগইন, ফোন নম্বর বা ইমেইল দিতে হয় না।</li>
+          <li>আমরা আপনার ব্রাউজিং হিস্ট্রি, ওপেন ট্যাব, বুকমার্ক বা ডাউনলোড তালিকা কোনো সার্ভারে পাঠাই না।</li>
+          <li>অ্যাপের মধ্যে কোনো থার্ড-পার্টি বিজ্ঞাপন SDK বা ট্র্যাকিং অ্যানালিটিক্স যুক্ত নেই।</li>
+          <li>আমরা কোনো তৃতীয় পক্ষের সাথে ব্যবহারকারীর কোনো তথ্য বিক্রি বা শেয়ার করি না।</li>
+        </ul>
+      </article>
+
+      <article class="doc-section">
+        <h2>২. আপনার ডিভাইসে লোকালভাবে সংরক্ষিত তথ্য</h2>
+        <ul>
+          <li><strong>বুকমার্ক, হিস্ট্রি ও ডাউনলোড তালিকা:</strong> আপনার ডিভাইসের প্রাইভেট SQLite ডেটাবেস (<span class="meta-mono">ngbrowser.db</span>)-এ সংরক্ষিত থাকে। অ্যান্ড্রয়েড ক্লাউড ব্যাকআপ বন্ধ (<span class="meta-mono">allowBackup="false"</span>) রাখা হয়েছে।</li>
+          <li><strong>কুকিজ ও ক্যাশ:</strong> বিল্ট-ইন Mozilla GeckoView 140 ইঞ্জিন দ্বারা লোকালভাবে পরিচালিত হয় এবং Total Cookie Isolation ডিফল্টভাবে চালু থাকে।</li>
+          <li><strong>প্রাইভেট ব্রাউজিং মোড:</strong> প্রাইভেট ট্যাবে কোনো ব্রাউজিং হিস্ট্রি বা স্থায়ী কুকিজ সেভ হয় না।</li>
+        </ul>
+      </article>
+
+      <article class="doc-section">
+        <h2>৩. অ্যাপের পারমিশনসমূহ</h2>
+        <ul>
+          <li><strong>ইন্টারনেট ও নেটওয়ার্ক স্টেট:</strong> ওয়েবপেজ লোড ও ফাইল ডাউনলোডের জন্য প্রয়োজন।</li>
+          <li><strong>লোকেশন, ক্যামেরা ও মাইক্রোফোন (ঐচ্ছিক):</strong> শুধুমাত্র তখনই চাওয়া হয় যখন আপনার ভিজিট করা কোনো ওয়েবসাইট স্পষ্টভাবে অনুমতি চায় (যেমন ম্যাপ বা ভিডিও কল)। NayaGram Platform কখনোই এসব তথ্য সংগ্রহ করে না।</li>
+        </ul>
+      </article>
+
+      <article class="doc-section">
+        <h2>৪. ডেটা মুছে ফেলার পূর্ণ নিয়ন্ত্রণ</h2>
+        <ul>
+          <li><strong>নির্দিষ্ট হিস্ট্রি মুছুন:</strong> Menu &rarr; History থেকে যেকোনো লিংকে ট্যাপ করে Remove from History চাপুন।</li>
+          <li><strong>গত ২৪ ঘণ্টা বা সব হিস্ট্রি মুছুন:</strong> Menu &rarr; History &rarr; Clear... অপশন ব্যবহার করুন।</li>
+          <li><strong>সব ব্রাউজিং ডেটা মুছুন:</strong> টুলবারের NG Shields আইকনে ট্যাপ করে Clear All Browsing Data নির্বাচন করুন অথবা অ্যাপটি আনইনস্টল করুন।</li>
+        </ul>
+      </article>
+
+      <article class="doc-section">
+        <h2>৫. যোগাযোগ</h2>
+        <p>এই প্রাইভেসি পলিসি সম্পর্কে কোনো প্রশ্ন থাকলে ডেভেলপারের সাথে যোগাযোগ করুন:</p>
+        <ul>
+          <li><strong>ডেভেলপার:</strong> NayaGram Platform</li>
+          <li><strong>অ্যাপ প্যাকেজ:</strong> <span class="meta-mono">org.nayagram.ngbrowser</span></li>
+          <li><strong>ইমেইল:</strong> <a href="mailto:nghuzayfa@gmail.com">nghuzayfa@gmail.com</a></li>
+        </ul>
+      </article>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <div>&copy; 2026 NayaGram Platform. NG Browser (<span class="meta-mono">org.nayagram.ngbrowser</span>).</div>
+      <div class="footer-links">
+        <a href="index.html">Overview</a>
+        <a href="data-safety.html">Data Safety</a>
+        <a href="terms.html">Terms</a>
+        <a href="mailto:nghuzayfa@gmail.com">nghuzayfa@gmail.com</a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    function setLang(lang) {
+      var en = document.getElementById('policy-en');
+      var bn = document.getElementById('policy-bn');
+      var btnEn = document.getElementById('btn-en');
+      var btnBn = document.getElementById('btn-bn');
+      if (lang === 'bn') {
+        en.classList.add('hidden');
+        bn.classList.remove('hidden');
+        btnEn.classList.remove('active');
+        btnBn.classList.add('active');
+      } else {
+        bn.classList.add('hidden');
+        en.classList.remove('hidden');
+        btnBn.classList.remove('active');
+        btnEn.classList.add('active');
+      }
+    }
+  </script>
+</body>
+</html>
