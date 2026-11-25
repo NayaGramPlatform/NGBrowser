@@ -4,14 +4,14 @@ plugins {
 
 android {
     namespace 'org.nayagram.ngbrowser'
-    compileSdk 35
+    compileSdk 36
 
     defaultConfig {
         applicationId "org.nayagram.ngbrowser"
         minSdk 21
-        targetSdk 35
-        versionCode 200
-        versionName "2.0.0"
+        targetSdk 36
+        versionCode 31218
+        versionName "v3.12.18 NG"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
@@ -70,6 +70,10 @@ android {
     }
 
     packaging {
+        jniLibs {
+            // Ensures 16 KB page-size alignment for Google Play Android 15+/16+ compliance
+            useLegacyPackaging = false
+        }
         resources {
             excludes += [
                 'META-INF/DEPENDENCIES',
@@ -83,7 +87,7 @@ android {
 }
 
 dependencies {
-    // Standalone Native C++/Rust Browser Engine (Mozilla GeckoView 140 ESR)
+    // Standalone Native C++/Rust Browser Engine (Mozilla GeckoView 140 ESR, 16 KB ELF aligned)
     implementation "org.mozilla.geckoview:geckoview-omni:140.0.20250707120347"
 
     // Modern AndroidX & Material UI

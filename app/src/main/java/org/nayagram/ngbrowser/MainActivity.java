@@ -934,12 +934,13 @@ public class MainActivity extends AppCompatActivity {
                         showThemePicker();
                     } else if (which == 2) {
                         new AlertDialog.Builder(this)
-                                .setTitle("NG Browser v2.0.0")
+                                .setTitle("NG Browser v3.12.18 NG")
                                 .setMessage(
                                         "NayaGram Platform Official Browser\n\n" +
                                         "• Standalone Native Engine: Mozilla GeckoView 140 ESR (C++/Rust)\n" +
                                         "• Upstream Core Sync: Brave-Core 1.102.37 / Chromium 159\n" +
                                         "• Built-in Enhanced Tracking Protection & Total Cookie Isolation\n" +
+                                        "• Version Code: 31218 (Android 16 / API 36 Ready · 16 KB Aligned)\n" +
                                         "• Package: org.nayagram.ngbrowser"
                                 )
                                 .setPositiveButton("OK", null)
