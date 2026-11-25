@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - MasterPro
-      - main
     paths:
       - 'app/**'
       - 'gradle/**'
@@ -14,12 +13,12 @@ on:
   pull_request:
     branches:
       - MasterPro
-      - main
 
 jobs:
   check-and-debug-build:
-    name: Compile & Assemble Native Debug APK
+    name: Compile & Assemble NG Browser Debug APKs
     runs-on: ubuntu-latest
+
     steps:
       - name: 1. Checkout repository
         uses: actions/checkout@v4
@@ -34,14 +33,14 @@ jobs:
       - name: 3. Grant execute permissions on gradlew
         run: chmod +x ./gradlew
 
-      - name: 4. Build Debug APK
+      - name: 4. Build Debug APKs
         run: |
           ./gradlew assembleDebug --no-daemon --stacktrace
           ls -lh app/build/outputs/apk/debug/
 
-      - name: 5. Upload Debug APK artifact
+      - name: 5. Upload NG Browser Debug APK artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug-apk
+          name: NGBrowser-v3.12.18-NG-debug-apk
           path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: warn
+          if-no-files-found: error

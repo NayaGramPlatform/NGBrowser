@@ -2,6 +2,10 @@ plugins {
     id 'com.android.application'
 }
 
+base {
+    archivesName = "NGBrowser-v3.12.18-NG"
+}
+
 android {
     namespace 'org.nayagram.ngbrowser'
     compileSdk 36
@@ -15,12 +19,19 @@ android {
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
+    }
 
-        ndk {
-            abiFilters "arm64-v8a", "armeabi-v7a"
+    // Per-ABI APKs keep direct-download APK smaller (~145 MB) than the multi-ABI Play Store AAB (~218 MB)
+    splits {
+        abi {
+            enable true
+            reset()
+            include "arm64-v8a", "armeabi-v7a"
+            universalApk false
         }
     }
 
+    // Play Store AAB automatically bundles arm64-v8a, armeabi-v7a & x86_64 (~218 MB) and delivers ~73 MB per device
     bundle {
         abi {
             enableSplit = true
@@ -78,6 +89,8 @@ android {
         jniLibs {
             // Ensures 16 KB page-size alignment for Google Play Android 15+/16+ compliance
             useLegacyPackaging = false
+            // Exclude legacy 32-bit x86 while preserving arm64-v8a, armeabi-v7a & x86_64 in the AAB
+            excludes += ['**/x86/**']
         }
         resources {
             excludes += [

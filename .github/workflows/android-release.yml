@@ -8,7 +8,7 @@ on:
 
 jobs:
   build:
-    name: Build & Sign Native GeckoView Release (AAB + APK)
+    name: Build & Sign NG Browser Release (AAB + Split APKs)
     runs-on: ubuntu-latest
 
     steps:
@@ -64,7 +64,7 @@ jobs:
       - name: 4. Grant execute permissions on gradlew
         run: chmod +x ./gradlew
 
-      - name: 5. Build signed release AAB & APK
+      - name: 5. Build signed NG Browser AAB & Split APKs
         env:
           RELEASE_STORE_FILE: ${{ env.KEYSTORE_PATH }}
           RELEASE_KEY_ALIAS: ${{ env.SAFE_KEY_ALIAS }}
@@ -77,35 +77,35 @@ jobs:
             "-PRELEASE_STORE_PASSWORD=$SAFE_STORE_PASS" \
             "-PRELEASE_KEY_PASSWORD=$SAFE_KEY_PASS"
 
-      - name: 6. Verify signed AAB & APK outputs
+      - name: 6. Prepare branded filenames & verify signatures
         run: |
-          AAB_FILE=$(ls app/build/outputs/bundle/release/*.aab | head -n 1)
-          APK_FILE=$(ls app/build/outputs/apk/release/*.apk | head -n 1)
-          if [ ! -f "$AAB_FILE" ]; then
-            echo "::error::Signed AAB file was not generated!"
-            exit 1
-          fi
-          if [ ! -f "$APK_FILE" ]; then
-            echo "::error::Signed APK file was not generated!"
-            exit 1
-          fi
-          ls -lh "$AAB_FILE" "$APK_FILE"
-          jarsigner -verify -verbose:summary "$AAB_FILE"
-          jarsigner -verify -verbose:summary "$APK_FILE"
-          sha256sum "$AAB_FILE" "$APK_FILE"
+          mkdir -p release-dist/aab release-dist/apk
+          AAB_SRC=$(ls app/build/outputs/bundle/release/*.aab | head -n 1)
+          ARM64_SRC=$(ls app/build/outputs/apk/release/*arm64-v8a*.apk | head -n 1)
+          ARM32_SRC=$(ls app/build/outputs/apk/release/*armeabi-v7a*.apk | head -n 1)
 
-      - name: 7. Upload signed AAB artifact
+          cp "$AAB_SRC" "release-dist/aab/NGBrowser-v3.12.18-NG.aab"
+          cp "$ARM64_SRC" "release-dist/apk/NGBrowser-v3.12.18-NG-arm64-v8a.apk"
+          cp "$ARM32_SRC" "release-dist/apk/NGBrowser-v3.12.18-NG-armeabi-v7a.apk"
+
+          ls -lh release-dist/aab/ release-dist/apk/
+          jarsigner -verify -verbose:summary "release-dist/aab/NGBrowser-v3.12.18-NG.aab"
+          jarsigner -verify -verbose:summary "release-dist/apk/NGBrowser-v3.12.18-NG-arm64-v8a.apk"
+          jarsigner -verify -verbose:summary "release-dist/apk/NGBrowser-v3.12.18-NG-armeabi-v7a.apk"
+          sha256sum release-dist/aab/*.aab release-dist/apk/*.apk
+
+      - name: 7. Upload signed NG Browser AAB artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-release-aab
-          path: app/build/outputs/bundle/release/*.aab
+          name: NGBrowser-v3.12.18-NG-AAB
+          path: release-dist/aab/NGBrowser-v3.12.18-NG.aab
           if-no-files-found: error
 
-      - name: 8. Upload signed APK artifact
+      - name: 8. Upload signed NG Browser APK artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: app-release-apk
-          path: app/build/outputs/apk/release/*.apk
+          name: NGBrowser-v3.12.18-NG-APK
+          path: release-dist/apk/*.apk
           if-no-files-found: error
 
       - name: 9. Cleanup keystore

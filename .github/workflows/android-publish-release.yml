@@ -1,9 +1,6 @@
 name: Publish GitHub Release
 
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
     inputs:
       tag_name:
@@ -13,14 +10,14 @@ on:
       release_title:
         description: 'Release title'
         required: true
-        default: 'NG Browser v3.12.18 NG (Play Store Production)'
+        default: 'NG Browser v3.12.18 NG (Build 3578 · Play Store Production)'
 
 permissions:
   contents: write
 
 jobs:
   publish-release:
-    name: Build, Verify & Publish Signed Release (AAB + APK)
+    name: Build, Verify & Publish NG Browser Release (AAB + Split APKs)
     runs-on: ubuntu-latest
 
     steps:
@@ -62,7 +59,7 @@ jobs:
       - name: 4. Grant execute permissions on gradlew
         run: chmod +x ./gradlew
 
-      - name: 5. Build signed release AAB & APK
+      - name: 5. Build signed NG Browser AAB & Split APKs
         env:
           RELEASE_STORE_FILE: ${{ env.KEYSTORE_PATH }}
           RELEASE_KEY_ALIAS: ${{ env.SAFE_KEY_ALIAS }}
@@ -75,57 +72,62 @@ jobs:
             "-PRELEASE_STORE_PASSWORD=$SAFE_STORE_PASS" \
             "-PRELEASE_KEY_PASSWORD=$SAFE_KEY_PASS"
 
-      - name: 6. Verify signed AAB & APK outputs
+      - name: 6. Prepare branded filenames & verify signatures
         run: |
-          AAB_FILE=$(ls app/build/outputs/bundle/release/*.aab | head -n 1)
-          APK_FILE=$(ls app/build/outputs/apk/release/*.apk | head -n 1)
-          if [ ! -f "$AAB_FILE" ] || [ ! -f "$APK_FILE" ]; then
-            echo "::error::Missing signed AAB or APK output!"
-            exit 1
-          fi
-          ls -lh "$AAB_FILE" "$APK_FILE"
-          jarsigner -verify -verbose:summary "$AAB_FILE"
-          jarsigner -verify -verbose:summary "$APK_FILE"
+          mkdir -p release-dist/aab release-dist/apk
+          AAB_SRC=$(ls app/build/outputs/bundle/release/*.aab | head -n 1)
+          ARM64_SRC=$(ls app/build/outputs/apk/release/*arm64-v8a*.apk | head -n 1)
+          ARM32_SRC=$(ls app/build/outputs/apk/release/*armeabi-v7a*.apk | head -n 1)
 
-      - name: 7. Upload signed AAB artifact to Actions
+          cp "$AAB_SRC" "release-dist/aab/NGBrowser-v3.12.18-NG.aab"
+          cp "$ARM64_SRC" "release-dist/apk/NGBrowser-v3.12.18-NG-arm64-v8a.apk"
+          cp "$ARM32_SRC" "release-dist/apk/NGBrowser-v3.12.18-NG-armeabi-v7a.apk"
+
+          ls -lh release-dist/aab/ release-dist/apk/
+          jarsigner -verify -verbose:summary "release-dist/aab/NGBrowser-v3.12.18-NG.aab"
+          jarsigner -verify -verbose:summary "release-dist/apk/NGBrowser-v3.12.18-NG-arm64-v8a.apk"
+          jarsigner -verify -verbose:summary "release-dist/apk/NGBrowser-v3.12.18-NG-armeabi-v7a.apk"
+
+      - name: 7. Upload signed NG Browser AAB artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-release-aab
-          path: app/build/outputs/bundle/release/*.aab
+          name: NGBrowser-v3.12.18-NG-AAB
+          path: release-dist/aab/NGBrowser-v3.12.18-NG.aab
           if-no-files-found: error
 
-      - name: 8. Upload signed APK artifact to Actions
+      - name: 8. Upload signed NG Browser APK artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: app-release-apk
-          path: app/build/outputs/apk/release/*.apk
+          name: NGBrowser-v3.12.18-NG-APK
+          path: release-dist/apk/*.apk
           if-no-files-found: error
 
-      - name: 9. Create/Update GitHub Release & Attach Assets
+      - name: 9. Publish GitHub Release with NG Browser Assets
         uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/') || github.event.inputs.tag_name != ''
         with:
-          tag_name: ${{ github.event.inputs.tag_name || github.ref_name }}
-          name: ${{ github.event.inputs.release_title || github.ref_name }}
+          tag_name: ${{ github.event.inputs.tag_name }}
+          name: ${{ github.event.inputs.release_title }}
           body: |
             ## NG Browser v3.12.18 NG — Play Store Production Release
 
-            **NayaGram Platform** · Package: `org.nayagram.ngbrowser` · Version Code: `3578`
+            **NayaGram Platform** · Package: `org.nayagram.ngbrowser` · Version Code: `3578`  
+            **Official Privacy Policy:** https://nayagramplatform.github.io/NGBrowser/privacy-policy.html
 
             ### Play Store Readiness Highlights
-            - **Target SDK 36 (Android 16)** with proper **Edge-to-Edge WindowInsets** support
+            - **Target SDK 36 (Android 16)** with full **Edge-to-Edge WindowInsets** support
             - **16 KB Page-Size Aligned** native libraries (`useLegacyPackaging = false`)
             - **Standalone Native Engine:** Mozilla GeckoView 140 ESR (C++/Rust)
-            - **Privacy First:** Strict Enhanced Tracking Protection, Total Cookie Isolation, HTTPS-Only mode, Private Tabs
-            - **ProGuard Rules & Verified Signing:** RSA 2048 JKS verified via `jarsigner`
+            - **Enhanced History & Privacy:** Deduplicated searchable history, single-item delete, last-24h wipe, Strict NG Shields
             - **Upstream Core Sync:** `brave/brave-core 1.102.39` (Chromium 159)
 
             ### Download Assets
-            - **Release AAB (`app-release.aab`)**: Google Play Store upload bundle (~73 MB per-device delivery via ABI split)
-            - **Release APK (`app-release.apk`)**: Direct Android installation (`arm64-v8a` + `armeabi-v7a`)
+            - **`NGBrowser-v3.12.18-NG.aab`** — Google Play Store Multi-ABI Bundle (`arm64-v8a` + `armeabi-v7a` + `x86_64`, ~73 MB per-device delivery)
+            - **`NGBrowser-v3.12.18-NG-arm64-v8a.apk`** — Direct install APK for modern 64-bit Android phones (16 KB aligned)
+            - **`NGBrowser-v3.12.18-NG-armeabi-v7a.apk`** — Direct install APK for 32-bit Android phones
           files: |
-            app/build/outputs/bundle/release/*.aab
-            app/build/outputs/apk/release/*.apk
+            release-dist/aab/NGBrowser-v3.12.18-NG.aab
+            release-dist/apk/NGBrowser-v3.12.18-NG-arm64-v8a.apk
+            release-dist/apk/NGBrowser-v3.12.18-NG-armeabi-v7a.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
