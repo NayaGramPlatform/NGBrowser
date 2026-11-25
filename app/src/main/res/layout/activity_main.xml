@@ -1,108 +1,232 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/root_layout"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:background="@color/ng_bg_white">
+    android:background="@color/ng_navy_dark"
+    android:fitsSystemWindows="true"
+    android:orientation="vertical">
 
-    <!-- Top Navigation Toolbar (Bright Cyan #00E5FF & Sky Blue #0288D1 Accent) -->
+    <!-- Top Address & Shield Toolbar -->
     <LinearLayout
+        android:id="@+id/top_toolbar"
         android:layout_width="match_parent"
         android:layout_height="56dp"
-        android:background="@color/ng_cyan_primary"
+        android:background="@color/ng_navy_dark"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingStart="8dp"
-        android:paddingEnd="8dp">
+        android:paddingStart="6dp"
+        android:paddingEnd="6dp">
 
-        <ImageButton
-            android:id="@+id/btn_shields"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
+        <!-- NG Shields Button with Live Counter Badge -->
+        <FrameLayout
+            android:id="@+id/btn_shields_container"
+            android:layout_width="42dp"
+            android:layout_height="42dp"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="NG Shields"
-            android:src="@android:drawable/ic_menu_compass"
-            android:tint="@color/ng_white" />
+            android:clickable="true"
+            android:focusable="true">
 
-        <EditText
-            android:id="@+id/url_edit_text"
+            <ImageView
+                android:id="@+id/iv_shield_icon"
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:layout_gravity="center"
+                android:contentDescription="NG Shields"
+                android:src="@drawable/ic_shield"
+                android:tint="@color/ng_cyan_bright" />
+
+            <TextView
+                android:id="@+id/tv_shield_badge"
+                android:layout_width="wrap_content"
+                android:layout_height="15dp"
+                android:layout_gravity="top|end"
+                android:layout_marginTop="3dp"
+                android:layout_marginEnd="2dp"
+                android:background="@drawable/bg_shield_count"
+                android:gravity="center"
+                android:minWidth="15dp"
+                android:paddingStart="3dp"
+                android:paddingEnd="3dp"
+                android:text="0"
+                android:textColor="@color/ng_white"
+                android:textSize="9sp"
+                android:textStyle="bold"
+                android:visibility="gone" />
+        </FrameLayout>
+
+        <!-- Omni URL Bar Container -->
+        <LinearLayout
+            android:id="@+id/url_bar_container"
             android:layout_width="0dp"
             android:layout_height="40dp"
-            android:layout_marginStart="6dp"
+            android:layout_marginStart="4dp"
             android:layout_marginEnd="6dp"
             android:layout_weight="1"
             android:background="@drawable/bg_url_bar"
-            android:hint="Search or type URL"
-            android:imeOptions="actionGo"
-            android:inputType="textUri"
-            android:paddingStart="12dp"
-            android:paddingEnd="12dp"
-            android:singleLine="true"
-            android:textColor="@color/ng_text_dark"
-            android:textColorHint="@color/ng_text_hint"
-            android:textSize="14sp" />
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="10dp"
+            android:paddingEnd="6dp">
 
-        <FrameLayout
-            android:layout_width="40dp"
-            android:layout_height="40dp">
+            <ImageView
+                android:id="@+id/iv_security_icon"
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:layout_marginEnd="6dp"
+                android:contentDescription="Security Status"
+                android:src="@drawable/ic_lock"
+                android:tint="@color/ng_shield_green" />
+
+            <EditText
+                android:id="@+id/url_edit_text"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@android:color/transparent"
+                android:hint="@string/url_hint"
+                android:imeOptions="actionGo"
+                android:inputType="textUri"
+                android:selectAllOnFocus="true"
+                android:singleLine="true"
+                android:textColor="@color/ng_white"
+                android:textColorHint="@color/ng_text_hint"
+                android:textSize="14sp" />
 
             <ImageButton
-                android:id="@+id/btn_tabs_count"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
+                android:id="@+id/btn_reload_stop"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="Tabs"
-                android:src="@android:drawable/ic_menu_slideshow"
-                android:tint="@color/ng_white" />
+                android:contentDescription="Reload or Stop"
+                android:padding="6dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_refresh"
+                android:tint="@color/ng_text_hint" />
+        </LinearLayout>
+
+        <!-- Tabs Switcher Badge -->
+        <FrameLayout
+            android:id="@+id/btn_tabs_container"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:clickable="true"
+            android:focusable="true">
 
             <TextView
                 android:id="@+id/tv_tabs_count"
-                android:layout_width="18dp"
-                android:layout_height="18dp"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
                 android:layout_gravity="center"
                 android:background="@drawable/bg_tab_count_badge"
                 android:gravity="center"
                 android:text="1"
-                android:textColor="@color/ng_cyan_primary"
-                android:textSize="11sp"
+                android:textColor="@color/ng_white"
+                android:textSize="12sp"
                 android:textStyle="bold" />
         </FrameLayout>
 
+        <!-- Overflow Menu -->
         <ImageButton
             android:id="@+id/btn_menu"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
+            android:layout_width="38dp"
+            android:layout_height="38dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="Menu"
-            android:src="@android:drawable/ic_menu_more"
+            android:padding="7dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_menu"
             android:tint="@color/ng_white" />
     </LinearLayout>
 
+    <!-- Collapsible Find in Page Bar -->
+    <LinearLayout
+        android:id="@+id/find_in_page_bar"
+        android:layout_width="match_parent"
+        android:layout_height="46dp"
+        android:background="@color/ng_navy_surface"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="12dp"
+        android:paddingEnd="8dp"
+        android:visibility="gone">
+
+        <EditText
+            android:id="@+id/et_find_query"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:background="@android:color/transparent"
+            android:hint="@string/find_hint"
+            android:imeOptions="actionSearch"
+            android:inputType="text"
+            android:singleLine="true"
+            android:textColor="@color/ng_white"
+            android:textColorHint="@color/ng_text_hint"
+            android:textSize="14sp" />
+
+        <TextView
+            android:id="@+id/tv_find_matches"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:paddingStart="6dp"
+            android:paddingEnd="6dp"
+            android:text="0/0"
+            android:textColor="@color/ng_text_hint"
+            android:textSize="12sp" />
+
+        <ImageButton
+            android:id="@+id/btn_find_prev"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Previous Match"
+            android:src="@drawable/ic_up"
+            android:tint="@color/ng_white" />
+
+        <ImageButton
+            android:id="@+id/btn_find_next"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Next Match"
+            android:src="@drawable/ic_down"
+            android:tint="@color/ng_white" />
+
+        <ImageButton
+            android:id="@+id/btn_find_close"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Close Find Bar"
+            android:src="@drawable/ic_close"
+            android:tint="@color/ng_white" />
+    </LinearLayout>
+
+    <!-- Page Load Progress Bar -->
     <ProgressBar
         android:id="@+id/progress_bar"
         style="?android:attr/progressBarStyleHorizontal"
         android:layout_width="match_parent"
-        android:layout_height="4dp"
+        android:layout_height="3dp"
+        android:max="100"
         android:progressDrawable="@drawable/bg_progress_bar"
         android:visibility="gone" />
 
-    <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
-        android:id="@+id/swipe_refresh"
+    <!-- Standalone Native GeckoView Engine Viewport -->
+    <org.mozilla.geckoview.GeckoView
+        android:id="@+id/geckoview"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1">
-
-        <FrameLayout
-            android:id="@+id/web_container"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent" />
-    </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
+        android:layout_weight="1" />
 
     <!-- Bottom Navigation Bar -->
     <LinearLayout
+        android:id="@+id/bottom_nav_bar"
         android:layout_width="match_parent"
-        android:layout_height="48dp"
-        android:background="@color/ng_sky_blue"
+        android:layout_height="50dp"
+        android:background="@color/ng_navy_bar"
         android:gravity="center"
         android:orientation="horizontal">
 
@@ -113,17 +237,7 @@
             android:layout_weight="1"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="Back"
-            android:src="@android:drawable/ic_media_previous"
-            android:tint="@color/ng_white" />
-
-        <ImageButton
-            android:id="@+id/btn_home"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Home"
-            android:src="@android:drawable/ic_menu_search"
+            android:src="@drawable/ic_back"
             android:tint="@color/ng_white" />
 
         <ImageButton
@@ -133,8 +247,37 @@
             android:layout_weight="1"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="Forward"
-            android:src="@android:drawable/ic_media_next"
+            android:src="@drawable/ic_forward"
+            android:tint="@color/ng_white" />
+
+        <ImageButton
+            android:id="@+id/btn_home"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Home"
+            android:src="@drawable/ic_home"
+            android:tint="@color/ng_cyan_bright" />
+
+        <ImageButton
+            android:id="@+id/btn_new_tab"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="New Tab"
+            android:src="@drawable/ic_add"
+            android:tint="@color/ng_white" />
+
+        <ImageButton
+            android:id="@+id/btn_bookmark_star"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Bookmark Page"
+            android:src="@drawable/ic_bookmark_border"
             android:tint="@color/ng_white" />
     </LinearLayout>
-
 </LinearLayout>

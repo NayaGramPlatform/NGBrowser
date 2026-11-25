@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">NG Browser</string>
+    <string name="url_hint">Search or enter web address</string>
+    <string name="find_hint">Find in page...</string>
 </resources>

@@ -4,20 +4,20 @@ on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'Release Tag (e.g. v1.0.1)'
+        description: 'Release Tag (e.g. v2.0.0)'
         required: false
-        default: 'v1.0.1'
+        default: 'v2.0.0'
       release_title:
         description: 'Release Title'
         required: false
-        default: 'NG Browser v1.0.1 Official Release'
+        default: 'NG Browser v2.0.0 — Standalone Native Engine Release'
   push:
     tags:
       - 'v*'
 
 jobs:
   publish:
-    name: Build Signed APK & Create GitHub Release
+    name: Build Signed Native APK/AAB & Publish GitHub Release
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -30,6 +30,7 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '17'
+          cache: 'gradle'
 
       - name: 3. Decode Keystore
         env:
@@ -81,12 +82,18 @@ jobs:
           tag_name: ${{ github.event.inputs.tag_name || github.ref_name }}
           name: ${{ github.event.inputs.release_title || github.ref_name }}
           body: |
-            ## 🚀 NG Browser Official Release
+            ## NG Browser Official Release (Standalone Native GeckoView Engine)
             **NayaGram Platform**
 
-            ### 📦 Download Links
-            - **Release APK**: Direct Android installation file
-            - **Release AAB**: Google Play Store publishing bundle
+            ### Highlights
+            - Standalone Mozilla GeckoView 140 ESR C++/Rust rendering engine (no WebView dependency)
+            - Built-in Strict Enhanced Tracking Protection, Total Cookie Isolation, HTTPS-Only mode
+            - Multi-tab & Private browsing, Find-in-Page, Bookmarks, History & Downloads Manager
+            - Synced with upstream brave/brave-core (1.102.37 / Chromium 159)
+
+            ### Download Assets
+            - **Release APK**: Direct Android installation (`arm64-v8a` + `armeabi-v7a`)
+            - **Release AAB**: Google Play Store App Bundle
           files: |
             app/build/outputs/apk/release/*.apk
             app/build/outputs/bundle/release/*.aab

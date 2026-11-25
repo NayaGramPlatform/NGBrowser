@@ -1,0 +1,33 @@
+name: Upstream Brave-Core Sync Check
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * 1'
+
+jobs:
+  check-upstream:
+    name: Check Latest brave/brave-core Updates
+    runs-on: ubuntu-latest
+    steps:
+      - name: 1. Checkout MasterPro
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 50
+
+      - name: 2. Compare with upstream brave/brave-core
+        run: |
+          CURRENT_VER=$(node -p "require('./package.json').version")
+          CURRENT_CHR=$(node -p "require('./package.json').config.projects.chrome.tag")
+          echo "Current NG Browser upstream base: brave-core $CURRENT_VER (Chromium $CURRENT_CHR)"
+
+          UPSTREAM_PKG=$(curl -fsSL https://raw.githubusercontent.com/brave/brave-core/master/package.json)
+          UPSTREAM_VER=$(echo "$UPSTREAM_PKG" | node -e "const d = JSON.parse(require('fs').readFileSync(0,'utf8')); console.log(d.version);")
+          UPSTREAM_CHR=$(echo "$UPSTREAM_PKG" | node -e "const d = JSON.parse(require('fs').readFileSync(0,'utf8')); console.log(d.config.projects.chrome.tag);")
+          echo "Latest upstream brave/brave-core: $UPSTREAM_VER (Chromium $UPSTREAM_CHR)"
+
+          if [ "$CURRENT_VER" != "$UPSTREAM_VER" ]; then
+            echo "::notice::New upstream brave-core release available: $UPSTREAM_VER (Chromium $UPSTREAM_CHR)"
+          else
+            echo "Repository is up to date with upstream brave-core $UPSTREAM_VER!"
+          fi

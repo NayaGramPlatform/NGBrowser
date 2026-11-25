@@ -1,9 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ng_cyan_primary">#00E5FF</color>
+    <color name="ng_cyan_primary">#00B8D4</color>
+    <color name="ng_cyan_bright">#00E5FF</color>
     <color name="ng_sky_blue">#0288D1</color>
+    <color name="ng_navy_dark">#0D1B2A</color>
+    <color name="ng_navy_surface">#162638</color>
+    <color name="ng_navy_bar">#112031</color>
+    <color name="ng_private_purple">#4A148C</color>
+    <color name="ng_private_accent">#CE93D8</color>
     <color name="ng_white">#FFFFFF</color>
     <color name="ng_bg_white">#F5F7FA</color>
     <color name="ng_text_dark">#102A43</color>
-    <color name="ng_text_hint">#627D98</color>
+    <color name="ng_text_hint">#8EA4BD</color>
+    <color name="ng_shield_green">#00E676</color>
+    <color name="ng_warn_amber">#FFB300</color>
+    <color name="ng_danger_red">#FF5252</color>
 </resources>
