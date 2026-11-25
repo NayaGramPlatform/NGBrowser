@@ -80,6 +80,7 @@
 <translation id="8982438328166986164">Zeigt Website-Vorschläge basierend auf Ihren Lesezeichen und Ihrem Browserverlauf an.</translation>
 <translation id="924029461438529367">Suchvorschläge anzeigen</translation>
 <translation id="9148058034647219655">Beenden</translation>
+<translation id="2139186145475833000">Zum Startbildschirm hinzufügen</translation>
 <translation id="7534079972563542000">Unaufhaltsame Domains</translation>
 <translation id="6486983549008741930">Inhaltsfilterung</translation>
 <translation id="2398817776566547893">Aktivieren Sie benutzerdefinierte Filter, die regionale und sprachspezifische Tracker und Belästigungen blockieren.</translation>
@@ -192,9 +193,7 @@
 <translation id="9008534313521214777">Ca. Zeit\ngespart</translation>
 <translation id="5668852698659986622">Gesponserte Ads aktivieren</translation>
 <translation id="431194936581466649">Unterstützen Sie Braves Mission, ein unabhängiges, nutzerorientiertes Web mit gesponserten Ads aufzubauen. Wir messen die Anzeigenleistung privat, ohne Sie zu identifizieren.</translation>
-<translation id="8347743943525229984">Brave Umfragen erlauben</translation>
-<translation id="6022939994702081659">Erlaube Brave, Links zu privaten Umfragen auf der neuen Tab-Seite anzuzeigen. Umfragen helfen uns, bessere Funktionen zu entwickeln und die Wirksamkeit von browserbasierten Werbekampagnen zu messen.</translation>
-<translation id="7746496306508543965">Mehr über Brave Umfragen erfahren</translation>
+<translation id="1939813747486101115">Mehr über gesponserte Ads erfahren</translation>
 <translation id="410351446219883937">Autoplay</translation>
 <translation id="7445411102860286510">Automatische Wiedergabe stummgeschalteter Videos auf Websites zulassen (empfohlen)</translation>
 <translation id="7837721118676387834">Automatische Wiedergabe stummgeschalteter Videos für eine bestimmte Website zulassen.</translation>
@@ -291,7 +290,7 @@
 <translation id="2569646144216067185">Anzahl der Wörter: <ph name="WORD_COUNT"/></translation>
 <translation id="7507533586185621084">Falscher Synchronisierungscode</translation>
 <translation id="8284063834901328650">Falscher Synchronisierungs-QR-Code</translation>
-<translation id="859506441384380749">Dieser Code wurde von einer veralteten Version von Brave generiert; bitte führen Sie zuerst ein Upgrade für Ihr anderes Gerät durch</translation>
+<translation id="4002014583969312635">Dieser Code wurde anscheinend auf einem Gerät erstellt, das eine ältere Version von Brave nutzt. Bitte aktualisiere Brave auf deinem anderen Gerät auf die neueste Version und erstelle dann einen neuen Synchronisierungscode.</translation>
 <translation id="3132642509209154999">Der Code ist abgelaufen. Bitte erstellen Sie auf Ihrem anderen Gerät einen neuen Code und versuchen Sie es erneut.</translation>
 <translation id="2859229680945501779">Dieser Code ist ungültig. Bitte überprüfen Sie, ob Uhrzeit und Zeitzone auf Ihrem Gerät richtig eingestellt sind.</translation>
 <translation id="3149880132460839085">Brave Sync</translation>
@@ -337,8 +336,6 @@
 <translation id="8185825081026121627">Verdiene Basic Attention Token, indem du dir Brave Rewards-Anzeigen ansiehst, die deine Privatsphäre respektieren.</translation>
 <translation id="5321518976657560663">Rücksetzungsfehler</translation>
 <translation id="4114170343590425996">Beim Zurücksetzen von Brave Rewards ist ein Fehler aufgetreten. Bitte starte Brave neu und versuche es erneut.</translation>
-<translation id="6417420737057016607">Brave-Werbung</translation>
-<translation id="5611966874859284786">Benachrichtigungsanzeigen anzeigen, wenn Brave gerade nicht genutzt wird</translation>
 <translation id="5717636703619499822"><ph name="BEGIN_LINK1"/>Brave Rewards Daten zurücksetzen…<ph name="END_LINK1"/></translation>
 <translation id="1830919318137227284"><ph name="BEGIN_LINK1"/>Brave-Werbedaten löschen …<ph name="END_LINK1"/></translation>
 <translation id="8293206222192510085">Lesezeichen hinzufügen</translation>
@@ -397,6 +394,13 @@ Sind Sie sicher, dass Sie den Vorgang fortsetzen möchten?</translation>
 <translation id="8793108040181436796">Widgets</translation>
 <translation id="8643377320501056697">Die führenden Seiten anzeigen</translation>
 <translation id="7275773481201277457">Brave-Statistiken anzeigen</translation>
+<translation id="8516804522688861636">Kürzlich besuchte Websites anzeigen</translation>
+<translation id="4546260624932151782">Favoriten anzeigen</translation>
+<translation id="5313967007315987356">Website hinzufügen</translation>
+<translation id="1773147648972887693">Kürzlich besuchte Websites anzeigen</translation>
+<translation id="7134741506051403308">Widget ausblenden</translation>
+<translation id="1247759249260562308">Favoriten bearbeiten</translation>
+<translation id="6387214885349500492">Favorit anheften</translation>
 <translation id="7462178177755090262">Startbildschirm</translation>
 <translation id="5365434987337264071">Zuletzt geöffneter Tab</translation>
 <translation id="6019856124237323989">{HOURS, plural,
@@ -974,6 +978,7 @@ Wenn Sie diese Anfrage nicht akzeptieren, wird das VPN nicht erneut verbunden un
 <translation id="6365389672683343144">Sie können mit Ihrem Brave VPN-Abonnement bis zu 5 Android-, iOS- oder Desktop-Geräte schützen. Verknüpfen Sie dazu einfach Ihr Google Play-Abonnement mit Ihrem Brave-Konto.</translation>
 <translation id="6610899852831463073">Aktivierung von Safe Browsing nicht möglich</translation>
 <translation id="7954263306665462056">Safe Browsing wurde auf Ihrem Gerät deaktiviert. Um es zu aktivieren, stellen Sie sicher, dass die Google Play-Dienste installiert und auf dem neuesten Stand sind.</translation>
+<translation id="6417420737057016607">Brave-Werbung</translation>
 <translation id="7748944510530490017">Primäre Netzwerke</translation>
 <translation id="2781668117338732220">Sekundärnetzwerke</translation>
 <translation id="282560918037172384">Testnetzwerke</translation>
@@ -1000,6 +1005,13 @@ Wenn Sie diese Anfrage nicht akzeptieren, wird das VPN nicht erneut verbunden un
 <translation id="7530313002494358590">Das Aktivieren oder Deaktivieren einer Funktion von Brave erfordert einen Neustart des Browsers, um die Änderungen zu übernehmen. Bitte tippen Sie auf <ph name="BEGIN_BOLD"/>Jetzt neu starten<ph name="END_BOLD"/>, sobald Brave Origin die Aktualisierung abgeschlossen hat.</translation>
 <translation id="1028940738207645746">Sind Sie sicher, dass Sie alle Einstellungen auf die Standardwerte zurücksetzen möchten?</translation>
 <translation id="5939518447894949180">Zurücksetzen</translation>
+<translation id="3222790865318305905">Aktivierungslimit erreicht</translation>
+<translation id="3787857711016546034">Um Betrug zu verhindern, ist die Anzahl der Origin-Aktivierungen begrenzt. Du kannst aber jederzeit weitere Aktivierungen anfordern, um deine Origin-Lizenz auf weiteren Geräten zu verwenden. Klicke einfach auf die Option „Weitere Aktivierungen anfordern“ oder <ph name="CONTACT_SUPPORT"/>, um Hilfe zu erhalten.</translation>
+<translation id="6760819753412779585">support kontaktieren</translation>
+<translation id="571697836019670200">Weitere Aktivierungen anfordern</translation>
+<translation id="9019545131475425538">Wird verarbeitet…</translation>
+<translation id="7242700630179071243">Bereit zur Aktivierung</translation>
+<translation id="5463918917265356202">Brave Origin ist jetzt auf diesem Gerät aktiv. Um die Funktion zu nutzen, musst du den Browser neu starten. Möchtest du ihn jetzt neu starten?</translation>
 <translation id="8554205386170195281">Kaufen</translation>
 <translation id="8613144770663526433">Mit Brave Wallet anmelden</translation>
 <translation id="3696514931437952995">Sie melden sich bei <ph name="ORIGIN"/> an. Brave Wallet teilt Ihre Wallet-Adresse mit <ph name="ORIGIN"/>.</translation>

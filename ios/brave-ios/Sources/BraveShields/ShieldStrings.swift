@@ -8,23 +8,11 @@ import Strings
 
 extension Strings {
   public struct Shields {
-    public static let shieldsAdStats = NSLocalizedString(
-      "AdsrBlocked",
-      bundle: .module,
-      value: "Ads \nBlocked",
-      comment: "Shields Ads Stat"
-    )
     public static let shieldsAdAndTrackerStats = NSLocalizedString(
       "AdsAndTrackersrBlocked",
       bundle: .module,
       value: "Trackers & ads blocked",
       comment: "Shields Ads Stat"
-    )
-    public static let shieldsTrackerStats = NSLocalizedString(
-      "TrackersrBlocked",
-      bundle: .module,
-      value: "Trackers \nBlocked",
-      comment: "Shields Trackers Stat"
     )
     public static let dataSavedStat = NSLocalizedString(
       "DataSavedStat",
@@ -172,111 +160,13 @@ extension Strings.Shields {
 // MARK: - Anti Ad-Block Warning
 
 extension Strings.Shields {
-  /// A title for a popup that tells the user we recommend turning shields off for this site
-  public static let antiAdBlockWarningTitle = NSLocalizedString(
-    "AntiAdBlockWarningTitle",
-    bundle: .module,
-    value: "Adjust Ad Block Settings For This Site",
-    comment:
-      "A title for a popup that tells the user we recommend turning shields off for this site."
-  )
 
-  /// A descriptive message explaining this site's ad-blocking crackdown
-  public static let antiAdBlockWarningDescription = NSLocalizedString(
-    "AntiAdBlockWarningDescription",
-    bundle: .module,
-    value:
-      "This site has begun blocking some ad blockers, which means their site may not work as expected.",
-    comment: "A descriptive message explaining this site's ad-blocking crackdown."
-  )
-
-  /// A descriptive message explaining to disable shields on this site
-  public static let antiAdBlockWarningDescription2 = NSLocalizedString(
-    "AntiAdBlockWarningDescription2",
-    bundle: .module,
-    value:
-      "To address this issue, Brave can adjust your shields settings for you. Once adjusted, you can try watching this content in Brave Player instead.",
-    comment: "A descriptive message explaining to disable shields on this site."
-  )
-
-  /// A button that disables ad-blocking and uses brave player
-  public static let antiAdBlockWarningConfirmationButton = NSLocalizedString(
-    "AntiAdBlockWarningConfirmationButton",
-    bundle: .module,
-    value: "Adjust Shields For Me",
-    comment: "A button that disables ad-blocking and uses brave player."
-  )
-
-  /// A button that dismisses the warning and does nothing
-  public static let antiAdBlockWarningDismissButton = NSLocalizedString(
-    "AntiAdBlockWarningDismissButton",
-    bundle: .module,
-    value: "Keep Current Settings",
-    comment: "A button that dismisses the warning and does nothing."
-  )
-
-  /// A discription of the Brave Player
-  public static let antiAdBlockWarningBravePlayerDescription = NSLocalizedString(
-    "AntiAdBlockWarningBravePlayerDescription",
-    bundle: .module,
-    value: "**Brave Player** is your ticket to an ad-free and uninterrupted video experience.",
-    comment: "A discription of the Brave Player."
-  )
 }
 
 // MARK: - Brave Player
 
 extension Strings.Shields {
-  /// Title for the brave player feature
-  public static let bravePlayer = NSLocalizedString(
-    "BravePlayer",
-    bundle: .module,
-    value: "Brave Player",
-    comment: "Title for the brave player feature"
-  )
 
-  /// Title for the brave player info popup which appears when clicking on the brave player icon on the navigation bar
-  public static let bravePlayerInfoTitle = NSLocalizedString(
-    "BravePlayerInfoTitle",
-    bundle: .module,
-    value: "Watch In Brave Player Instead",
-    comment:
-      "Title for the brave player info popup which appears when clicking on the brave player icon on the navigation bar."
-  )
-
-  /// A description of the brave player that is presented on the info panel when clicing on the brave player icon for the first time
-  public static let bravePlayerInfoMessage = NSLocalizedString(
-    "BravePlayerInfoMessage",
-    bundle: .module,
-    value: "Brave Player lets you watch videos without interruptions.",
-    comment:
-      "A description of the brave player that is presented on the info panel when clicing on the brave player icon for the first time."
-  )
-
-  /// A label for a toggle that enables automatic launching of brave player for certain sites
-  public static let bravePlayerAlwaysOpenVideoLinks = NSLocalizedString(
-    "BravePlayerAlwaysOpenYouTubeLinks",
-    bundle: .module,
-    value: "Always open videos from this site with Brave Player",
-    comment:
-      "A label for a toggle that enables automatic launching of brave player for certain sites"
-  )
-
-  /// A button that confirms to use the brave player
-  public static let bravePlayerConfirmButton = NSLocalizedString(
-    "BravePlayerConfirmButton",
-    bundle: .module,
-    value: "Try It Out",
-    comment: "A button that confirms to use the brave player."
-  )
-
-  /// A button that ignores the brave player
-  public static let bravePlayerDismissButton = NSLocalizedString(
-    "BravePlayerDismissButton",
-    bundle: .module,
-    value: "Not Now",
-    comment: "A button that ignores the brave player"
-  )
 }
 
 // MARK: - GPC
@@ -622,20 +512,6 @@ extension Strings.Shields {
     value: "Add",
     comment:
       "This is a button on the top navigation that takes the user to an add custom filter list url to the list"
-  )
-  public static let filterListsEdit = NSLocalizedString(
-    "FilterListsEdit",
-    bundle: .module,
-    value: "Edit",
-    comment:
-      "This is a button on the top navigation that takes the user to an add custom filter list url to the list"
-  )
-  public static let filterListURLTextFieldPlaceholder = NSLocalizedString(
-    "FilterListURLTextFieldPlaceholder",
-    bundle: .module,
-    value: "Enter filter list URL here ",
-    comment:
-      "This is a placeholder for the custom filter list url text field where a user may enter a custom filter list URL"
   )
   public static let filterListsDownloadFailed = NSLocalizedString(
     "FilterListsDownloadFailed",
@@ -999,13 +875,6 @@ extension Strings.Shields {
     value: "Ads and other creepy things blocked",
     comment: "The number of ads and trackers blocked will be next to this"
   )
-  public static let blockedInfoButtonAccessibilityLabel = NSLocalizedString(
-    "BraveShieldsBlockedInfoButtonAccessibilityLabel",
-    bundle: .module,
-    value: "Learn more",
-    comment:
-      "What the screen reader will read out when the user has VoiceOver on and taps on the question-mark info button on the shields panel"
-  )
   public static let siteBroken = NSLocalizedString(
     "BraveShieldsSiteBroken",
     bundle: .module,
@@ -1165,5 +1034,62 @@ extension Strings.Shields {
     value:
       "If you provide contact info it will be stored for reporting broken sites in the future.",
     comment: "Contact info storing description"
+  )
+
+  public static let blockElementButtonTitle = NSLocalizedString(
+    "BlockElementButtonTitle",
+    bundle: .module,
+    value: "Block Element",
+    comment: "Title of a button in the shields panel that starts the element picker."
+  )
+
+  public static let clearBlockedElementsButtonTitle = NSLocalizedString(
+    "ClearBlockedElementsButtonTitle",
+    bundle: .module,
+    value: "Clear All Blocked Elements",
+    comment:
+      "Title of a button in the shields panel that removes all elements blocked with the element picker on the current site."
+  )
+
+  public static let elementPickerCreateDisabledTitle = NSLocalizedString(
+    "ElementPickerCreateDisabledTitle",
+    bundle: .module,
+    value: "Select element you want to block",
+    comment: "Label for the element picker's create button while no element is selected."
+  )
+
+  public static let elementPickerCreateEnabledTitle = NSLocalizedString(
+    "ElementPickerCreateEnabledTitle",
+    bundle: .module,
+    value: "Block Elements",
+    comment: "Label for the element picker's create button once an element is selected."
+  )
+
+  public static let elementPickerManageTitle = NSLocalizedString(
+    "ElementPickerManageTitle",
+    bundle: .module,
+    value: "Manage filters",
+    comment: "Label for the element picker's button that opens the custom filters editor."
+  )
+
+  public static let elementPickerShowRulesTitle = NSLocalizedString(
+    "ElementPickerShowRulesTitle",
+    bundle: .module,
+    value: "Show rules",
+    comment: "Label for the element picker's button that reveals the generated filter rules."
+  )
+
+  public static let elementPickerHideRulesTitle = NSLocalizedString(
+    "ElementPickerHideRulesTitle",
+    bundle: .module,
+    value: "Hide rules",
+    comment: "Label for the element picker's button that hides the generated filter rules."
+  )
+
+  public static let elementPickerQuitTitle = NSLocalizedString(
+    "ElementPickerQuitTitle",
+    bundle: .module,
+    value: "Cancel",
+    comment: "Label for the element picker's button that closes the picker without blocking."
   )
 }

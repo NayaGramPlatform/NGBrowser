@@ -1,8 +1,8 @@
 diff --git a/chrome/browser/external_protocol/external_protocol_handler.cc b/chrome/browser/external_protocol/external_protocol_handler.cc
-index 656c9b68b7a1a484d404cdddcff49020bf6548f6..9bd794a269e1d9b1190e02b1e933199b0349f307 100644
+index 289b835cd7c5dc8f5b6729d6f474fff6425dd1a2..92ef698849256877ac8e1649ca3e4556196abc1a 100644
 --- a/chrome/browser/external_protocol/external_protocol_handler.cc
 +++ b/chrome/browser/external_protocol/external_protocol_handler.cc
-@@ -397,7 +397,7 @@ ExternalProtocolHandler::BlockState ExternalProtocolHandler::GetBlockState(
+@@ -421,7 +421,7 @@ ExternalProtocolHandler::BlockState ExternalProtocolHandler::GetBlockState(
  
    // The mailto scheme is allowed explicitly because of its ubiquity on the web
    // and because every platform provides a default handler for it.

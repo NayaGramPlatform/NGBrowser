@@ -173,8 +173,16 @@ if (rewards_service) {  // Returns null when disabled
 **Don't use `shared_ptr` to take ownership of something you don't own.**
 
 Using `shared_ptr` on memory owned by another class causes crashes when the
-`shared_ptr` frees memory that is still referenced elsewhere. Avoid shared
-pointers unless there is a strong reason for shared ownership.
+`shared_ptr` frees memory that is still referenced elsewhere.
+
+**`std::shared_ptr` is banned in Chromium code outright** — there is no "strong
+reason for shared ownership" exception (see
+[CSM-005](coding-standards-memory.md#CSM-005) and the
+[Chromium smart pointer guidelines](https://www.chromium.org/developers/smart-pointer-guidelines/)).
+If you think you need shared ownership, rethink the design first; where it is
+genuinely unavoidable, use `scoped_refptr<T>` with a `base::RefCounted` type —
+but prefer redesign over reference counting (see
+[CSM-032](coding-standards-memory.md#CSM-032)).
 
 **BAD:**
 
@@ -435,11 +443,11 @@ if (brave_wallet_enabled) {
 
 **When tests or other classes need access to private members, use `friend`
 declarations instead of making methods public or protected.** This rule is about
-bypassing access control for convenience. It does not apply to normal
+bypassing access control for convenience. **Under this rule, NEVER flag normal
 inheritance where a subclass calls inherited protected methods or exposes new
-public methods that delegate to them.
+public methods that delegate to them.**
 
-This rule does not apply to `*ForTesting()` methods, which are an accepted
+**NEVER flag `*ForTesting()` methods under this rule.** They are an accepted
 Chromium convention for exposing test-only accessors.
 
 ```cpp
@@ -634,16 +642,21 @@ if (!service)
 
 <a id="ARCH-028"></a>
 
-## ✅ Use `MaybeCreateForWebContents` for Conditional Tab Helpers
+## ✅ Use `MaybeCreateForWebContents` for Conditional WebContents Helpers
 
-**When a tab helper should not be attached to all web contents (e.g., skipped
+**This applies only to helpers that must be attached to the `WebContents`
+itself, because they also run on WebContents that are not tabs** (see
+[ARCH-074](#ARCH-074)). Tab-scoped features belong in `BraveTabFeatures`
+instead, where the same guards go in `BraveTabFeatures::Init()`.
+
+**When such a helper should not be attached to all web contents (e.g., skipped
 for incognito or when a feature is disabled), use a static
 `MaybeCreateForWebContents` method** with the appropriate guards instead of
 always creating and checking internally.
 
 ```cpp
 // ❌ WRONG - always create, check internally
-SerpMetricsTabHelper::CreateForWebContents(web_contents);
+FooHelper::CreateForWebContents(web_contents);
 
 // ✅ CORRECT - conditionally create with proper guards
 static void MaybeCreateForWebContents(content::WebContents* web_contents) {
@@ -651,9 +664,9 @@ static void MaybeCreateForWebContents(content::WebContents* web_contents) {
       web_contents->GetBrowserContext());
   if (!profile->IsRegularProfile())
     return;
-  if (!base::FeatureList::IsEnabled(kSerpMetrics))
+  if (!base::FeatureList::IsEnabled(kFoo))
     return;
-  SerpMetricsTabHelper::CreateForWebContents(web_contents);
+  FooHelper::CreateForWebContents(web_contents);
 }
 ```
 
@@ -843,7 +856,7 @@ uses WebKit, not Chromium's content layer. Pass specific dependencies
 
 <a id="ARCH-037"></a>
 
-## ✅ Use Layered Component Structure (`core/` + `content/`) for iOS-Compatible Components
+## ✅ Use Layered Component Structure (`core/` + `content/`)
 
 **When a component needs to work on both iOS and content-based platforms, use a
 layered component structure.** Split the component into `core/` (iOS-compatible,
@@ -865,8 +878,43 @@ components/brave_shields/
 
 - `core/` must never depend on `//content` or `content/` subdirectories
 - `content/` may depend on `core/` and `//content`
-- iOS builds only pull in `core/`
+- `ios/` contains iOS-specific code. It generally drives shared `core/` code,
+  serving the same role as `content/` on content-based platforms. It may depend
+  on `core/`, but MUST NOT depend on `//content` or the component's `content/`
+  directory.
+- iOS builds pull in `core/` and any `ios/` integration, NEVER `content/`
 - Business logic belongs in `core/`; content-layer glue belongs in `content/`
+- At the component root, use layer directories (`core/`, `content/`, `ios/`) or
+  process directories (`browser/`, `renderer/`, `common/`), NEVER both. When
+  introducing layers, move existing process directories into the appropriate
+  layer. Create only the layer and process directories the component needs; not
+  all of them are required.
+
+```text
+# ❌ WRONG - layer and process directories at the same level
+components/example/
+├── core/
+├── content/
+├── ios/
+├── browser/
+└── common/
+
+# ✅ CORRECT - process directories at the component root
+components/example/
+├── browser/
+├── renderer/
+└── common/
+
+# ✅ CORRECT - layer directories at the root, process directories within layers
+components/example/
+├── core/
+│   ├── browser/
+│   └── common/
+├── content/
+│   ├── browser/
+│   └── renderer/
+└── ios/
+```
 
 ---
 
@@ -1218,7 +1266,7 @@ feature's data and lifetime requirements. See
 
 | Scope              | Owner                               | Examples                                  |
 | ------------------ | ----------------------------------- | ----------------------------------------- |
-| **Tab**            | `TabFeatures`                       | Find-in-page, print preview, page actions |
+| **Tab**            | `TabFeatures` (`BraveTabFeatures`)  | Find-in-page, print preview, page actions |
 | **Browser Window** | `BrowserWindowFeatures`             | Omnibox, bookmarks bar, vertical tabs     |
 | **Profile**        | `BrowserContextKeyedServiceFactory` | Rewards, Wallet, sync services            |
 | **Global**         | `GlobalFeatures`                    | Process-wide features spanning profiles   |
@@ -1328,8 +1376,8 @@ class MyServiceFactory : public ProfileKeyedServiceFactory {
 };
 ```
 
-For tab/window features, create them in `TabFeatures::Init()` or
-`BrowserWindowFeatures::Init()` respectively.
+For tab/window features, create them in `BraveTabFeatures::Init()` (see
+[ARCH-074](#ARCH-074)) or `BrowserWindowFeatures::Init()` respectively.
 
 <a id="ARCH-068"></a>
 
@@ -1414,15 +1462,16 @@ injection instead.
 
 This rule applies to features with UI changes (new views, buttons, dialogs,
 etc.). Non-UI components such as tab helpers, services, or background logic
-should be covered by unit tests or browser tests appropriate to the code — a CUJ
-test is not required when there is no user-visible interaction to validate.
+should be covered by unit tests or browser tests appropriate to the code.
+**NEVER require a CUJ test when there is no user-visible interaction to
+validate.**
 
 **Exception:** This rule targets native (Views) UI that `InteractiveBrowserTest`
-can drive. Don't require a CUJ test for WebUI pages such as `brave://settings`
+can drive. **NEVER require a CUJ test for WebUI pages such as `brave://settings`
 or `chrome://history`, where `InteractiveBrowserTest`-style testing is not
 available, nor for trivial UI with no meaningful logic to test (e.g. a toggle
 wired to a pref), nor for changes that follow an existing untested pattern in
-the surrounding code.
+the surrounding code.**
 
 ```cpp
 // ✅ CORRECT - CUJ test: validates user-visible behavior end-to-end
@@ -1549,38 +1598,55 @@ class MyTabFeature {
  public:
   DECLARE_USER_DATA(MyTabFeature)
 
-  explicit MyTabFeature(tabs::TabInterface* tab, /* other deps */);
+  explicit MyTabFeature(tabs::TabInterface& tab, /* other deps */);
 
-  static MyTabFeature* From(tabs::TabInterface* tab) {
-    return Get(tab->GetUnownedUserDataHost());
-  }
+  // Returns null when `tab` is null.
+  static MyTabFeature* From(tabs::TabInterface* tab);
 
  private:
-  ScopedUnownedUserData<MyTabFeature> scoped_unowned_user_data_;
+  ui::ScopedUnownedUserData<MyTabFeature> scoped_unowned_user_data_;
 };
 
 // In .cc:
 DEFINE_USER_DATA(MyTabFeature)
 
-MyTabFeature::MyTabFeature(tabs::TabInterface* tab, /* other deps */)
-    : scoped_unowned_user_data_(tab->GetUnownedUserDataHost(), *this) {}
+// static
+MyTabFeature* MyTabFeature::From(tabs::TabInterface* tab) {
+  return tab ? Get(tab->GetUnownedUserDataHost()) : nullptr;
+}
+
+MyTabFeature::MyTabFeature(tabs::TabInterface& tab, /* other deps */)
+    : scoped_unowned_user_data_(tab.GetUnownedUserDataHost(), *this) {}
 ```
 
 **Creation in TabFeatures::Init() or BrowserWindowFeatures::Init():**
 
 ```cpp
-// Using the factory for testability:
+// Desktop: using the factory lets tests override the feature.
 my_tab_feature_ = GetUserDataFactory().CreateInstance<MyTabFeature>(
     tab,        // For the injection function
-    &tab, ...   // Normal constructor args
+    tab, ...    // Normal constructor args
 );
 ```
+
+On Android, `TabFeatures::GetUserDataFactory()` is private to upstream, so
+`BraveTabFeatures` creates the feature with `std::make_unique`.
 
 **Production retrieval:**
 
 ```cpp
 auto* feature = MyTabFeature::From(tab);
+
+// From a WebContents, which may not be a tab's:
+auto* feature =
+    MyTabFeature::From(tabs::TabInterface::MaybeGetFromContents(web_contents));
 ```
+
+Look the feature up with `From()` at each point of use rather than caching a
+pointer or `WeakPtr` to it. Tab features are destroyed when the tab is closed,
+before the tab strip notifies its observers and before the contents is
+destroyed, and a discarded contents is no longer mapped to its tab, so `From()`
+returns null once the feature is gone.
 
 ---
 
@@ -1590,30 +1656,29 @@ auto* feature = MyTabFeature::From(tab);
 
 **For integration tests that need mock features in a live browser, use
 `GetUserDataFactoryForTesting().AddOverrideForTesting()`** to substitute a mock
-before browser initialization. For unit tests, attach features directly to a
-mock interface's `UnownedUserDataHost`.
+before browser initialization. For unit tests, construct the feature against a
+`tabs::MockTabInterface`.
 
 **Unit test — attach to mock interface:**
 
 ```cpp
-ui::UnownedUserDataHost user_data_host_;
-testing::NiceMock<MockTabInterface> mock_tab_;
-
-EXPECT_CALL(mock_tab_, GetUnownedUserDataHost)
-    .WillRepeatedly(testing::ReturnRef(user_data_host_));
+// MockTabInterface is already a NiceMock and returns its own
+// UnownedUserDataHost, so neither needs setting up.
+tabs::MockTabInterface mock_tab_;
 
 // Feature attaches itself via ScopedUnownedUserData in constructor
-my_feature_.emplace(&mock_tab_, ...);
+my_feature_.emplace(mock_tab_, ...);
+ASSERT_EQ(MyTabFeature::From(&mock_tab_), &*my_feature_);
 ```
 
-**Integration test — factory override for live browser:**
+**Integration test — factory override for live browser (desktop only):**
 
 ```cpp
 // Install override BEFORE browser creation
 auto override = tabs::TabFeatures::GetUserDataFactoryForTesting()
     .AddOverrideForTesting(
         base::BindRepeating([](tabs::TabInterface& tab) {
-          return std::make_unique<MyTabFeatureMock>(&tab);
+          return std::make_unique<MyTabFeatureMock>(tab);
         }));
 ```
 
@@ -1850,3 +1915,286 @@ FooFeature(Profile& profile) : profile_(profile) {}
 ```
 
 ---
+
+---
+
+<a id="ARCH-074"></a>
+
+## ✅ Own Tab-Scoped Features in `BraveTabFeatures`
+
+**A Brave feature scoped to a tab is a plain class held as a `std::unique_ptr`
+member of `BraveTabFeatures` and created in its `Init()`, not a
+`WebContentsUserData` tab helper attached in `brave::AttachTabHelpers()`.**
+Upstream is moving every desktop tab helper this way
+([crbug.com/540709814](https://crbug.com/540709814)), and per the
+[Chromium Browser Design Principles](https://chromium.googlesource.com/chromium/src/+/main/docs/chrome_browser_design_principles.md)
+`TabHelpers::AttachTabHelpers` becomes remove-only on desktop.
+
+- Desktop: `browser/ui/tabs/brave_tab_features.cc`.
+- Android: `browser/android/brave_tab_features.cc`, when the feature also runs
+  on Android.
+- If other code needs to reach the feature, expose it with UnownedUserData
+  (`X::From(tab)`), not `X::FromWebContents()` (see [ARCH-064](#ARCH-064)).
+- When the feature sits behind a buildflag, guard its member and accessor in
+  `brave_tab_features.h` with the same buildflag as its creation, and put the
+  feature in its own gn target that asserts the buildflag, so builds without the
+  feature (such as Origin) do not compile it.
+
+```cpp
+// ❌ WRONG - a tab-scoped feature attached to the WebContents
+// browser/brave_tab_helpers.cc
+FooTabHelper::MaybeCreateForWebContents(web_contents);
+
+// ✅ CORRECT - owned by BraveTabFeatures
+// browser/ui/tabs/brave_tab_features.cc
+void BraveTabFeatures::Init(TabInterface& tab, Profile* profile) {
+  TabFeatures::Init(tab, profile);
+  if (base::FeatureList::IsEnabled(kFoo)) {
+    foo_ = std::make_unique<FooTabFeature>(tab);
+  }
+}
+```
+
+`brave::AttachTabHelpers()` and `brave::AttachPrivacySensitiveTabHelpers()`
+remain only for helpers that must also attach to WebContents that are not tabs
+(for example, AI chat's associated contents or background contents), which is
+the same exception upstream allows. A presubmit check rejects `CreateFor*` calls
+in `brave_tab_features.cc` and new ones in `brave_tab_helpers.cc` unless the
+helper is on its allowlist.
+
+---
+
+<a id="ARCH-075"></a>
+
+## ❌ Don't Cache the Tab's `WebContents` in a Tab Feature
+
+**On desktop, a tab's `WebContents` is replaced when the tab is discarded, so a
+tab feature must not hold on to the `WebContents` it was created with.** The
+feature outlives the old contents: an observer bound to it stops receiving
+events, and a `WeakPtr` to it becomes null. See the contract on
+`TabInterface::GetContents()` in `components/tabs/public/tab_interface.h`.
+
+```cpp
+// ❌ WRONG - bound to the contents the tab had at Init()
+class FooTabFeature : public content::WebContentsObserver {
+ public:
+  explicit FooTabFeature(tabs::TabInterface& tab)
+      : WebContentsObserver(tab.GetContents()) {}
+};
+
+// ✅ CORRECT - follows the tab's contents across discards
+class FooTabFeature : public tabs::ContentsObservingTabFeature {
+ public:
+  explicit FooTabFeature(tabs::TabInterface& tab)
+      : ContentsObservingTabFeature(tab) {}
+};
+```
+
+When a feature only needs the contents occasionally, hold
+`raw_ref<tabs::TabInterface>` and call `tab_->GetContents()` at the point of
+use. Otherwise subscribe with `TabInterface::RegisterWillDiscardContents()`,
+which `ContentsObservingTabFeature` does for you. Android does not replace a
+tab's contents, but follow the same pattern there for portability.
+
+A feature in `components/` cannot derive from `ContentsObservingTabFeature`,
+which lives in `chrome/`. Subscribe to `RegisterWillDiscardContents()` in the
+constructor instead, and in the callback call `Observe(new_contents)` and reset
+any state that belongs to the old contents' page.
+
+```cpp
+FooTabHelper::FooTabHelper(tabs::TabInterface& tab)
+    : WebContentsObserver(tab.GetContents()) {
+  will_discard_contents_subscription_ =
+      tab.RegisterWillDiscardContents(base::BindRepeating(
+          &FooTabHelper::WillDiscardContents, base::Unretained(this)));
+}
+
+void FooTabHelper::WillDiscardContents(tabs::TabInterface* tab,
+                                       content::WebContents* old_contents,
+                                       content::WebContents* new_contents) {
+  ResetPageState();
+  Observe(new_contents);
+}
+```
+
+---
+
+<a id="ARCH-076"></a>
+
+## ✅ Guard Test-Only Hooks in Production Code with `CHECK_IS_TEST`
+
+**When production code runs a branch only because a test installed a hook, such
+as a `*ForTesting()` callback or override, call `CHECK_IS_TEST()` at the start
+of that branch.** It documents that the branch is test-only and crashes if
+non-test code ever starts using the hook. NEVER leave such a branch unguarded.
+
+```cpp
+// ❌ WRONG - nothing says this branch only runs in tests
+void FooTabHelper::NotifyDone(bool result) {
+  if (done_callback_for_testing_) {
+    std::move(done_callback_for_testing_).Run(result);
+  }
+}
+
+// ✅ CORRECT - the test-only branch is guarded
+void FooTabHelper::NotifyDone(bool result) {
+  if (done_callback_for_testing_) {
+    CHECK_IS_TEST();
+    std::move(done_callback_for_testing_).Run(result);
+  }
+}
+```
+
+Put `CHECK_IS_TEST()` in the branch the hook enables, where test-only behavior
+diverges from production. `base/check_is_test.h` says it should not be used
+within trivial accessors such as `member_name_for_testing()`, but may be used in
+`*ForTesting()` functions to ensure correctness at runtime. `CHECK_IS_TEST()` is
+a `CHECK`, so it is fatal in release builds too, unless given a
+`base::NotFatalUntil` argument. Include `base/check_is_test.h`.
+
+---
+
+<a id="ARCH-077"></a>
+
+## ✅ Use the Last Committed URL for Feature Logic, Not the Visible URL
+
+**Feature logic should read the last committed URL. Use the visible URL only
+when the feature is explicitly tied to what the address bar displays, such as
+the toolbar URL or a padlock icon.**
+
+The visible URL is usually the last committed URL. It differs while a
+browser-initiated navigation, such as a typed URL or a bookmark, is pending
+(back and forward navigations excluded), because the pending URL is shown. A
+renderer-initiated pending URL is shown only in a new unmodified tab, and it
+reverts to `about:blank` once another document accesses that tab's initial
+document. Neither case is the page loaded in the frame. The last committed URL
+is that page and its security context.
+
+Visible-URL names (do not use for feature state):
+
+- C++ / ObjC++: `WebContents::GetVisibleURL()`,
+  `web::WebState::GetVisibleURL()`, `NavigationController::GetVisibleEntry()`.
+  For the displayed URL of an entry, use `NavigationEntry::GetVirtualURL()`, not
+  `GetURL()`.
+- Swift (iOS): `visibleURL` on `TabState`, and `url` on `ChromiumTabState` and
+  `FakeTabState` (aliases for `visibleURL`). Other types' `url` properties are
+  not tab-state aliases. `SessionTab.url` stores a copy of `visibleURL`, so
+  review its reads case by case.
+- Java (Android): `WebContents.getVisibleUrl()`, `Tab.getUrl()` (its own Javadoc
+  notes it can differ from the last committed URL while a navigation is in
+  progress).
+
+Deprecated, never use: `WebContents::GetURL()`,
+`NavigationController::GetActiveEntry()`.
+
+Last-committed names (use these):
+
+- `WebContents::GetLastCommittedURL()`, `RenderFrameHost::GetLastCommittedURL()`
+- `NavigationController::GetLastCommittedEntry()`
+- `web::WebState::GetLastCommittedURL()`
+- `web::WebState::GetLastCommittedURLIfTrusted()` (iOS only, returns
+  `std::optional<GURL>`)
+- `TabState.lastCommittedURL`, `WebContents.getLastCommittedUrl()`
+
+```swift
+// ❌ WRONG - a pending URL can decide a feature before it commits
+let isSupported = tab.visibleURL?.isPlaylistSupportedSiteURL == true
+
+// ✅ CORRECT - the page that is loaded in the tab
+let isSupported = tab.lastCommittedURL?.isPlaylistSupportedSiteURL == true
+```
+
+```java
+// ❌ WRONG - the visible URL can differ from the loaded page
+GURL url = webContents.getVisibleUrl();
+
+// ✅ CORRECT
+GURL url = webContents.getLastCommittedUrl();
+```
+
+```java
+// ❌ WRONG - Tab.getUrl() can differ from the loaded page
+GURL url = tab.getUrl();
+
+// ✅ CORRECT - go through WebContents for the committed page;
+// getWebContents() is @Nullable, so check it first
+WebContents webContents = tab.getWebContents();
+GURL url = webContents != null ? webContents.getLastCommittedUrl() : null;
+```
+
+```cpp
+// ❌ WRONG - the visible URL can differ from the loaded page
+const GURL& url = web_contents->GetVisibleURL();
+
+// ✅ CORRECT
+const GURL& url = web_contents->GetLastCommittedURL();
+```
+
+Do not fall back to the visible URL when the last committed URL is empty or nil.
+`GetLastCommittedURL()` can be empty if no navigation has committed, and
+`lastCommittedURL ?? visibleURL` reintroduces the bug.
+
+Use the visible URL only when the feature is explicitly tied to what the address
+bar displays. Browser tests that assert toolbar or omnibox state are an example
+of this exception. A test that asserts `GetVisibleURL()` for feature behavior is
+not an address-bar use, so the exception does not cover it.
+
+---
+
+<a id="ARCH-077"></a>
+
+## ✅ Use the Frame's Origin for Security Decisions, Not the URL
+
+**Security and permission decisions should use
+`RenderFrameHost::GetLastCommittedOrigin()` for the frame being decided on, and
+default to restricted for opaque origins. Do not decide from a raw `GURL`,
+except the permission-check URL that
+`extensions::util::GetURLForExtensionPermissionCheck(rfh)` returns for extension
+code.**
+
+A URL is often not enough for a security decision, because the origin can differ
+from the URL in these cases:
+
+- Error pages: the URL is the failed destination, but the origin is opaque. Its
+  precursor is usually the destination, but it is empty when the error page
+  commits in the current process, such as an unrecoverable error in a subframe.
+- `about:blank`, `about:srcdoc`, and `blob:` frames: they inherit the embedder
+  frame's origin.
+- Sandboxed, `data:`, and `file:` frames: they have opaque origins.
+
+```cpp
+// ❌ WRONG - a URL-derived origin is the destination for an error page
+url::Origin origin = url::Origin::Create(frame_host->GetLastCommittedURL());
+if (!IsValidDappOrigin(origin)) {
+  return;
+}
+BindProvider(frame_host);
+
+// ✅ CORRECT - the origin of the frame that requested the provider
+url::Origin origin = frame_host->GetLastCommittedOrigin();
+if (!IsValidDappOrigin(origin)) {
+  return;
+}
+BindProvider(frame_host);
+```
+
+`IsValidDappOrigin()` rejects opaque origins and any scheme other than http or
+https, so error pages and sandboxed frames never receive the provider.
+
+An error page commits in an opaque origin, so an origin-based check does not see
+the failed destination URL. Check the frame the decision applies to, not only
+the main frame, because error pages can commit in subframes.
+
+`GetTupleOrPrecursorTupleIfOpaque()` returns the precursor of an opaque origin.
+Use it only with great caution, because opaque origins should generally not
+inherit privileges from their precursor.
+
+Opaque frames default to restricted. If a decision is still required, a network
+request uses the request's `initiator_origin`. Otherwise, if applicable, walk up
+to the nearest ancestor frame with a non-opaque origin, and verify that it is
+the origin the decision is based on.
+
+Extension code should use
+`extensions::util::GetURLForExtensionPermissionCheck(rfh)`, the permission-check
+URL helper that Chromium directs higher-level layers, such as extensions, to
+use. It takes a `RenderFrameHost`.

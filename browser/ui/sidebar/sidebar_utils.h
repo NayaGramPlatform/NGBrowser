@@ -25,6 +25,10 @@ namespace content {
 class WebContents;
 }  // namespace content
 
+namespace tabs {
+class TabInterface;
+}  // namespace tabs
+
 namespace sidebar {
 
 bool CanUseSidebar(BrowserWindowInterface* browser);
@@ -66,6 +70,41 @@ SidebarService::ShowSidebarOption GetDefaultShowSidebarOption(
 // Get bubble arrow direction based on sidebar position.
 // Returns RIGHT_TOP if sidebar is on right.
 views::BubbleBorder::Arrow GetBubbleArrowForSidebar(PrefService* prefs);
+
+// CloseAllWebPanelsForShutdown() and MaybeCloseWebPanelForShutdown() both skip
+// the page's unload handlers, so the panel's tab is gone before the caller's
+// next statement and the page can't refuse. The shutdown paths need the
+// synchrony: they snapshot the session on their next statement, and would
+// otherwise persist the panel as an ordinary pinned tab.
+
+// Closes the open web panel of every browser window, across all profiles.
+// Called when quitting, before session services are shut down.
+void CloseAllWebPanelsForShutdown();
+
+// Closes `browser`'s web panel. No-op when `browser` has no sidebar controller
+// or no open web panel. Called when a single window is closing, before the
+// session and tab restore services snapshot it, and by the last-tab policy -
+// the panel isn't one of the user's tabs, so it doesn't get to veto a gesture
+// aimed at them. Despite the name the caller's close can still be refused
+// afterwards, e.g. a window close blocked by an ongoing download.
+void MaybeCloseWebPanelForShutdown(BrowserWindowInterface* browser);
+
+// True when `contents` is `browser`'s open web panel. The panel is backed by a
+// pinned tab, so pinned tab persistence has to skip it.
+bool IsWebPanelTab(BrowserWindowInterface* browser,
+                   const content::WebContents* contents);
+
+// Same, for callers that hold a tab rather than a browser window.
+bool IsWebPanelTab(tabs::TabInterface* tab);
+
+// True when `browser`'s active tab is the open web panel. Split view creation
+// uses the active tab as the pivot, so the panel must not be active for it.
+bool IsWebPanelTabActive(BrowserWindowInterface* browser);
+
+// True when the open web panel's tab is the only tab left. The panel is backed
+// by a pinned tab but isn't one of the user's tabs, so such a strip is empty as
+// far as the last-tab policy is concerned.
+bool IsWebPanelOnlyTab(BrowserWindowInterface* browser);
 
 }  // namespace sidebar
 

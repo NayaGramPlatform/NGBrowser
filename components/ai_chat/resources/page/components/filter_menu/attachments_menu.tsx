@@ -13,7 +13,7 @@ import { useConversation } from '../../state/conversation_context'
 import { getLocale } from '$web-common/locale'
 import { FuzzyFinder } from './fuzzy_finder'
 import { makeEdit, stringifyContent } from '../input_box/editable_content'
-import Icon from '@brave/leo/react/icon'
+import Icon from '@brave/nala/react/icon'
 
 type Attachment = TabData | Bookmark
 
@@ -55,6 +55,9 @@ export default function TabsMenu() {
 
   const handleClose = React.useCallback((isOpen: boolean) => {
     if (isOpen) return
+
+    // Focusing the conversation frame also lands here; don't take focus back.
+    if (document.activeElement instanceof HTMLIFrameElement) return
 
     const editor = document.querySelector<HTMLElement>('[data-editor]')
     if (!editor) return

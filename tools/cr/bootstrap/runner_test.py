@@ -12,7 +12,6 @@ import io
 import os
 from pathlib import Path
 import subprocess
-import sys
 import tempfile
 import unittest
 from unittest import mock
@@ -32,9 +31,10 @@ class EnsureDepotToolsTest(unittest.TestCase):
     """Exercises deploying `vendor/depot_tools` into a checkout."""
 
     def setUp(self):
-        self._tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(self._tmp.cleanup)
-        self.root = Path(self._tmp.name)
+        stack = contextlib.ExitStack()
+        self.addCleanup(stack.close)
+        self._tmp = stack.enter_context(tempfile.TemporaryDirectory())
+        self.root = Path(self._tmp)
         self.checkout = self.root / 'src' / 'brave'
         self.checkout.mkdir(parents=True)
         self.dest = self.checkout / 'vendor' / 'depot_tools'
@@ -62,35 +62,50 @@ class EnsureDepotToolsTest(unittest.TestCase):
     def test_reuses_an_existing_checkout(self):
         self._make_vpython3()
         with mock.patch.object(runner, '_run') as run:
-            self.assertEqual(runner.ensure_depot_tools(self.checkout),
-                             self.dest)
+            self.assertEqual(
+                runner.ensure_depot_tools(self.checkout), self.dest
+            )
         run.assert_not_called()
 
     def test_clones_from_the_web_without_git_cache(self):
         with mock.patch.object(runner, '_run', side_effect=_fake_clone) as run:
-            self.assertEqual(runner.ensure_depot_tools(self.checkout),
-                             self.dest)
-        run.assert_called_once_with('git', 'clone', runner.DEPOT_TOOLS_URL,
-                                    self.dest)
+            self.assertEqual(
+                runner.ensure_depot_tools(self.checkout), self.dest
+            )
+        run.assert_called_once_with(
+            'git', 'clone', runner.DEPOT_TOOLS_URL, self.dest
+        )
         self.assertFalse(self.guard.exists())
 
     def test_clones_from_the_web_when_cache_has_no_mirror(self):
         os.environ['GIT_CACHE_PATH'] = str(self.root / 'empty_cache')
         with mock.patch.object(runner, '_run', side_effect=_fake_clone) as run:
             runner.ensure_depot_tools(self.checkout)
-        run.assert_called_once_with('git', 'clone', runner.DEPOT_TOOLS_URL,
-                                    self.dest)
+        run.assert_called_once_with(
+            'git', 'clone', runner.DEPOT_TOOLS_URL, self.dest
+        )
 
     def test_shared_clones_from_the_cache_mirror(self):
         mirror = self._make_mirror()
         with mock.patch.object(runner, '_run', side_effect=_fake_clone) as run:
-            self.assertEqual(runner.ensure_depot_tools(self.checkout),
-                             self.dest)
-        self.assertEqual(run.call_args_list, [
-            mock.call('git', 'clone', '--shared', mirror, self.dest),
-            mock.call('git', '-C', self.dest, 'remote', 'set-url', 'origin',
-                      runner.DEPOT_TOOLS_URL),
-        ])
+            self.assertEqual(
+                runner.ensure_depot_tools(self.checkout), self.dest
+            )
+        self.assertEqual(
+            run.call_args_list,
+            [
+                mock.call('git', 'clone', '--shared', mirror, self.dest),
+                mock.call(
+                    'git',
+                    '-C',
+                    self.dest,
+                    'remote',
+                    'set-url',
+                    'origin',
+                    runner.DEPOT_TOOLS_URL,
+                ),
+            ],
+        )
         self.assertFalse(self.guard.exists())
 
     def test_guards_the_clone_while_it_runs(self):
@@ -104,17 +119,19 @@ class EnsureDepotToolsTest(unittest.TestCase):
         self.assertFalse(self.guard.exists())
 
     def test_failed_clone_leaves_the_guard_for_init(self):
-        with mock.patch.object(runner,
-                               '_run',
-                               side_effect=subprocess.CalledProcessError(
-                                   128, 'git')):
+        with mock.patch.object(
+            runner,
+            '_run',
+            side_effect=subprocess.CalledProcessError(128, 'git'),
+        ):
             self.assertIsNone(runner.ensure_depot_tools(self.checkout))
         self.assertTrue(self.guard.is_file())
 
     def test_interrupted_clone_leaves_the_guard_for_init(self):
-        with mock.patch.object(runner, '_run',
-                               side_effect=KeyboardInterrupt), \
-             self.assertRaises(KeyboardInterrupt):
+        with (
+            mock.patch.object(runner, '_run', side_effect=KeyboardInterrupt),
+            self.assertRaises(KeyboardInterrupt),
+        ):
             runner.ensure_depot_tools(self.checkout)
         self.assertTrue(self.guard.is_file())
 
@@ -124,10 +141,12 @@ class EnsureDepotToolsTest(unittest.TestCase):
         (self.dest / 'stale').write_text('', encoding='utf-8')
         self.guard.write_text('', encoding='utf-8')
         with mock.patch.object(runner, '_run', side_effect=_fake_clone) as run:
-            self.assertEqual(runner.ensure_depot_tools(self.checkout),
-                             self.dest)
-        run.assert_called_once_with('git', 'clone', runner.DEPOT_TOOLS_URL,
-                                    self.dest)
+            self.assertEqual(
+                runner.ensure_depot_tools(self.checkout), self.dest
+            )
+        run.assert_called_once_with(
+            'git', 'clone', runner.DEPOT_TOOLS_URL, self.dest
+        )
         self.assertFalse((self.dest / 'stale').exists())
         self.assertFalse(self.guard.exists())
 
@@ -135,8 +154,9 @@ class EnsureDepotToolsTest(unittest.TestCase):
         self.dest.parent.mkdir(parents=True)
         self.guard.write_text('', encoding='utf-8')
         with mock.patch.object(runner, '_run', side_effect=_fake_clone):
-            self.assertEqual(runner.ensure_depot_tools(self.checkout),
-                             self.dest)
+            self.assertEqual(
+                runner.ensure_depot_tools(self.checkout), self.dest
+            )
         self.assertFalse(self.guard.exists())
 
     def test_leaves_a_broken_checkout_alone(self):
@@ -152,12 +172,16 @@ class MainTest(unittest.TestCase):
 
     def _main(self, *, on_path=None, checkout=None, depot_tools=None):
         out = io.StringIO()
-        with mock.patch('shutil.which', return_value=on_path), \
-             mock.patch.object(runner.launcher, '_resolve_checkout',
-                               return_value=checkout), \
-             mock.patch.object(runner, 'ensure_depot_tools',
-                               return_value=depot_tools) as ensure, \
-             contextlib.redirect_stdout(out):
+        with (
+            mock.patch('shutil.which', return_value=on_path),
+            mock.patch.object(
+                runner.launcher, '_resolve_checkout', return_value=checkout
+            ),
+            mock.patch.object(
+                runner, 'ensure_depot_tools', return_value=depot_tools
+            ) as ensure,
+            contextlib.redirect_stdout(out),
+        ):
             rc = runner.main()
         return rc, ensure, out.getvalue()
 
@@ -170,8 +194,7 @@ class MainTest(unittest.TestCase):
     def test_prints_the_governing_checkouts_vpython3(self):
         checkout = Path('/w/src/brave')
         depot_tools = checkout / 'vendor' / 'depot_tools'
-        rc, ensure, out = self._main(checkout=checkout,
-                                     depot_tools=depot_tools)
+        rc, ensure, out = self._main(checkout=checkout, depot_tools=depot_tools)
         self.assertEqual(rc, 0)
         ensure.assert_called_once_with(checkout)
         self.assertEqual(out, f'{depot_tools / runner.VPYTHON3}\n')

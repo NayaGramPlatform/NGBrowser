@@ -13,12 +13,12 @@
 #include "chrome/browser/interstitials/security_interstitial_page_test_utils.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ssl/https_upgrades_interceptor.h"
-#include "chrome/browser/ui/tabs/public/tab_features.h"
 #include "chrome/common/chrome_features.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/test/base/chrome_test_utils.h"
 #include "chrome/test/base/platform_browser_test.h"
 #include "components/prefs/pref_service.h"
+#include "components/tabs/public/tab_interface.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
 #include "content/public/test/content_mock_cert_verifier.h"
@@ -132,6 +132,12 @@ class HttpsUpgradeBrowserTest : public PlatformBrowserTest {
     HttpsUpgradesInterceptor::SetHttpPortForTesting(http_server()->port());
   }
 
+  void TearDownOnMainThread() override {
+    HttpsUpgradesInterceptor::SetHttpsPortForTesting(0);
+    HttpsUpgradesInterceptor::SetHttpPortForTesting(0);
+    PlatformBrowserTest::TearDownOnMainThread();
+  }
+
   void SetUpCommandLine(base::CommandLine* command_line) override {
     PlatformBrowserTest::SetUpCommandLine(command_line);
     mock_cert_verifier_.SetUpCommandLine(command_line);
@@ -204,7 +210,7 @@ class HttpsUpgradeBrowserTest : public PlatformBrowserTest {
       return false;
     }
     AskBeforeHttpDialogController* dialog_controller =
-        tab->GetTabFeatures()->ask_before_http_dialog_controller();
+        AskBeforeHttpDialogController::From(tab);
     if (!dialog_controller) {
       return false;
     }

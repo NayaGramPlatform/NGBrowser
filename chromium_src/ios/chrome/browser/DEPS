@@ -2,6 +2,7 @@ include_rules = [
   "+ios/public/provider/chrome/browser/app_distribution/app_distribution_api.h",
   "+brave/common",
   "+brave/components/ai_chat",
+  "+brave/components/brave_shields/core/common",
   "+brave/components/constants",
   "+brave/components/https_upgrade_exceptions/browser",
   "+brave/components/static_redirect_helper",
@@ -28,7 +29,7 @@ include_rules = [
 ]
 
 specific_include_rules = {
-  "application_context_impl\.mm": [
+  "application_context_impl\\.mm": [
     "+brave/ios/browser/metrics/ios_brave_metrics_services_manager_client.h",
   ]
 }

@@ -5,12 +5,15 @@
 
 #include "brave/components/brave_rewards/core/engine/endpoint/private_cdn/get_publisher/get_publisher.h"
 
+#include <algorithm>
 #include <string>
 #include <utility>
 
 #include "base/check.h"
 #include "base/containers/span.h"
 #include "base/numerics/byte_conversions.h"
+#include "base/test/bind.h"
+#include "base/test/test_future.h"
 #include "brave/components/brave_rewards/core/engine/publisher/protos/channel_response.pb.h"
 #include "brave/components/brave_rewards/core/engine/test/rewards_engine_test.h"
 #include "brave/components/brave_rewards/core/engine/util/environment_config.h"
@@ -24,22 +27,13 @@ class RewardsGetPublisherTest : public RewardsEngineTest {
                         const std::string& prefix,
                         mojom::ServerPublisherInfoPtr* info) {
     DCHECK(info);
-    base::RunLoop run_loop;
-    mojom::Result result;
+    base::test::TestFuture<mojom::Result, mojom::ServerPublisherInfoPtr> future;
 
     endpoint::private_cdn::GetPublisher endpoint(engine());
+    endpoint.Request(id, prefix, future.GetCallback());
 
-    endpoint.Request(id, prefix,
-                     base::BindLambdaForTesting(
-                         [&run_loop, &result, info](
-                             mojom::Result request_result,
-                             mojom::ServerPublisherInfoPtr request_info) {
-                           result = request_result;
-                           *info = std::move(request_info);
-                           run_loop.Quit();
-                         }));
-
-    run_loop.Run();
+    auto [result, request_info] = future.Take();
+    *info = std::move(request_info);
     return result;
   }
 
@@ -92,13 +86,17 @@ TEST_F(RewardsGetPublisherTest, UpholdVerified) {
   uphold_wallet->set_wallet_state(publishers_pb::UPHOLD_ACCOUNT_KYC);
   uphold_wallet->set_address("abcd");
 
-  auto response = mojom::UrlResponse::New();
-  response->status_code = net::HTTP_OK;
-  response->body = StringifyChannelResponse(message);
+  mojom::UrlRequestPtr url_request;
 
-  client().AddNetworkResultForTesting(GetServerUrl("/publishers/prefixes/ce55"),
-                                      mojom::UrlMethod::GET,
-                                      std::move(response));
+  client().AddNetworkResultForTesting(
+      GetServerUrl("/publishers/prefixes/ce55"), mojom::UrlMethod::GET,
+      base::BindLambdaForTesting([&](const mojom::UrlRequest& request) {
+        url_request = request.Clone();
+        auto response = mojom::UrlResponse::New();
+        response->status_code = net::HTTP_OK;
+        response->body = StringifyChannelResponse(message);
+        return response;
+      }));
 
   mojom::Result result;
   mojom::ServerPublisherInfoPtr info;
@@ -109,6 +107,10 @@ TEST_F(RewardsGetPublisherTest, UpholdVerified) {
   EXPECT_EQ(info->publisher_key, "brave.com");
   EXPECT_EQ(info->status, mojom::PublisherStatus::UPHOLD_VERIFIED);
   EXPECT_EQ(info->address, "abcd");
+
+  ASSERT_TRUE(url_request);
+  EXPECT_TRUE(std::ranges::contains(url_request->headers, "User-Agent:"));
+  EXPECT_TRUE(std::ranges::contains(url_request->headers, "Accept-Language:"));
 }
 
 TEST_F(RewardsGetPublisherTest, EmptyWalletAddress) {

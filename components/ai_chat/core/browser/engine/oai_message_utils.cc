@@ -18,6 +18,7 @@
 #include "base/values.h"
 #include "brave/components/ai_chat/core/browser/constants.h"
 #include "brave/components/ai_chat/core/common/features.h"
+#include "brave/components/ai_chat/core/common/mojom/common.mojom.h"
 #include "brave/components/ai_chat/core/common/prefs.h"
 #include "components/prefs/pref_service.h"
 #include "third_party/abseil-cpp/absl/container/flat_hash_set.h"
@@ -100,12 +101,17 @@ mojom::ContentBlockPtr GetContentBlockFromAssociatedContent(
   std::string truncated(
       base::TruncateUTF8ToByteSize(content.content, remaining_length));
   sanitize_input(truncated);
-  if (content.is_video) {
+  if (content.content_type == mojom::ContentType::VideoTranscript) {
     return mojom::ContentBlock::NewVideoTranscriptContentBlock(
         mojom::VideoTranscriptContentBlock::New(std::move(truncated)));
-  } else {
+  } else if (content.content_type == mojom::ContentType::PageContent) {
     return mojom::ContentBlock::NewPageTextContentBlock(
         mojom::PageTextContentBlock::New(std::move(truncated)));
+  } else {
+    // This check is just to ensure that things are being handled here.
+    CHECK(content.content_type == mojom::ContentType::Workspace);
+    return mojom::ContentBlock::NewPageTextContentBlock(
+        mojom::PageTextContentBlock::New(""));
   }
 }
 
@@ -243,9 +249,12 @@ std::vector<OAIMessage> BuildOAIMessages(
     }
 
     // If we have page contents for this turn, generate a content block for
-    // each.
+    // each. Only human turns carry content: the only content associated with
+    // an assistant turn is content a tool added (e.g. a workspace), which has
+    // no text, and is known to the model via that tool's result instead.
     auto page_content_it = page_contents.find(message->uuid.value());
-    if (page_content_it != page_contents.end() && remaining_length != 0) {
+    if (message->character_type == mojom::CharacterType::HUMAN &&
+        page_content_it != page_contents.end() && remaining_length != 0) {
       page_contents_blocks[message->uuid.value()] = BuildOAIPageContentBlocks(
           page_content_it->second, remaining_length, sanitize_input);
     }
@@ -612,7 +621,7 @@ std::optional<std::vector<OAIMessage>> BuildOAIRewriteSuggestionMessages(
 std::optional<std::vector<OAIMessage>>
 BuildOAIGenerateConversationTitleMessages(
     const PageContentsMap& page_contents,
-    const EngineConsumer::ConversationHistory& conversation_history,
+    const EngineConsumer::ConversationHistoryView& conversation_history,
     uint32_t remaining_length,
     base::FunctionRef<void(std::string&)> sanitize_input) {
   // Validate we have the expected conversation structure

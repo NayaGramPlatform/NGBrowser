@@ -14,10 +14,10 @@
 #include "base/memory/scoped_refptr.h"
 #include "base/path_service.h"
 #include "base/test/bind.h"
+#include "base/test/test_future.h"
 #include "base/threading/thread_restrictions.h"
 #include "brave/components/constants/brave_paths.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/test/base/chrome_test_utils.h"
 #include "chrome/test/base/testing_profile.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/browser_task_environment.h"
@@ -95,17 +95,10 @@ class BraveSanitizedImageSourceTest : public testing::Test {
     test_url_loader_factory_.SetInterceptor(std::move(interceptor));
     test_url_loader_factory_.AddResponse(url.spec(), std::move(data));
 
-    base::RunLoop run_loop;
-    scoped_refptr<base::RefCountedMemory> result;
-    source_.StartDataRequest(
-        image_url, content::WebContents::Getter(),
-        base::BindLambdaForTesting(
-            [&](scoped_refptr<base::RefCountedMemory> data) {
-              result = std::move(data);
-              run_loop.Quit();
-            }));
-    run_loop.Run();
-    return result;
+    base::test::TestFuture<scoped_refptr<base::RefCountedMemory>> future;
+    source_.StartDataRequest(image_url, content::WebContents::Getter(),
+                             future.GetCallback());
+    return future.Take();
   }
 
  private:
@@ -177,4 +170,27 @@ TEST_F(BraveSanitizedImageSourceTest, PaddedImageOnNonBraveCDNIsNotDecoded) {
 TEST_F(BraveSanitizedImageSourceTest, DotPadOnNonBraveCDNButValidIsDecoded) {
   auto url = GURL("https://example.com/image.png.pad");
   EXPECT_TRUE(Decode(url, kValidImage));
+}
+
+TEST(BraveSanitizedImageSourceAccessControlTest, AllowsBraveNewsWhenUntrusted) {
+  content::BrowserTaskEnvironment task_environment;
+  network::TestURLLoaderFactory test_url_loader_factory;
+  TestingProfile profile;
+  auto url_loader_factory =
+      base::MakeRefCounted<network::WeakWrapperSharedURLLoaderFactory>(
+          &test_url_loader_factory);
+  BraveSanitizedImageSource untrusted_source(&profile, url_loader_factory,
+                                             /*serve_untrusted=*/true);
+  BraveSanitizedImageSource trusted_source(&profile, url_loader_factory,
+                                           /*serve_untrusted=*/false);
+
+  EXPECT_EQ(untrusted_source.GetAccessControlAllowOriginForOrigin(
+                "chrome-untrusted://news"),
+            "chrome-untrusted://news");
+  EXPECT_EQ(untrusted_source.GetAccessControlAllowOriginForOrigin(
+                "chrome-untrusted://market-display"),
+            "");
+  EXPECT_EQ(trusted_source.GetAccessControlAllowOriginForOrigin(
+                "chrome-untrusted://news"),
+            "");
 }

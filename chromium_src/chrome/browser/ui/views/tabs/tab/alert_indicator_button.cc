@@ -6,17 +6,12 @@
 #include "chrome/browser/ui/views/tabs/tab/alert_indicator_button.h"
 
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/views/tabs/tab.h"
 #include "chrome/browser/ui/views/tabs/tab_slot_controller.h"
 #include "components/prefs/pref_service.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 
-#define AlertIndicatorButton AlertIndicatorButtonBase
-
 #include <chrome/browser/ui/views/tabs/tab/alert_indicator_button.cc>
-
-#undef AlertIndicatorButton
 
 void AlertIndicatorButton::UpdateEnabledForMuteToggle() {
   const bool was_enabled = GetEnabled();

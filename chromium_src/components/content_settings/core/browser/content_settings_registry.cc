@@ -212,6 +212,18 @@ void ContentSettingsRegistry::BraveInit() {
                WebsiteSettingsRegistry::PLATFORM_ANDROID,
            ContentSettingsInfo::INHERIT_IF_LESS_PERMISSIVE,
            PermissionSettingsInfo::EXCEPTIONS_ON_SECURE_AND_INSECURE_ORIGINS);
+
+  // Register polkadot default value as Ask.
+  Register(ContentSettingsType::BRAVE_POLKADOT, "brave_polkadot",
+           CONTENT_SETTING_ASK, WebsiteSettingsInfo::UNSYNCABLE,
+           /*allowlisted_schemes=*/{},
+           /*valid_settings=*/
+           {CONTENT_SETTING_ALLOW, CONTENT_SETTING_BLOCK, CONTENT_SETTING_ASK},
+           WebsiteSettingsInfo::TOP_ORIGIN_ONLY_SCOPE,
+           WebsiteSettingsRegistry::DESKTOP |
+               WebsiteSettingsRegistry::PLATFORM_ANDROID,
+           ContentSettingsInfo::INHERIT_IF_LESS_PERMISSIVE,
+           PermissionSettingsInfo::EXCEPTIONS_ON_SECURE_AND_INSECURE_ORIGINS);
 #endif  // BUILDFLAG(ENABLE_BRAVE_WALLET)
 
   // Register google sign in social media permission default value as Ask.
@@ -319,27 +331,12 @@ void ContentSettingsRegistry::BraveInit() {
   permission_settings_registry_->Unregister(
       ContentSettingsType::STORAGE_ACCESS);
   website_settings_registry_->Unregister(ContentSettingsType::STORAGE_ACCESS);
-  content_settings_info_.erase(ContentSettingsType::TOP_LEVEL_STORAGE_ACCESS);
-  permission_settings_registry_->Unregister(
-      ContentSettingsType::TOP_LEVEL_STORAGE_ACCESS);
-  website_settings_registry_->Unregister(
-      ContentSettingsType::TOP_LEVEL_STORAGE_ACCESS);
   Register(ContentSettingsType::STORAGE_ACCESS, "storage-access",
            CONTENT_SETTING_BLOCK, WebsiteSettingsInfo::UNSYNCABLE,
            /*allowlisted_primary_schemes=*/{},
            /*valid_settings=*/
            {CONTENT_SETTING_ALLOW, CONTENT_SETTING_ASK, CONTENT_SETTING_BLOCK},
            WebsiteSettingsInfo::REQUESTING_AND_TOP_SCHEMEFUL_SITE_SCOPE,
-           WebsiteSettingsRegistry::ALL_PLATFORMS,
-           ContentSettingsInfo::INHERIT_IF_LESS_PERMISSIVE,
-           PermissionSettingsInfo::EXCEPTIONS_ON_SECURE_AND_INSECURE_ORIGINS);
-  Register(ContentSettingsType::TOP_LEVEL_STORAGE_ACCESS,
-           "top-level-storage-access", CONTENT_SETTING_BLOCK,
-           WebsiteSettingsInfo::UNSYNCABLE,
-           /*allowlisted_primary_schemes=*/{},
-           /*valid_settings=*/
-           {CONTENT_SETTING_ALLOW, CONTENT_SETTING_ASK, CONTENT_SETTING_BLOCK},
-           WebsiteSettingsInfo::REQUESTING_ORIGIN_AND_TOP_SCHEMEFUL_SITE_SCOPE,
            WebsiteSettingsRegistry::ALL_PLATFORMS,
            ContentSettingsInfo::INHERIT_IF_LESS_PERMISSIVE,
            PermissionSettingsInfo::EXCEPTIONS_ON_SECURE_AND_INSECURE_ORIGINS);
@@ -371,6 +368,19 @@ void ContentSettingsRegistry::BraveInit() {
       WebsiteSettingsRegistry::DESKTOP |
           WebsiteSettingsRegistry::PLATFORM_ANDROID |
           WebsiteSettingsRegistry::PLATFORM_IOS,
+      WebsiteSettingsInfo::DONT_INHERIT_IN_INCOGNITO);
+
+  // Permission embargoes recorded in a regular profile don't apply in its
+  // off-the-record profiles, including Tor.
+  website_settings_registry_->Unregister(
+      ContentSettingsType::PERMISSION_AUTOBLOCKER_DATA);
+  website_settings_registry_->Register(
+      ContentSettingsType::PERMISSION_AUTOBLOCKER_DATA,
+      "permission-autoblocking-data", base::Value(),
+      WebsiteSettingsInfo::UNSYNCABLE, WebsiteSettingsInfo::NOT_LOSSY,
+      WebsiteSettingsInfo::GENERIC_SINGLE_ORIGIN_SCOPE,
+      WebsiteSettingsRegistry::DESKTOP |
+          WebsiteSettingsRegistry::PLATFORM_ANDROID,
       WebsiteSettingsInfo::DONT_INHERIT_IN_INCOGNITO);
 
   website_settings_registry_->Register(

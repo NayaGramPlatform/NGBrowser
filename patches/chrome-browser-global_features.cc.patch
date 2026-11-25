@@ -1,21 +1,12 @@
 diff --git a/chrome/browser/global_features.cc b/chrome/browser/global_features.cc
-index f7ee1df01cdf3e0dd30cc825fe0868dfb5615a7b..c34abcf6550b5db1ce3aa163d2d3e1ff5ff40307 100644
+index 5287fe5c6f13198c8f9526fb83964d33ea6138a1..4fc4b64c8f23362dcf3574ccf85d0aa5c62bc230 100644
 --- a/chrome/browser/global_features.cc
 +++ b/chrome/browser/global_features.cc
-@@ -95,6 +95,7 @@
- #include "chrome/common/request_header_integrity/request_header_integrity_url_loader_throttle.h"  // nogncheck
- #endif
- 
-+GlobalFeatures* CreateBraveGlobalFeatures();
- namespace {
- 
- // This is the generic entry point for test code to stub out browser
-@@ -113,7 +114,7 @@ std::unique_ptr<GlobalFeatures> GlobalFeatures::CreateGlobalFeatures() {
-     return GetFactory().Run();
-   }
-   // Constructor is protected.
--  return base::WrapUnique(new GlobalFeatures());
-+  return base::WrapUnique(CreateBraveGlobalFeatures());
+@@ -277,6 +277,7 @@ void GlobalFeatures::PostBrowserProcessInitCore() {
  }
  
- GlobalFeatures::~GlobalFeatures() = default;
+ void GlobalFeatures::Init() {
++  brave_global_features_ = std::make_unique<BraveGlobalFeatures>();
+   global_browser_collection_ = CreateGlobalBrowserCollection();
+ }
+ 

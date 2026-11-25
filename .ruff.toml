@@ -1,0 +1,32 @@
+# Copyright (c) 2026 The Brave Authors. All rights reserved.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this file,
+# You can obtain one at https://mozilla.org/MPL/2.0/.
+
+line-length = 80
+indent-width = 4
+extend-exclude = [
+  # Vendored third-party code.
+  "third_party/boringtun/vendor",
+  "third_party/rust",
+  "third_party/wasm/vendor",
+  "tools/crates/vendor",
+  # Vendored generated code for the purposes of PRESUBMIT.py tests
+  "net/cert/test_data/out/pyproto",
+]
+
+[format]
+quote-style = "preserve"
+
+[lint]
+# Match upstream's //.ruff.toml rule selection.
+select = ["E4", "E7", "E9", "F"]
+unfixable = ["F401"]
+
+[lint.per-file-ignores]
+# These inline upstream modules, which provide the names they use.
+"chromium_src/**/*.py" = ["F821"]
+"installer/util/prebuild/create_installer_string_rc.py" = ["F821"]
+"PRESUBMIT.py" = ["F821"]
+# The recipe engine reads `API`/`TEST_API` off each module package.
+"tools/recipes/recipe_modules/*/__init__.py" = ["F401"]

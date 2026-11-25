@@ -8,7 +8,7 @@
 #include <memory>
 
 #include "base/check.h"
-#include "brave/components/ntp_background_images/browser/new_tab_takeover_infobar_util.h"
+#include "brave/components/ntp_background_images/browser/sponsored_content/new_tab_takeover/new_tab_takeover_infobar_util.h"
 #include "brave/components/ntp_background_images/common/url_constants.h"
 #include "brave/grit/brave_generated_resources.h"
 #include "build/build_config.h"
@@ -20,30 +20,17 @@
 #include "content/public/browser/web_contents.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/models/image_model.h"
+#include "ui/base/mojom/window_open_disposition.mojom.h"
 #include "url/gurl.h"
 
 #if BUILDFLAG(IS_ANDROID)
+#include "chrome/browser/infobars/confirm_infobar_creation_allowlist.h"
 #include "chrome/browser/infobars/confirm_infobar_creator.h"
 #else  // BUILDFLAG(IS_ANDROID)
 #include "brave/browser/infobars/brave_confirm_infobar_creator.h"
 #endif  // BUILDFLAG(IS_ANDROID)
 
 namespace ntp_background_images {
-
-namespace {
-
-std::unique_ptr<infobars::InfoBar> CreateNewTabTakeoverInfoBar(
-    PrefService* prefs) {
-#if BUILDFLAG(IS_ANDROID)
-  return CreateConfirmInfoBar(
-      std::make_unique<NewTabTakeoverInfoBarDelegate>(prefs));
-#else   // BUILDFLAG(IS_ANDROID)
-  return CreateBraveConfirmInfoBar(
-      std::make_unique<NewTabTakeoverInfoBarDelegate>(prefs));
-#endif  // BUILDFLAG(IS_ANDROID)
-}
-
-}  // namespace
 
 // static
 void NewTabTakeoverInfoBarDelegate::MaybeDisplayAndIncrementCounter(
@@ -59,7 +46,14 @@ void NewTabTakeoverInfoBarDelegate::MaybeDisplayAndIncrementCounter(
 
   if (infobars::ContentInfoBarManager* infobar_manager =
           infobars::ContentInfoBarManager::FromWebContents(web_contents)) {
-    infobar_manager->AddInfoBar(CreateNewTabTakeoverInfoBar(prefs));
+#if BUILDFLAG(IS_ANDROID)
+    infobar_manager->AddInfoBar(CreateConfirmInfoBar(
+        ConfirmInfoBarCreationAllowlist::GetPassKeyForMigration(),
+        std::make_unique<NewTabTakeoverInfoBarDelegate>(prefs)));
+#else   // BUILDFLAG(IS_ANDROID)
+    infobar_manager->AddInfoBar(CreateBraveConfirmInfoBar(
+        std::make_unique<NewTabTakeoverInfoBarDelegate>(prefs)));
+#endif  // BUILDFLAG(IS_ANDROID)
   }
 }
 
@@ -96,7 +90,7 @@ GURL NewTabTakeoverInfoBarDelegate::GetLinkURL() const {
 }
 
 bool NewTabTakeoverInfoBarDelegate::LinkClicked(
-    WindowOpenDisposition disposition) {
+    ui::mojom::WindowOpenDisposition disposition) {
   SuppressNewTabTakeoverInfobar(prefs_);
   ConfirmInfoBarDelegate::LinkClicked(disposition);
   // Return true to immediately close the infobar.

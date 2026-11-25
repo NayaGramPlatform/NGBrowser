@@ -9,7 +9,7 @@ import { isCI } from './ciDetect.ts'
 import fs from 'node:fs'
 import path from 'node:path'
 import * as Log from './log.ts'
-import util from './util.js'
+import util from './util.ts'
 
 // The .disable_auto_update file in the depot_tools directory, regardless of
 // its content, disables auto-updates. If a specific depot_tools reference is
@@ -17,10 +17,9 @@ import util from './util.js'
 // store the enforced reference. Note: The presence of this file also prevents
 // the auto-bootstrapping of CIPD (Chrome Infrastructure Package Deployment),
 // Python, and other dependencies.
-const disableAutoUpdateFilePath = path.join(
-  config.depotToolsDir,
-  '.disable_auto_update',
-)
+function disableAutoUpdateFilePath() {
+  return path.join(config.depotToolsDir, '.disable_auto_update')
+}
 
 function isDepotToolsRefValid(ref) {
   // Only support git revision enforcement, because tags and branches may
@@ -31,10 +30,10 @@ function isDepotToolsRefValid(ref) {
 // Reads the enforced depot_tools ref from .disable_auto_update file. If the
 // file does not exist or the ref is not valid, returns null.
 function readEnforcedDepotToolsRef() {
-  if (!fs.existsSync(disableAutoUpdateFilePath)) {
+  if (!fs.existsSync(disableAutoUpdateFilePath())) {
     return null
   }
-  const ref = fs.readFileSync(disableAutoUpdateFilePath, 'utf8').trim()
+  const ref = fs.readFileSync(disableAutoUpdateFilePath(), 'utf8').trim()
   return isDepotToolsRefValid(ref) ? ref : null
 }
 
@@ -42,9 +41,9 @@ function readEnforcedDepotToolsRef() {
 // falsy value, the file is removed.
 function writeEnforcedDepotToolsRef(ref) {
   if (ref) {
-    fs.writeFileSync(disableAutoUpdateFilePath, ref)
-  } else if (fs.existsSync(disableAutoUpdateFilePath)) {
-    fs.unlinkSync(disableAutoUpdateFilePath)
+    fs.writeFileSync(disableAutoUpdateFilePath(), ref)
+  } else if (fs.existsSync(disableAutoUpdateFilePath())) {
+    fs.unlinkSync(disableAutoUpdateFilePath())
   }
 }
 

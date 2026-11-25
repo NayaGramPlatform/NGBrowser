@@ -80,6 +80,7 @@
 <translation id="8982438328166986164">Memaparkan cadangan tapak web berdasarkan penanda halaman dan sejarah penyemakan imbas anda.</translation>
 <translation id="924029461438529367">Tunjukkan cadangan carian</translation>
 <translation id="9148058034647219655">Keluar</translation>
+<translation id="2139186145475833000">Tambah ke skrin Utama</translation>
 <translation id="7534079972563542000">Domain yang tidak dapat Dihentikan</translation>
 <translation id="6486983549008741930">Penapisan Kandungan</translation>
 <translation id="2398817776566547893">Dayakan penapis tersuai yang menyekat penjejak khusus rantau dan Gangguan.</translation>
@@ -193,9 +194,6 @@
 <translation id="5668852698659986622">Dayakan Iklan Ditaja</translation>
 <translation id="431194936581466649">Bantu menyokong misi Brave untuk membina Web yang bebas dan mengutamakan pengguna dengan Iklan Ditaja. Kami mengukur prestasi iklan secara peribadi, tanpa mengenal pasti anda.</translation>
 <translation id="1939813747486101115">Ketahui lebih lanjut tentang Iklan yang Ditaja</translation>
-<translation id="8347743943525229984">Benarkan Tinjauan Brave</translation>
-<translation id="6022939994702081659">Benarkan Brave memaparkan pautan ke tinjauan peribadi di halaman tab baharu. Tinjauan membantu kami membina ciri yang lebih baik dan mengukur keberkesanan kempen iklan berasaskan pelayar.</translation>
-<translation id="7746496306508543965">Ketahui lebih lanjut tentang tinjauan Brave</translation>
 <translation id="410351446219883937">Automain</translation>
 <translation id="7445411102860286510">Benarkan tapak untuk memainkan video yang diredam secara automatik (disyorkan)</translation>
 <translation id="7837721118676387834">Benarkan video yang diredamkan dimainkan secara automatik untuk tapak web tertentu.</translation>
@@ -292,7 +290,7 @@
 <translation id="2569646144216067185">Jumlah perkataan: <ph name="WORD_COUNT"/></translation>
 <translation id="7507533586185621084">Kod segerakan salah</translation>
 <translation id="8284063834901328650">Kod QR segerakan salah</translation>
-<translation id="859506441384380749">Kod ini dijana oleh versi Brave yang telah ditamatkan, sila naik taraf peranti anda yang lain dahulu</translation>
+<translation id="4002014583969312635">Nampaknya kod ini telah dicipta pada peranti yang menjalankan versi Brave lebih lama. Sila kemas kini kepada versi terkini Brave pada peranti anda yang lain dan cipta kod segerak baharu.</translation>
 <translation id="3132642509209154999">Kod ini telah tamat tempoh. Sila jana yang baharu pada peranti anda yang lain dan cuba lagi.</translation>
 <translation id="2859229680945501779">Kod ini tidak sah. Sila periksa bahawa masa dan zon masa ditetapkan dengan betul pada peranti anda.</translation>
 <translation id="3149880132460839085">Segerak Brave</translation>
@@ -338,8 +336,6 @@
 <translation id="8185825081026121627">Dapatkan Token Perhatian Asas dengan melihat iklan Brave Rewards yang menjaga privasi.</translation>
 <translation id="5321518976657560663">Set Semula Ralat</translation>
 <translation id="4114170343590425996">Terdapat ralat semasa mengeset semula Ganjaran Brave. Sila lancarkan semula Brave dan cuba semula.</translation>
-<translation id="6417420737057016607">Iklan Brave</translation>
-<translation id="5611966874859284786">Tunjukkan iklan pemberitahuan apabila Brave tidak digunakan</translation>
 <translation id="5717636703619499822"><ph name="BEGIN_LINK1"/>Tetapkan semula data Brave Rewards…<ph name="END_LINK1"/></translation>
 <translation id="1830919318137227284"><ph name="BEGIN_LINK1"/>Buang data Brave Ads…<ph name="END_LINK1"/></translation>
 <translation id="8293206222192510085">Tambah Penanda Halaman</translation>
@@ -398,6 +394,13 @@ Anda pasti anda ingin melakukan tindakan ini?</translation>
 <translation id="8793108040181436796">Widget</translation>
 <translation id="8643377320501056697">Tunjukkan Tapak Teratas</translation>
 <translation id="7275773481201277457">Tunjukkan Statistik Brave</translation>
+<translation id="8516804522688861636">Paparkan laman web yang kerap dilawati</translation>
+<translation id="4546260624932151782">Paparkan keutamaan</translation>
+<translation id="5313967007315987356">Tambahkan tapak</translation>
+<translation id="1773147648972887693">Paparkan laman web yang kerap dilawati</translation>
+<translation id="7134741506051403308">Sembunyikan widget</translation>
+<translation id="1247759249260562308">Edit kegemaran</translation>
+<translation id="6387214885349500492">Semat kegemaran ini</translation>
 <translation id="7462178177755090262">Skrin Pembukaan</translation>
 <translation id="5365434987337264071">Tab terakhir dibuka</translation>
 <translation id="6019856124237323989">{HOURS, plural,
@@ -975,6 +978,7 @@ Jika anda tidak menerima permintaan ini, VPN tidak akan bersambung semula dan sa
 <translation id="6365389672683343144">Langganan VPN Brave anda boleh melindungi hingga 5 peranti, merentasi Android, iOS dan desktop. Hanya pautkan langganan Google Play anda kepada akaun Brave anda.`</translation>
 <translation id="6610899852831463073">Tidak boleh mendayakan Semak Imbas Selamat</translation>
 <translation id="7954263306665462056">Semak Imbas Selamat telah dinyahdayakan pada peranti anda. Untuk mendayakannya, pastikan bahawa Perkhidmatan Google Play telah dipasang dan berstatus terkini.</translation>
+<translation id="6417420737057016607">Iklan Brave</translation>
 <translation id="7748944510530490017">Rangkaian Utama</translation>
 <translation id="2781668117338732220">Rangkaian Kedua</translation>
 <translation id="282560918037172384">Rangkaian Ujian</translation>
@@ -1001,6 +1005,13 @@ Jika anda tidak menerima permintaan ini, VPN tidak akan bersambung semula dan sa
 <translation id="7530313002494358590">Mengaktifkan atau menyahdayaaktifkan ciri Brave memerlukan semula penyemak imbas untuk menggunakan perubahan. Sila ketik <ph name="BEGIN_BOLD"/>Mulakan semula sekarang<ph name="END_BOLD"/> selepas Brave Origin selesai mengemas kini.</translation>
 <translation id="1028940738207645746">Betulkah anda mahu menetapkan semula semua tetapan kepada lalai?</translation>
 <translation id="5939518447894949180">Tetapkan semula</translation>
+<translation id="3222790865318305905">Had pengaktifan dicapai</translation>
+<translation id="3787857711016546034">Untuk mengelakkan penipuan, pengaktifan Origin dihadkan kadarnya. Namun anda sentiasa boleh meminta lebih banyak pengaktifan untuk menggunakan lesen Origin anda pada lebih banyak peranti. Hanya klik pilihan Minta lebih banyak pengaktifan, atau <ph name="CONTACT_SUPPORT"/> untuk bantuan.</translation>
+<translation id="6760819753412779585">hubungi sokongan</translation>
+<translation id="571697836019670200">Minta lebih banyak pengaktifan</translation>
+<translation id="9019545131475425538">Memproses…</translation>
+<translation id="7242700630179071243">Sedia untuk diaktifkan</translation>
+<translation id="5463918917265356202">Brave Origin kini aktif pada peranti ini. Untuk mula menggunakan ciri ini, anda perlu memulakan semula pelayar. Adakah anda ingin memulakan semula sekarang?</translation>
 <translation id="8554205386170195281">Beli</translation>
 <translation id="8613144770663526433">Log masuk dengan Brave Wallet</translation>
 <translation id="3696514931437952995">Anda sedang log masuk ke <ph name="ORIGIN"/>. Brave Wallet akan berkongsi alamat dompet anda dengan <ph name="ORIGIN"/>.</translation>

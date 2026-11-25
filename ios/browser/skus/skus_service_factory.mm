@@ -5,8 +5,9 @@
 
 #include "brave/ios/browser/skus/skus_service_factory.h"
 
+#include <utility>
+
 #include "base/feature_list.h"
-#include "base/no_destructor.h"
 #include "brave/components/skus/browser/skus_service_impl.h"
 #include "brave/components/skus/browser/skus_utils.h"
 #include "brave/components/skus/common/features.h"
@@ -22,41 +23,33 @@ namespace skus {
 // static
 mojo::PendingRemote<mojom::SkusService> SkusServiceFactory::GetForProfile(
     ProfileIOS* profile) {
-  auto* service = GetInstance()->GetServiceForProfileAs<skus::SkusServiceImpl>(
-      profile, true);
+  auto* service = TypedProfileKeyedServiceFactoryIOS::GetForProfile(profile);
   if (!service) {
     return mojo::PendingRemote<mojom::SkusService>();
   }
   return service->MakeRemote();
 }
 
-// static
-SkusServiceFactory* SkusServiceFactory::GetInstance() {
-  static base::NoDestructor<SkusServiceFactory> instance;
-  return instance.get();
-}
-
-SkusServiceFactory::SkusServiceFactory()
-    : ProfileKeyedServiceFactoryIOS("SkusService",
-                                    TestingCreation::kCreateService) {}
-
-SkusServiceFactory::~SkusServiceFactory() = default;
+SkusServiceFactory::SkusServiceFactory(PassKey key)
+    : TypedProfileKeyedServiceFactoryIOS(std::move(key),
+                                         "SkusService",
+                                         TestingCreation::kCreateService) {}
 
 std::unique_ptr<KeyedService> SkusServiceFactory::BuildServiceInstanceFor(
-    ProfileIOS* profile) const {
+    ProfileIOS& profile) const {
   // Return null if feature is disabled
   if (!base::FeatureList::IsEnabled(skus::features::kSkusFeature)) {
     return nullptr;
   }
 
-  if (profile->IsOffTheRecord()) {
+  if (profile.IsOffTheRecord()) {
     return nullptr;
   }
-  skus::MigrateSkusSettings(profile->GetPrefs(),
+  skus::MigrateSkusSettings(profile.GetPrefs(),
                             GetApplicationContext()->GetLocalState());
   std::unique_ptr<skus::SkusServiceImpl> sku_service(
       new skus::SkusServiceImpl(GetApplicationContext()->GetLocalState(),
-                                profile->GetSharedURLLoaderFactory()));
+                                profile.GetSharedURLLoaderFactory()));
   return sku_service;
 }
 

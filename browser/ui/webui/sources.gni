@@ -24,6 +24,7 @@ brave_browser_ui_webui_configs_deps = [
   "//brave/components/brave_vpn/common/buildflags",
   "//brave/components/containers/buildflags",
   "//brave/components/playlist/core/common/buildflags",
+  "//brave/components/psst/buildflags",
 ]
 
 if (enable_playlist_webui) {
@@ -41,6 +42,11 @@ if (enable_brave_vpn) {
 if (enable_brave_education) {
   brave_browser_ui_webui_configs_deps +=
       [ "//brave/browser/ui/webui/brave_education" ]
+}
+
+if (!is_android) {
+  brave_browser_ui_webui_configs_deps +=
+      [ "//brave/browser/ui/webui/brave_recap" ]
 }
 
 if (enable_brave_news && !is_android) {
@@ -71,5 +77,8 @@ if (enable_traffic_control) {
 }
 
 if (enable_psst) {
-  brave_browser_ui_webui_configs_deps += [ "//brave/browser/ui/webui/psst" ]
+  brave_browser_ui_webui_configs_deps += [
+    "//brave/browser/ui/webui/psst",
+    "//brave/components/psst/core/common",
+  ]
 }

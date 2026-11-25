@@ -19,7 +19,6 @@
 #include "brave/components/constants/brave_paths.h"
 #include "build/build_config.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_commands.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/common/chrome_isolated_world_ids.h"
@@ -29,9 +28,11 @@
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
 #include "content/public/test/content_mock_cert_verifier.h"
+#include "extensions/buildflags/buildflags.h"
 #include "net/dns/mock_host_resolver.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "third_party/abseil-cpp/absl/strings/str_format.h"
+#include "ui/base/mojom/window_open_disposition.mojom.h"
 #include "url/gurl.h"
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
@@ -68,6 +69,38 @@ std::string NonWriteableScriptProperty(const std::string& property) {
          !(window.ethereum.%s === "brave");)",
       property, property);
 }
+
+// Resolves with the provider's chain id once it equals `chain_id`. The check
+// and the listener registration run in one JS task, so a change cannot slip
+// between them. The event arguments are used because the provider updates its
+// cached chainId after firing the events. `connect` is needed too: until the
+// provider's first chain id lookup returns, chainId is empty, and that lookup
+// may already see the new chain, which fires `connect` and suppresses the
+// following `chainChanged`.
+std::string WaitForChainIdScript(const std::string& provider,
+                                 const std::string& chain_id) {
+  return absl::StrFormat(
+      R"(new Promise((resolve) => {
+           const expected = '%s';
+           const provider = window.%s;
+           if (provider.chainId === expected) {
+             resolve(expected);
+             return;
+           }
+           provider.on('chainChanged', (id) => {
+             if (id === expected) {
+               resolve(id);
+             }
+           });
+           provider.on('connect', (info) => {
+             if (info.chainId === expected) {
+               resolve(info.chainId);
+             }
+           });
+         }))",
+      chain_id, provider);
+}
+
 std::string NonWriteableScriptMethod(const std::string& provider,
                                      const std::string& method) {
   return absl::StrFormat(
@@ -129,7 +162,7 @@ class JSEthereumProviderBrowserTest : public InProcessBrowserTest {
   }
 
   void ReloadAndWaitForLoadStop() {
-    chrome::Reload(browser(), WindowOpenDisposition::CURRENT_TAB);
+    chrome::Reload(browser(), ui::mojom::WindowOpenDisposition::kCurrentTab);
     ASSERT_TRUE(content::WaitForLoadStop(web_contents()));
   }
 
@@ -524,13 +557,16 @@ IN_PROC_BROWSER_TEST_F(JSEthereumProviderBrowserTest, OnlyWriteOwnProperty) {
 
   const std::string get_chain_id = "window.ethereum.chainId";
 
-  ASSERT_EQ(content::EvalJs(primary_main_frame(), get_chain_id).ExtractString(),
+  ASSERT_EQ(content::EvalJs(primary_main_frame(),
+                            WaitForChainIdScript("ethereum", "0x1")),
             "0x1");
 
-  GetJsonRpcService()->SetNetwork(
-      "0xaa36a7", brave_wallet::mojom::CoinType::ETH, std::nullopt);
-  // Needed so ChainChangedEvent observers run
-  base::RunLoop().RunUntilIdle();
+  ASSERT_TRUE(GetJsonRpcService()->SetNetwork(
+      "0xaa36a7", brave_wallet::mojom::CoinType::ETH, std::nullopt));
+  // The chain change reaches the renderer asynchronously, so wait for it.
+  ASSERT_EQ(content::EvalJs(primary_main_frame(),
+                            WaitForChainIdScript("ethereum", "0xaa36a7")),
+            "0xaa36a7");
   EXPECT_EQ(content::EvalJs(primary_main_frame(), get_chain_id).ExtractString(),
             "0xaa36a7");
 
@@ -544,10 +580,14 @@ IN_PROC_BROWSER_TEST_F(JSEthereumProviderBrowserTest, OnlyWriteOwnProperty) {
                 .ExtractString(),
             "0x89");
 
-  GetJsonRpcService()->SetNetwork("0x4", brave_wallet::mojom::CoinType::ETH,
-                                  std::nullopt);
-  // Needed so ChainChangedEvent observers run
-  base::RunLoop().RunUntilIdle();
+  // 0x1 is used because 0x4 is not a known chain.
+  ASSERT_TRUE(GetJsonRpcService()->SetNetwork(
+      "0x1", brave_wallet::mojom::CoinType::ETH, std::nullopt));
+  // Wait for the Brave provider to receive the chain change, then check that
+  // the overwritten window.ethereum was left alone.
+  ASSERT_EQ(content::EvalJs(primary_main_frame(),
+                            WaitForChainIdScript("braveEthereum", "0x1")),
+            "0x1");
   EXPECT_EQ(content::EvalJs(primary_main_frame(), get_chain_id).ExtractString(),
             "0x89");
 }
@@ -572,108 +612,40 @@ IN_PROC_BROWSER_TEST_F(JSEthereumProviderBrowserTest, Iframe3P) {
     GURL iframe_url;
   } ethereum_undefined_cases[] =
       {{// 3p iframe
-        "true", secure_top_url, iframe_url_3p},
-       {// 1st party iframe with allow="ethereum 'none'"
-        R"(
-      document.querySelector('iframe').setAttribute('allow', 'ethereum \'none\'');
-      true
-      )",
-        secure_top_url, iframe_url_1p},
+        "", secure_top_url, iframe_url_3p},
        {// 1st party iframe with sandbox="allow-scripts"
         R"(
-      document.querySelector('iframe').removeAttribute('allow');
       document.querySelector('iframe').setAttribute('sandbox', 'allow-scripts');
-      true
       )",
         secure_top_url, iframe_url_1p},
        {// 3p iframe with sandbox="allow-scripts allow-same-origin"
         R"(
-      document.querySelector('iframe').removeAttribute('allow');
       document.querySelector('iframe')
           .setAttribute('sandbox', 'allow-scripts allow-same-origin');
-      true
       )",
         secure_top_url, iframe_url_3p},
-       {// 3p iframe with allow="solana"
-        R"(
-      document.querySelector('iframe').removeAttribute('sandbox');
-      document.querySelector('iframe').setAttribute('allow', 'solana');
-      true
-      )",
-        secure_top_url, iframe_url_3p},
-
-       {// 3p iframe with allow="solana; ethereum" but insecure top level
-        R"(
-      document.querySelector('iframe').removeAttribute('sandbox');
-      document.querySelector('iframe')
-          .setAttribute('allow', 'solana; ethereum');
-      true
-      )",
-        insecure_top_url, iframe_url_3p},
-
-       {// 3p iframe with allow="solana; ethereum" but insecure top level (data
-        // URI)
-        R"(
-      document.querySelector('iframe').removeAttribute('sandbox');
-      document.querySelector('iframe')
-          .setAttribute('allow', 'solana; ethereum');
-      true
-      )",
-        data_top_url, iframe_url_3p},
-       {// 3p iframe with allow="solana; ethereum" but insecure iframe
-        R"(
-      document.querySelector('iframe').removeAttribute('sandbox');
-      document.querySelector('iframe')
-          .setAttribute('allow', 'solana; ethereum');
-      true
-      )",
-        secure_top_url, data_simple_url},
-       {// insecure top level and insecure iframe allow="solana; ethereum"
-        R"(
-      document.querySelector('iframe').removeAttribute('sandbox');
-      document.querySelector('iframe')
-          .setAttribute('allow', 'solana; ethereum');
-      true
-      )",
-        data_top_url, data_simple_url}},
+       {// 3p iframe with insecure top level
+        "", insecure_top_url, iframe_url_3p},
+       {// 3p iframe with insecure top level (data URI)
+        "", data_top_url, iframe_url_3p},
+       {// insecure iframe
+        "", secure_top_url, data_simple_url},
+       {// insecure top level and insecure iframe
+        "", data_top_url, data_simple_url}},
     ethereum_defined_cases[] = {
         {// 1st party iframe
-         "true", secure_top_url, iframe_url_1p},
+         "", secure_top_url, iframe_url_1p},
         {// 1st party iframe sandbox="allow-scripts allow-same-origin"
          R"(
-      document.querySelector('iframe').removeAttribute('allow');
       document.querySelector('iframe')
           .setAttribute('sandbox', 'allow-scripts allow-same-origin');
-      true
       )",
-         secure_top_url, iframe_url_1p},
-        {// 3p iframe with allow="ethereum"
-         R"(
-      document.querySelector('iframe').removeAttribute('sandbox');
-      document.querySelector('iframe').setAttribute('allow', 'ethereum');
-      true
-      )",
-         secure_top_url, iframe_url_3p},
-        {// 3p iframe with allow="solana; ethereum"
-         R"(
-      document.querySelector('iframe').removeAttribute('sandbox');
-      document.querySelector('iframe')
-          .setAttribute('allow', 'solana; ethereum');
-      true
-      )",
-         secure_top_url, iframe_url_3p},
-        {// 3rd party iframe with sandbox="allow-scripts" allow="ethereum"
-         R"(
-      document.querySelector('iframe').setAttribute('allow', 'ethereum');
-      document.querySelector('iframe').setAttribute('sandbox', 'allow-scripts');
-      true
-      )",
-         secure_top_url, iframe_url_3p}};
+         secure_top_url, iframe_url_1p}};
 
   for (auto& c : ethereum_undefined_cases) {
     SCOPED_TRACE(testing::Message() << c.script << c.top_url << c.iframe_url);
     ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), c.top_url));
-    EXPECT_TRUE(content::EvalJs(primary_main_frame(), c.script).ExtractBool());
+    EXPECT_TRUE(content::ExecJs(primary_main_frame(), c.script));
     EXPECT_TRUE(NavigateIframeToURL(web_contents(), "test", c.iframe_url));
     EXPECT_TRUE(content::EvalJs(ChildFrameAt(primary_main_frame(), 0),
                                 kEvalEthereumUndefined)
@@ -682,7 +654,7 @@ IN_PROC_BROWSER_TEST_F(JSEthereumProviderBrowserTest, Iframe3P) {
   for (auto& c : ethereum_defined_cases) {
     SCOPED_TRACE(testing::Message() << c.script << c.top_url << c.iframe_url);
     ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), c.top_url));
-    EXPECT_TRUE(content::EvalJs(primary_main_frame(), c.script).ExtractBool());
+    EXPECT_TRUE(content::ExecJs(primary_main_frame(), c.script));
     EXPECT_TRUE(NavigateIframeToURL(web_contents(), "test", c.iframe_url));
     EXPECT_FALSE(content::EvalJs(ChildFrameAt(primary_main_frame(), 0),
                                  kEvalEthereumUndefined)

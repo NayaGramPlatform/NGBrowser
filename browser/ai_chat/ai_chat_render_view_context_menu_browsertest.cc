@@ -10,6 +10,7 @@
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "base/test/run_until.h"
+#include "base/test/scoped_feature_list.h"
 #include "brave/app/brave_command_ids.h"
 #include "brave/browser/ai_chat/ai_chat_service_factory.h"
 #include "brave/browser/ui/side_panel/ai_chat/ai_chat_side_panel_utils.h"
@@ -22,18 +23,20 @@
 #include "brave/components/ai_chat/core/browser/engine/mock_engine_consumer.h"
 #include "brave/components/ai_chat/core/browser/utils.h"
 #include "brave/components/ai_chat/core/common/ai_chat_urls.h"
+#include "brave/components/ai_chat/core/common/features.h"
 #include "brave/components/ai_chat/core/common/mojom/ai_chat.mojom.h"
 #include "brave/components/ai_chat/core/common/mojom/common.mojom.h"
 #include "brave/components/constants/brave_paths.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/renderer_context_menu/render_view_context_menu.h"
 #include "chrome/browser/renderer_context_menu/render_view_context_menu_test_util.h"
-#include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_features.h"
+#include "chrome/browser/ui/side_panel/side_panel_ui.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/prefs/pref_service.h"
+#include "components/tabs/public/tab_interface.h"
 #include "content/public/browser/context_menu_params.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_view_host.h"
@@ -114,6 +117,18 @@ class MockConversationHandlerClient : public mojom::ConversationUI {
                std::vector<mojom::ToolInfoPtr> tools),
               (override));
 
+  MOCK_METHOD(void,
+              OnVisionModelSwitchChanged,
+              (const std::optional<std::string>& model_key),
+              (override));
+
+  MOCK_METHOD(
+      void,
+      OnContentAgentChanged,
+      (bool is_content_agent_chosen,
+       const std::vector<mojom::ConversationCapability>& capabilities_enabled),
+      (override));
+
   MOCK_METHOD(void, OnConversationDeleted, (), (override));
 
  private:
@@ -127,7 +142,15 @@ class AIChatRenderViewContextMenuBrowserTest : public InProcessBrowserTest {
  public:
   AIChatRenderViewContextMenuBrowserTest()
       : ai_engine_(std::make_unique<MockEngineConsumer>()),
-        https_server_(net::EmbeddedTestServer::TYPE_HTTPS) {}
+        https_server_(net::EmbeddedTestServer::TYPE_HTTPS) {
+    // Pin features so the tests don't depend on their compiled-in defaults.
+    scoped_feature_list_.InitWithFeaturesAndParameters(
+        {{ai_chat::features::kAIChat,
+          {{ai_chat::features::kAIChatSSE.name, "true"}}},
+         {ai_chat::features::kContextMenuRewriteInPlace, {}},
+         {ai_chat::features::kAIChatGlobalSidePanelEverywhere, {}}},
+        {});
+  }
 
   ~AIChatRenderViewContextMenuBrowserTest() override = default;
 
@@ -250,7 +273,7 @@ class AIChatRenderViewContextMenuBrowserTest : public InProcessBrowserTest {
   }
 
   sidebar::SidebarController* GetSidebarController() {
-    auto* controller = browser()->GetFeatures().sidebar_controller();
+    auto* controller = sidebar::SidebarController::From(browser());
     EXPECT_TRUE(controller);
     return controller;
   }
@@ -263,7 +286,8 @@ class AIChatRenderViewContextMenuBrowserTest : public InProcessBrowserTest {
   }
 
   ConversationHandler* GetConversationHandler() {
-    AIChatTabHelper* helper = AIChatTabHelper::FromWebContents(web_contents());
+    AIChatTabHelper* helper = AIChatTabHelper::From(
+        tabs::TabInterface::MaybeGetFromContents(web_contents()));
     if (!helper) {
       return nullptr;
     }
@@ -324,6 +348,7 @@ class AIChatRenderViewContextMenuBrowserTest : public InProcessBrowserTest {
   }
 
  private:
+  base::test::ScopedFeatureList scoped_feature_list_;
   std::unique_ptr<MockEngineConsumer> ai_engine_;
   content::ContentMockCertVerifier mock_cert_verifier_;
   net::test_server::EmbeddedTestServer https_server_;
@@ -356,7 +381,7 @@ IN_PROC_BROWSER_TEST_F(AIChatRenderViewContextMenuBrowserTest, RewriteInPlace) {
   TestRewriteInPlace(contents, "textarea", "OK2", {},
                      base::unexpected(mojom::APIError::ConnectionIssue), "OK2");
   EXPECT_TRUE(IsAIChatSidebarActive());
-  GetSidebarController()->DeactivateCurrentPanel();
+  SidePanelUI::From(browser())->Close();
 
   EXPECT_FALSE(IsAIChatSidebarActive());
   // 2) Get partial streaming responses then error in completed callback.

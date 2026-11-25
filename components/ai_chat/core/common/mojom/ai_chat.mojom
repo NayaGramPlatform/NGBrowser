@@ -21,6 +21,7 @@ const string kAssistantDetailStorageToolName = "assistant_detail_storage";
 const string kMemoryStorageToolName = "memory_storage_tool";
 const string kCodeExecutionToolName = "code_execution_tool";
 const string kSemanticHistorySearchToolName = "semantic_history_search";
+const string kAttachWorkspaceToolName = "attach_workspace";
 
 [EnableIf=enable_ai_chat_tab_management_tool]
 const string kTabManagementToolName = "tab_management";
@@ -64,6 +65,13 @@ const string kFullPageScreenshotPrefix = "fullscreenshot_";
 const uint32 MAX_IMAGES = 20;
 const uint32 MAX_DOCUMENTS = 5;
 const uint32 MAX_DOCUMENT_SIZE_BYTES = 4718592; // 4.5MB
+
+// The state of a conversation that isn't idle. Idle conversations are left out
+// of the generation state maps.
+enum ConversationGenerationState {
+  kGenerating,
+  kCompletedNotViewed,
+};
 
 
 struct Conversation {
@@ -231,8 +239,11 @@ interface Service {
   // there is no record of |share_id|.
   CopyConversationShareLink(string share_id);
 
-  // Bind ability to send events to the UI and receive current state
-  BindObserver(pending_remote<ServiceObserver> ui) => (ServiceState state);
+  // Bind ability to send events to the UI and receive current state, including
+  // the generation state of conversations that aren't idle.
+  BindObserver(pending_remote<ServiceObserver> ui)
+      => (ServiceState state,
+          map<string, ConversationGenerationState> generation_states);
 
   // Bind specified Conversation for 2-way communication
   BindConversation(
@@ -248,6 +259,10 @@ interface ServiceObserver {
   OnConversationListChanged(array<Conversation> conversations);
   OnStateChanged(ServiceState state);
   OnSkillsChanged(array<Skill> skills);
+  // The generation state of every conversation that isn't idle, keyed by
+  // conversation uuid. Sent whenever any of them changes.
+  OnConversationGenerationStateChanged(
+    map<string, ConversationGenerationState> generation_states);
 };
 
 // Browser-side handler for general AI Chat UI functions, implemented
@@ -310,6 +325,13 @@ interface AIChatUIHandler {
   ShowWorkspaceFolderPicker(string conversation_uuid)
       => (string? selected_path);
 
+  // Opens `file_path` from the workspace identified by `workspace_url`
+  // (workspace://<uuid>) in the workspace's viewer page. From the side panel
+  // this navigates the active tab; from a full-page AI Chat the conversation
+  // is moved to the side panel (when supported) and the file opens in a tab
+  // in its place.
+  OpenWorkspaceFile(url.mojom.Url workspace_url, string file_path);
+
   // This might be a no-op if the UI isn't closeable
   CloseUI();
 
@@ -334,9 +356,11 @@ interface AIChatUIHandler {
   DisassociateContent(AssociatedContent content, string conversation_uuid);
 
   // Make a completely new conversation, which may
-  // be bound to the associated conversation, if this UI has a target
+  // be bound to the associated conversation, if this UI has a target, with the
+  // existing workspace at |workspace_url| attached.
   NewConversation(pending_receiver<ConversationHandler> conversation,
-      pending_remote<ConversationUI> conversation_ui);
+      pending_remote<ConversationUI> conversation_ui,
+      url.mojom.Url? workspace_url);
 };
 
 // UI-side handler for messages from the browser WebUI
@@ -379,6 +403,24 @@ struct ConversationState {
 
   // Which of the available capabilities are enabled for this conversation
   array<ConversationCapability> capabilities_enabled;
+
+  // Set while a submission waits for the user to decide whether to switch to
+  // this vision model, because it has images the current model can't read.
+  string? vision_model_switch_key;
+
+  // The user's choice, only meaningful when
+  // |ServiceState.is_content_agent_user_selectable|. Distinct from
+  // CONTENT_AGENT being in |capabilities_enabled|: the choice is recorded even
+  // where the content agent cannot yet take effect.
+  bool is_content_agent_chosen;
+};
+
+// How the user answered the prompt to switch to a vision model.
+enum VisionModelSwitchDecision {
+  // Switch the conversation to the offered model and send the images.
+  kSwitch,
+  // Keep the current model and send the submission without its images.
+  kSendWithoutImages,
 };
 
 // Browser-side handler for a Conversation
@@ -396,14 +438,16 @@ interface ConversationHandler {
 
   GetIsRequestInProgress() => (bool is_request_in_progress);
 
-  // Get all visible history entries, including in-progress responses
+  // Get all visible history entries in main conversation, including in-progress responses.
   GetConversationHistory() => (array<ConversationTurn> conversation_history);
 
   SubmitHumanConversationEntry(
-      string input, array<UploadedFile>? uploaded_files);
-  SubmitHumanConversationEntryWithAction(string input, ActionType action_type);
+      string input, array<UploadedFile>? uploaded_files, string? thread_uuid);
+  SubmitHumanConversationEntryWithAction(
+      string input, ActionType action_type, string? thread_uuid);
   SubmitHumanConversationEntryWithSkill(
-      string input, string skill_id, array<UploadedFile>? uploaded_files);
+      string input, string skill_id, array<UploadedFile>? uploaded_files,
+      string? thread_uuid);
 
   // Get associated page information. If there is none then |associated_content|
   // will be empty.
@@ -418,10 +462,16 @@ interface ConversationHandler {
   // to the caller.
   StopGenerationAndMaybeGetHumanEntry() => (ConversationTurn? human_entry);
 
+  // Resumes the submission waiting on |vision_model_switch_key|.
+  // StopGenerationAndMaybeGetHumanEntry cancels it instead, returning the
+  // waiting human entry.
+  RespondToVisionModelSwitch(VisionModelSwitchDecision decision);
+
   // Send a user-rating for a chat
   // message. |turn_id| is the index of the message in the
-  // specified conversation.
-  RateMessage(bool is_liked, string turn_uuid)
+  // specified conversation. |thread_uuid| is the thread the turn belongs to,
+  // or null for the root conversation.
+  RateMessage(bool is_liked, string turn_uuid, string? thread_uuid)
       => (string? rating_id);
   SendFeedback(
       string category,
@@ -458,10 +508,17 @@ interface ConversationHandler {
   // exposes, for the tools pill's dialog. Empty if it's no longer associated.
   GetContentTools(string content_uuid) => (array<ToolInfo> tools);
 
-  // Applies to every tool of that name from the content's origin, for the
-  // lifetime of this conversation.
-  SetContentToolPermission(string content_uuid, string tool_name,
-                           ToolPermission permission);
+  // Records |tool.permission| for every tool named |tool.name| from the
+  // content's origin, for the lifetime of this conversation. |tool| is the
+  // tool as the user was shown it: an allow choice stops applying if the site
+  // changes the tool's description.
+  SetContentToolPermission(string content_uuid, ToolInfo tool);
+
+  // Records whether the user wants the content agent for this conversation.
+  // A no-op unless |ServiceState.is_content_agent_user_selectable|. The
+  // choice lasts as long as the conversation is loaded and is not persisted,
+  // and takes effect from the next turn, not the one in progress.
+  SetContentAgentChosen(bool chosen);
 };
 
 interface ConversationUI {
@@ -499,6 +556,15 @@ interface ConversationUI {
   // Pushed rather than invalidated so every open UI for this conversation
   // settles on the same list without each one re-asking the page.
   OnContentToolsChanged(string content_uuid, array<ToolInfo> tools);
+
+  // A submission started or stopped waiting for the user to decide whether
+  // to switch to the vision model |model_key|.
+  OnVisionModelSwitchChanged(string? model_key);
+  // The user's content agent choice changed, with the capability set it now
+  // amounts to. Pushed rather than invalidated so that every open UI for this
+  // conversation agrees on the choice.
+  OnContentAgentChanged(bool is_content_agent_chosen,
+                        array<ConversationCapability> capabilities_enabled);
 
   OnConversationDeleted();
 };

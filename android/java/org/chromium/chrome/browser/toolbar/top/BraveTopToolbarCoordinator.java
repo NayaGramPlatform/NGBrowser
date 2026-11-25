@@ -21,9 +21,11 @@ import org.chromium.chrome.R;
 import org.chromium.chrome.browser.browser_controls.BrowserControlsVisibilityManager;
 import org.chromium.chrome.browser.browser_controls.BrowserStateBrowserControlsVisibilityDelegate;
 import org.chromium.chrome.browser.browser_controls.TopControlsStacker;
+import org.chromium.chrome.browser.download.DownloadToolbarButtonState;
 import org.chromium.chrome.browser.fullscreen.FullscreenManager;
 import org.chromium.chrome.browser.layouts.LayoutStateProvider;
 import org.chromium.chrome.browser.omnibox.OmniboxStub;
+import org.chromium.chrome.browser.omnibox.styles.OmniboxResourceProvider;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tab.TabObscuringHandler;
@@ -43,6 +45,8 @@ import org.chromium.chrome.browser.toolbar.top.NavigationPopup.HistoryDelegate;
 import org.chromium.chrome.browser.toolbar.top.tab_strip.TabStripTransitionCoordinator.TabStripTransitionDelegate;
 import org.chromium.chrome.browser.toolbar.top.tab_strip.TabStripTransitionCoordinator.TabStripTransitionHandler;
 import org.chromium.chrome.browser.ui.appmenu.AppMenuButtonHelper;
+import org.chromium.chrome.browser.ui.bottombar.BottomBarConfigUtils;
+import org.chromium.chrome.browser.ui.bottombar.BottomBarUtils;
 import org.chromium.chrome.browser.ui.messages.snackbar.SnackbarManager;
 import org.chromium.chrome.browser.ui.signin.SigninAndHistorySyncActivityLauncher;
 import org.chromium.chrome.browser.user_education.UserEducationHelper;
@@ -117,7 +121,10 @@ public class BraveTopToolbarCoordinator extends TopToolbarCoordinator {
             ModalDialogManager modalDialogManager,
             SnackbarManager snackbarManager,
             Runnable onSigninTapped,
-            boolean suppressTabStripAtStart) {
+            NonNullObservableSupplier<DownloadToolbarButtonState> downloadButtonStateSupplier,
+            Runnable onDownloadButtonClicked,
+            boolean suppressTabStripAtStart,
+            OmniboxResourceProvider omniboxResourceProvider) {
         super(
                 controlContainer,
                 toolbarLayout,
@@ -164,7 +171,10 @@ public class BraveTopToolbarCoordinator extends TopToolbarCoordinator {
                 modalDialogManager,
                 snackbarManager,
                 onSigninTapped,
-                suppressTabStripAtStart);
+                downloadButtonStateSupplier,
+                onDownloadButtonClicked,
+                suppressTabStripAtStart,
+                omniboxResourceProvider);
 
         mBraveToolbarLayout = toolbarLayout;
         mBraveMenuButtonCoordinator = browsingModeMenuButtonCoordinator;
@@ -208,6 +218,15 @@ public class BraveTopToolbarCoordinator extends TopToolbarCoordinator {
                 if (!ColorUtils.inNightMode(toolbarContext)) {
                     toolbarPhone.mToolbarBackgroundColorForNtp = toolbarBackgroundColorForNtp;
                 }
+            }
+
+            // Brave's NTP draws a background image rather than upstream's home surface color, so
+            // the toolbar matches the bottom bar instead.
+            Context toolbarContext = mBraveToolbarLayout.getContext();
+            if (BottomBarConfigUtils.isBottomBarEnabled(toolbarContext)) {
+                toolbarPhone.mToolbarBackgroundColorForNtp =
+                        BottomBarUtils.getBottomBarBackgroundColor(
+                                toolbarContext, /* isIncognito= */ false);
             }
         }
     }

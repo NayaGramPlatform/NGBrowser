@@ -12,20 +12,20 @@
 #include <vector>
 
 #include "base/containers/span.h"
-#include "brave/browser/ui/brave_browser_window.h"
 #include "brave/browser/ui/tabs/brave_tab_prefs.h"
 #include "brave/browser/ui/tabs/brave_tree_tab_strip_collection_delegate.h"
+#include "brave/browser/ui/tabs/public/tab_cycling_controller.h"
 #include "brave/browser/ui/tabs/tree_tab_model.h"
-#include "brave/components/constants/pref_names.h"
 #include "brave/components/tabs/public/brave_tab_strip_collection.h"
 #include "brave/components/tabs/public/tree_tab_node.h"
 #include "brave/components/tabs/public/tree_tab_node_tab_collection.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/browser_window.h"
 #include "chrome/browser/ui/tabs/features.h"
 #include "chrome/browser/ui/tabs/tab_strip_model_delegate.h"
 #include "chrome/browser/ui/tabs/tab_strip_model_observer.h"
+#include "chrome/common/pref_names.h"
 #include "components/prefs/pref_service.h"
+#include "components/tabs/public/tab_interface.h"
 #include "components/tabs/public/tab_strip_collection.h"
 #include "components/tabs/public/unpinned_tab_collection.h"
 #include "content/public/browser/web_contents.h"
@@ -45,10 +45,17 @@ BraveTabStripModel::BraveTabStripModel(
         brave_tabs::kTreeTabsEnabled, profile->GetPrefs(),
         base::BindRepeating(&BraveTabStripModel::OnTreeTabRelatedPrefChanged,
                             base::Unretained(this)));
-    vertical_tabs_enabled_.Init(
-        brave_tabs::kVerticalTabsEnabled, profile->GetPrefs(),
-        base::BindRepeating(&BraveTabStripModel::OnTreeTabRelatedPrefChanged,
-                            base::Unretained(this)));
+    if (tabs::IsUpstreamVerticalTabsForceEnabled()) {
+      upstream_vertical_tabs_enabled_.Init(
+          prefs::kVerticalTabsEnabled, profile->GetPrefs(),
+          base::BindRepeating(&BraveTabStripModel::OnTreeTabRelatedPrefChanged,
+                              base::Unretained(this)));
+    } else {
+      brave_vertical_tabs_enabled_.Init(
+          brave_tabs::kVerticalTabsEnabled, profile->GetPrefs(),
+          base::BindRepeating(&BraveTabStripModel::OnTreeTabRelatedPrefChanged,
+                              base::Unretained(this)));
+    }
     OnTreeTabRelatedPrefChanged();
   }
 }
@@ -68,21 +75,6 @@ void BraveTabStripModel::SetTreeTabNodeCollapsed(
     auto change =
         TreeTabChange(id, TreeTabChange::CollapsedStateChangedChange(*node));
     observers_.Notify(&TabStripModelObserver::OnTreeTabChanged, change);
-  }
-}
-
-void BraveTabStripModel::SelectRelativeTab(TabRelativeDirection direction,
-                                           TabStripUserGestureDetails detail) {
-  if (count() == 0) {
-    return;
-  }
-
-  bool is_mru_enabled = profile()->GetPrefs()->GetBoolean(kMRUCyclingEnabled);
-
-  if (is_mru_enabled) {
-    SelectMRUTab(direction, detail);
-  } else {
-    TabStripModel::SelectRelativeTab(direction, detail);
   }
 }
 
@@ -141,17 +133,31 @@ bool BraveTabStripModel::IsOnlyActiveTabAndTreeDescendantsSelected() {
   return selected_indices == expected_indices;
 }
 
+void BraveTabStripModel::SetTreeTabSubtreeSelectedOnPress(
+    tabs::TabHandle handle) {
+  tree_tab_subtree_selected_on_press_ = handle;
+}
+
+std::optional<tabs::TabHandle>
+BraveTabStripModel::TakeTreeTabSubtreeSelectedOnPress() {
+  return std::exchange(tree_tab_subtree_selected_on_press_, std::nullopt);
+}
+void BraveTabStripModel::CycleToNextMRUTab(TabStripUserGestureDetails detail) {
+  SelectMRUTab(TabRelativeDirection::kNext, detail);
+}
+
+void BraveTabStripModel::CycleToPreviousMRUTab(
+    TabStripUserGestureDetails detail) {
+  SelectMRUTab(TabRelativeDirection::kPrevious, detail);
+}
+
 void BraveTabStripModel::SelectMRUTab(TabRelativeDirection direction,
                                       TabStripUserGestureDetails detail) {
+  if (empty()) {
+    return;
+  }
+
   if (mru_cycle_list_.empty()) {
-    // Start cycling
-
-    BrowserWindow* browser_window =
-        BrowserWindow::FindBrowserWindowWithWebContents(GetWebContentsAt(0));
-    if (!browser_window) {
-      return;
-    }
-
     // Create a list of tab indexes sorted by time of last activation
     for (int i = 0; i < count(); ++i) {
       mru_cycle_list_.push_back(i);
@@ -163,8 +169,11 @@ void BraveTabStripModel::SelectMRUTab(TabRelativeDirection direction,
                        GetWebContentsAt(b)->GetLastActiveTimeTicks();
               });
 
-    // Tell the cycling controller that we start cycling to handle tabs keys
-    BraveBrowserWindow::From(browser_window)->StartTabCycling();
+    // WebUI browser windows have no tab cycling controller.
+    if (auto* controller = TabCyclingController::From(
+            GetTabAtIndex(0)->GetBrowserWindowInterface())) {
+      controller->Start();
+    }
   }
 
   if (direction == TabRelativeDirection::kNext) {
@@ -203,7 +212,16 @@ void BraveTabStripModel::CloseTabs(base::span<int> indices,
 }
 
 void BraveTabStripModel::OnTreeTabRelatedPrefChanged() {
-  if (*tree_tabs_enabled_ && *vertical_tabs_enabled_) {
+  const bool should_build_tree_tabs =
+      *tree_tabs_enabled_ && (tabs::IsUpstreamVerticalTabsForceEnabled()
+                                  ? *upstream_vertical_tabs_enabled_
+                                  : *brave_vertical_tabs_enabled_);
+  // Either vertical tabs pref can change without changing the result.
+  if (should_build_tree_tabs == !!tree_tab_model_) {
+    return;
+  }
+
+  if (should_build_tree_tabs) {
     BuildTreeTabs();
   } else {
     FlattenTreeTabs();
@@ -234,9 +252,20 @@ void BraveTabStripModel::BuildTreeTabs() {
               &BraveTabStripModel::NotifyTreeTabNodeReparented,
               base::Unretained(this))));
 
+  tree_tab_node_children_changed_subscription_ =
+      std::make_unique<base::CallbackListSubscription>(
+          tree_tab_model_->RegisterTreeTabNodeChildrenChangedCallback(
+              base::BindRepeating(
+                  &BraveTabStripModel::NotifyTreeTabNodeChildrenChanged,
+                  base::Unretained(this))));
+
   contents_data()->SetDelegate(
       std::make_unique<BraveTreeTabStripCollectionDelegate>(
           *contents_data(), tree_tab_model_->GetWeakPtr()));
+
+  auto change = TreeTabChange(TreeTabChange::kTreeInitialized,
+                              tree_tab::TreeTabNodeId::CreateEmpty(), nullptr);
+  observers_.Notify(&TabStripModelObserver::OnTreeTabChanged, change);
 }
 
 void BraveTabStripModel::FlattenTreeTabs() {
@@ -250,7 +279,12 @@ void BraveTabStripModel::FlattenTreeTabs() {
   tree_tab_node_will_be_destroyed_subscription_.reset();
   tree_tab_node_created_subscription_.reset();
   tree_tab_node_moved_subscription_.reset();
+  tree_tab_node_children_changed_subscription_.reset();
   tree_tab_model_.reset();
+
+  auto change = TreeTabChange(TreeTabChange::kTreeDestroyed,
+                              tree_tab::TreeTabNodeId::CreateEmpty(), nullptr);
+  observers_.Notify(&TabStripModelObserver::OnTreeTabChanged, change);
 }
 
 void BraveTabStripModel::NotifyTreeTabNodeCreated(
@@ -278,6 +312,12 @@ void BraveTabStripModel::NotifyTreeTabNodeReparented(
     return;
   }
   auto change = TreeTabChange(id, TreeTabChange::ReparentedChange(*node));
+  observers_.Notify(&TabStripModelObserver::OnTreeTabChanged, change);
+}
+
+void BraveTabStripModel::NotifyTreeTabNodeChildrenChanged(
+    const tree_tab::TreeTabNodeId& id) {
+  auto change = TreeTabChange(TreeTabChange::kNodeChildrenChanged, id, nullptr);
   observers_.Notify(&TabStripModelObserver::OnTreeTabChanged, change);
 }
 

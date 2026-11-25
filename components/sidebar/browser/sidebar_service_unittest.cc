@@ -10,6 +10,7 @@
 #include <optional>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #include "base/check.h"
 #include "base/test/metrics/histogram_tester.h"
@@ -19,7 +20,6 @@
 #include "brave/components/brave_news/common/buildflags/buildflags.h"
 #include "brave/components/brave_talk/buildflags/buildflags.h"
 #include "brave/components/brave_wallet/common/buildflags/buildflags.h"
-#include "brave/components/constants/pref_names.h"
 #include "brave/components/playlist/core/common/buildflags/buildflags.h"
 #include "brave/components/sidebar/browser/constants.h"
 #include "brave/components/sidebar/browser/pref_names.h"
@@ -224,7 +224,18 @@ class MockSidebarServiceObserver : public SidebarService::Observer {
 
 class SidebarServiceTest : public testing::Test {
  public:
-  SidebarServiceTest() = default;
+  SidebarServiceTest() {
+    // Pin the flags that gate built-in items so expectations don't depend on
+    // their compiled-in defaults.
+    std::vector<base::test::FeatureRef> enabled_features;
+#if BUILDFLAG(ENABLE_AI_CHAT)
+    enabled_features.push_back(ai_chat::features::kAIChat);
+#endif
+#if BUILDFLAG(ENABLE_PLAYLIST)
+    enabled_features.push_back(playlist::features::kPlaylist);
+#endif
+    feature_list_.InitWithFeatures(enabled_features, {});
+  }
 
   ~SidebarServiceTest() override = default;
 
@@ -267,23 +278,10 @@ class SidebarServiceTest : public testing::Test {
   PrefService* GetPrefs() { return &prefs_; }
 
   size_t GetDefaultItemCount() const {
-    auto item_count =
-        std::size(kDefaultBuiltInItemTypesForTest) - 1 /* for history*/;
-#if BUILDFLAG(ENABLE_PLAYLIST)
-    if (!base::FeatureList::IsEnabled(playlist::features::kPlaylist)) {
-      item_count -= 1;
-    }
-#endif
-
-#if BUILDFLAG(ENABLE_AI_CHAT)
-    if (!ai_chat::features::IsAIChatEnabled()) {
-      item_count -= 1;
-    }
-#endif
-
-    return item_count;
+    return std::size(kDefaultBuiltInItemTypesForTest) - 1 /* for history*/;
   }
 
+  base::test::ScopedFeatureList feature_list_;
   TestingPrefServiceSimple prefs_;
   NiceMock<MockSidebarServiceObserver> observer_;
   std::unique_ptr<SidebarService> service_;
@@ -295,7 +293,7 @@ TEST_F(SidebarServiceTest, AddRemoveItems) {
 
   // Check the default items count.
   const auto default_item_count = GetDefaultItemCount();
-  EXPECT_EQ(default_item_count, service_->items().size());
+  ASSERT_EQ(default_item_count, service_->items().size());
   EXPECT_EQ(0UL, service_->GetHiddenDefaultSidebarItems().size());
 
   // Cache 1st item to compare after removing.
@@ -318,9 +316,8 @@ TEST_F(SidebarServiceTest, AddRemoveItems) {
   EXPECT_EQ(default_item_count, service_->items().size());
   EXPECT_EQ(0UL, service_->GetHiddenDefaultSidebarItems().size());
 
-  const SidebarItem item2 = SidebarItem::Create(
-      GURL("https://www.brave.com/"), u"brave software",
-      SidebarItem::Type::kTypeWeb, SidebarItem::BuiltInItemType::kNone, false);
+  const SidebarItem item2 = SidebarItem::CreateWebTabItem(
+      GURL("https://www.brave.com/"), u"brave software");
   EXPECT_TRUE(item2.is_web_type());
   EXPECT_CALL(observer_, OnItemAdded(item2, default_item_count)).Times(1);
   service_->AddItem(item2);
@@ -335,9 +332,8 @@ TEST_F(SidebarServiceTest, MoveItem) {
   InitService();
 
   // Add one more item to test.
-  SidebarItem new_item = SidebarItem::Create(
-      GURL("https://www.brave.com/"), u"brave software",
-      SidebarItem::Type::kTypeWeb, SidebarItem::BuiltInItemType::kNone, false);
+  SidebarItem new_item = SidebarItem::CreateWebTabItem(
+      GURL("https://www.brave.com/"), u"brave software");
   service_->AddItem(new_item);
   const size_t items_count = service_->items().size();
   EXPECT_EQ(GetDefaultItemCount() + 1, items_count);
@@ -370,6 +366,34 @@ TEST_F(SidebarServiceTest, MoveItem) {
   EXPECT_EQ(item.url, service_->items()[1].url);
 }
 
+TEST(SidebarItemTest, Factories) {
+  const auto built_in = SidebarItem::CreateBuiltInItem(
+      SidebarItem::BuiltInItemType::kBookmarks, u"title",
+      SidebarItem::PanelType::kSidePanel);
+  EXPECT_TRUE(built_in.is_built_in_type());
+  EXPECT_EQ(SidebarItem::BuiltInItemType::kBookmarks,
+            built_in.built_in_item_type);
+  EXPECT_EQ(SidebarItem::PanelType::kSidePanel, built_in.panel_type);
+  EXPECT_TRUE(built_in.url.is_empty());
+  EXPECT_TRUE(built_in.IsValidItem());
+
+  const GURL url("https://abcd.com/");
+
+  const auto web_panel = SidebarItem::CreateWebPanelItem(url, u"title");
+  EXPECT_TRUE(web_panel.is_web_type());
+  EXPECT_EQ(SidebarItem::BuiltInItemType::kNone, web_panel.built_in_item_type);
+  EXPECT_EQ(SidebarItem::PanelType::kWebPanel, web_panel.panel_type);
+  EXPECT_EQ(url, web_panel.url);
+  EXPECT_TRUE(web_panel.IsValidItem());
+
+  const auto web_tab = SidebarItem::CreateWebTabItem(url, u"title");
+  EXPECT_TRUE(web_tab.is_web_type());
+  EXPECT_EQ(SidebarItem::BuiltInItemType::kNone, web_tab.built_in_item_type);
+  EXPECT_EQ(SidebarItem::PanelType::kNone, web_tab.panel_type);
+  EXPECT_FALSE(web_tab.opens_in_panel());
+  EXPECT_TRUE(web_tab.IsValidItem());
+}
+
 TEST(SidebarItemTest, SidebarItemValidation) {
   SidebarItem builtin_item;
   EXPECT_FALSE(builtin_item.IsValidItem());
@@ -397,6 +421,25 @@ TEST(SidebarItemTest, SidebarItemValidation) {
   EXPECT_TRUE(web_item.IsValidItem());
   web_item.built_in_item_type = SidebarItem::BuiltInItemType::kBookmarks;
   EXPECT_FALSE(web_item.IsValidItem());
+
+  // A side panel item needs a built-in item type to resolve its entry.
+  web_item.built_in_item_type = SidebarItem::BuiltInItemType::kNone;
+  web_item.panel_type = SidebarItem::PanelType::kSidePanel;
+  EXPECT_FALSE(web_item.IsValidItem());
+
+  // A web panel item needs a url to load.
+  web_item.panel_type = SidebarItem::PanelType::kWebPanel;
+  EXPECT_TRUE(web_item.IsValidItem());
+  web_item.url = GURL();
+  EXPECT_FALSE(web_item.IsValidItem());
+
+  // Same invariants for built-in items.
+  builtin_item.panel_type = SidebarItem::PanelType::kSidePanel;
+  EXPECT_TRUE(builtin_item.IsValidItem());
+  builtin_item.panel_type = SidebarItem::PanelType::kWebPanel;
+  EXPECT_FALSE(builtin_item.IsValidItem());
+  builtin_item.url = GURL("https://abcd.com/");
+  EXPECT_TRUE(builtin_item.IsValidItem());
 }
 
 TEST(SidebarFeaturesTest, DefaultTest) {
@@ -430,7 +473,8 @@ TEST_F(SidebarServiceTest, UpdateItem) {
   update.title_updated = true;
   update.url_updated = false;
   EXPECT_CALL(observer_, OnItemUpdated(testing::_, update)).Times(1);
-  service_->UpdateItem(brave_url, brave_url, brave_title, u"Brave");
+  service_->UpdateItem(SidebarItem::CreateWebTabItem(brave_url, brave_title),
+                       SidebarItem::CreateWebTabItem(brave_url, u"Brave"));
   testing::Mock::VerifyAndClearExpectations(&observer_);
   EXPECT_EQ(u"Brave", service_->items()[last_item_index].title);
 
@@ -438,7 +482,9 @@ TEST_F(SidebarServiceTest, UpdateItem) {
   update.title_updated = true;
   update.url_updated = true;
   EXPECT_CALL(observer_, OnItemUpdated(testing::_, update)).Times(1);
-  service_->UpdateItem(brave_url, GURL("https://a.com/"), u"Brave", u"a");
+  service_->UpdateItem(
+      SidebarItem::CreateWebTabItem(brave_url, u"Brave"),
+      SidebarItem::CreateWebTabItem(GURL("https://a.com/"), u"a"));
   testing::Mock::VerifyAndClearExpectations(&observer_);
   EXPECT_EQ(u"a", service_->items()[last_item_index].title);
   EXPECT_EQ(GURL("https://a.com/"), service_->items()[last_item_index].url);
@@ -450,9 +496,79 @@ TEST_F(SidebarServiceTest, UpdateItem) {
   // Trying to update the url that another item already uses and
   // check item is not updated and it still has brave url.
   EXPECT_CALL(observer_, OnItemUpdated(testing::_, testing::_)).Times(0);
-  service_->UpdateItem(brave_url, GURL("https://a.com/"), u"a", u"ab");
+  service_->UpdateItem(
+      SidebarItem::CreateWebTabItem(brave_url, u"a"),
+      SidebarItem::CreateWebTabItem(GURL("https://a.com/"), u"ab"));
   testing::Mock::VerifyAndClearExpectations(&observer_);
   EXPECT_EQ(brave_url, service_->items()[last_item_index].url);
+
+  // Update panel type only (url/title unchanged): switch to a web panel item.
+  SidebarItemUpdate panel_update;
+  panel_update.index = last_item_index;
+  panel_update.title_updated = false;
+  panel_update.url_updated = false;
+  panel_update.panel_type_updated = true;
+  EXPECT_CALL(observer_, OnItemUpdated(testing::_, panel_update)).Times(1);
+  service_->UpdateItem(SidebarItem::CreateWebTabItem(brave_url, brave_title),
+                       SidebarItem::CreateWebPanelItem(brave_url, brave_title));
+  testing::Mock::VerifyAndClearExpectations(&observer_);
+  EXPECT_EQ(SidebarItem::PanelType::kWebPanel,
+            service_->items()[last_item_index].panel_type);
+
+  // Flip back to a tab item.
+  EXPECT_CALL(observer_, OnItemUpdated(testing::_, panel_update)).Times(1);
+  service_->UpdateItem(SidebarItem::CreateWebPanelItem(brave_url, brave_title),
+                       SidebarItem::CreateWebTabItem(brave_url, brave_title));
+  testing::Mock::VerifyAndClearExpectations(&observer_);
+  EXPECT_EQ(SidebarItem::PanelType::kNone,
+            service_->items()[last_item_index].panel_type);
+
+  // The panel-type choice persists across a reload from prefs.
+  service_->UpdateItem(SidebarItem::CreateWebTabItem(brave_url, brave_title),
+                       SidebarItem::CreateWebPanelItem(brave_url, brave_title));
+  ResetService();
+  InitService();
+  EXPECT_EQ(SidebarItem::PanelType::kWebPanel,
+            service_->items()[last_item_index].panel_type);
+
+  // Update use_mobile_user_agent only (url/title/panel_type unchanged).
+  SidebarItemUpdate ua_update;
+  ua_update.index = last_item_index;
+  ua_update.title_updated = false;
+  ua_update.url_updated = false;
+  ua_update.panel_type_updated = false;
+  ua_update.use_mobile_user_agent_updated = true;
+  {
+    auto old_item = SidebarItem::CreateWebPanelItem(brave_url, brave_title);
+    auto new_item = old_item;
+    new_item.use_mobile_user_agent = true;
+    EXPECT_CALL(observer_, OnItemUpdated(testing::_, ua_update)).Times(1);
+    service_->UpdateItem(old_item, new_item);
+    testing::Mock::VerifyAndClearExpectations(&observer_);
+    EXPECT_TRUE(service_->items()[last_item_index].use_mobile_user_agent);
+  }
+
+  // Flip back to desktop.
+  {
+    auto old_item = SidebarItem::CreateWebPanelItem(brave_url, brave_title);
+    old_item.use_mobile_user_agent = true;
+    auto new_item = SidebarItem::CreateWebPanelItem(brave_url, brave_title);
+    EXPECT_CALL(observer_, OnItemUpdated(testing::_, ua_update)).Times(1);
+    service_->UpdateItem(old_item, new_item);
+    testing::Mock::VerifyAndClearExpectations(&observer_);
+    EXPECT_FALSE(service_->items()[last_item_index].use_mobile_user_agent);
+  }
+
+  // The use_mobile_user_agent choice persists across a reload from prefs.
+  {
+    auto old_item = SidebarItem::CreateWebPanelItem(brave_url, brave_title);
+    auto new_item = old_item;
+    new_item.use_mobile_user_agent = true;
+    service_->UpdateItem(old_item, new_item);
+  }
+  ResetService();
+  InitService();
+  EXPECT_TRUE(service_->items()[last_item_index].use_mobile_user_agent);
 }
 
 TEST_F(SidebarServiceTest, MoveItemSavedToPrefs) {
@@ -460,11 +576,10 @@ TEST_F(SidebarServiceTest, MoveItemSavedToPrefs) {
 
   // Add one more item to test.
   const auto expected_item_count = GetDefaultItemCount() + 1;
-  SidebarItem new_item = SidebarItem::Create(
-      GURL("https://www.brave.com/"), u"brave software",
-      SidebarItem::Type::kTypeWeb, SidebarItem::BuiltInItemType::kNone, false);
+  SidebarItem new_item = SidebarItem::CreateWebTabItem(
+      GURL("https://www.brave.com/"), u"brave software");
   service_->AddItem(new_item);
-  EXPECT_EQ(expected_item_count, service_->items().size());
+  ASSERT_EQ(expected_item_count, service_->items().size());
 
   // Move item at 0 to index 2.
   SidebarItem item = service_->items()[0];
@@ -475,7 +590,7 @@ TEST_F(SidebarServiceTest, MoveItemSavedToPrefs) {
 
   ResetService();
   InitService();
-  EXPECT_EQ(expected_item_count, service_->items().size());
+  ASSERT_EQ(expected_item_count, service_->items().size());
   EXPECT_EQ(url, service_->items()[2].url);
 }
 
@@ -492,7 +607,7 @@ TEST_F(SidebarServiceTest, HideBuiltInItem) {
     dict.Set(sidebar::kSidebarItemTitleKey, "Custom Item 1");
     dict.Set(sidebar::kSidebarItemTypeKey,
              static_cast<int>(SidebarItem::Type::kTypeWeb));
-    dict.Set(sidebar::kSidebarItemOpenInPanelKey, false);
+    dict.Set(sidebar::kSidebarItemWebPanelKey, false);
 
     base::ListValue list;
     list.Append(std::move(dict));
@@ -531,7 +646,7 @@ TEST_F(SidebarServiceTest, NewDefaultItemAdded) {
     dict.Set(sidebar::kSidebarItemTitleKey, "Custom Item 1");
     dict.Set(sidebar::kSidebarItemTypeKey,
              static_cast<int>(SidebarItem::Type::kTypeWeb));
-    dict.Set(sidebar::kSidebarItemOpenInPanelKey, false);
+    dict.Set(sidebar::kSidebarItemWebPanelKey, false);
 
     base::ListValue list;
     list.Append(std::move(dict));
@@ -562,20 +677,6 @@ TEST_F(SidebarServiceTest, NewDefaultItemAdded) {
           // preference.
           return false;
         }
-
-#if BUILDFLAG(ENABLE_AI_CHAT)
-        if (!ai_chat::features::IsAIChatEnabled() &&
-            built_in_type == SidebarItem::BuiltInItemType::kChatUI) {
-          return false;
-        }
-#endif
-
-#if BUILDFLAG(ENABLE_PLAYLIST)
-        if (!base::FeatureList::IsEnabled(playlist::features::kPlaylist) &&
-            built_in_type == SidebarItem::BuiltInItemType::kPlaylist) {
-          return false;
-        }
-#endif  // BUILDFLAG(ENABLE_PLAYLIST)
 
         return true;
       });
@@ -620,7 +721,7 @@ TEST_F(SidebarServiceTest, MigratePrefSidebarBuiltInItemsSomeHidden) {
              static_cast<int>(SidebarItem::Type::kTypeBuiltIn));
     dict.Set(sidebar::kSidebarItemBuiltInItemTypeKey,
              static_cast<int>(SidebarItem::BuiltInItemType::kBraveTalk));
-    dict.Set(sidebar::kSidebarItemOpenInPanelKey, true);
+    dict.Set(sidebar::kSidebarItemWebPanelKey, true);
 
     base::ListValue list;
     list.Append(std::move(dict));
@@ -645,7 +746,7 @@ TEST_F(SidebarServiceTest, MigratePrefSidebarBuiltInItemsSomeHidden) {
   auto talk_iter =
       std::ranges::find(items, SidebarItem::BuiltInItemType::kBraveTalk,
                         &SidebarItem::built_in_item_type);
-  EXPECT_NE(talk_iter, items.end());
+  ASSERT_NE(talk_iter, items.end());
   EXPECT_TRUE(std::ranges::contains(items,
                                     SidebarItem::BuiltInItemType::kReadingList,
                                     &SidebarItem::built_in_item_type));
@@ -679,7 +780,7 @@ TEST_F(SidebarServiceTest, MigratePrefSidebarBuiltInItemsNoneHidden) {
                static_cast<int>(SidebarItem::Type::kTypeBuiltIn));
       dict.Set(sidebar::kSidebarItemBuiltInItemTypeKey,
                static_cast<int>(built_in_type));
-      dict.Set(sidebar::kSidebarItemOpenInPanelKey, true);
+      dict.Set(sidebar::kSidebarItemWebPanelKey, true);
       list.Append(std::move(dict));
     }
 
@@ -688,7 +789,7 @@ TEST_F(SidebarServiceTest, MigratePrefSidebarBuiltInItemsNoneHidden) {
     dict.Set(sidebar::kSidebarItemTitleKey, "Custom Item 1");
     dict.Set(sidebar::kSidebarItemTypeKey,
              static_cast<int>(SidebarItem::Type::kTypeWeb));
-    dict.Set(sidebar::kSidebarItemOpenInPanelKey, false);
+    dict.Set(sidebar::kSidebarItemWebPanelKey, false);
 
     list.Append(std::move(dict));
     prefs_.SetList(sidebar::kSidebarItems, std::move(list));
@@ -774,7 +875,7 @@ TEST_F(SidebarServiceTest, MigratePrefSidebarBuiltInItemsNoType) {
       dict.Set(sidebar::kSidebarItemTitleKey, "Anything");
       dict.Set(sidebar::kSidebarItemTypeKey,
                static_cast<int>(SidebarItem::Type::kTypeBuiltIn));
-      dict.Set(sidebar::kSidebarItemOpenInPanelKey, true);
+      dict.Set(sidebar::kSidebarItemWebPanelKey, true);
       list.Append(base::Value(std::move(dict)));
     }
     // Add a custom item to make sure we don't interfere with it
@@ -783,7 +884,7 @@ TEST_F(SidebarServiceTest, MigratePrefSidebarBuiltInItemsNoType) {
     dict.Set(sidebar::kSidebarItemTitleKey, "Anything");
     dict.Set(sidebar::kSidebarItemTypeKey,
              static_cast<int>(SidebarItem::Type::kTypeWeb));
-    dict.Set(sidebar::kSidebarItemOpenInPanelKey, false);
+    dict.Set(sidebar::kSidebarItemWebPanelKey, false);
     list.Append(std::move(dict));
     prefs_.SetList(sidebar::kSidebarItems, std::move(list));
   }
@@ -794,11 +895,16 @@ TEST_F(SidebarServiceTest, MigratePrefSidebarBuiltInItemsNoType) {
   // Verify migration
   auto& items = prefs_.GetList(kSidebarItems);
   for (const auto& item : items) {
-    const auto item_type = static_cast<SidebarItem::Type>(
-        *item.GetDict().FindInt(kSidebarItemTypeKey));
+    const std::optional<int> type_value =
+        item.GetDict().FindInt(kSidebarItemTypeKey);
+    ASSERT_TRUE(type_value.has_value());
+    const auto item_type = static_cast<SidebarItem::Type>(*type_value);
     if (item_type == SidebarItem::Type::kTypeBuiltIn) {
-      const auto built_in_type = static_cast<SidebarItem::BuiltInItemType>(
-          *item.GetDict().FindInt(kSidebarItemBuiltInItemTypeKey));
+      const std::optional<int> built_in_type_value =
+          item.GetDict().FindInt(kSidebarItemBuiltInItemTypeKey);
+      ASSERT_TRUE(built_in_type_value.has_value());
+      const auto built_in_type =
+          static_cast<SidebarItem::BuiltInItemType>(*built_in_type_value);
       EXPECT_NE(built_in_type, SidebarItem::BuiltInItemType::kNone);
     }
   }
@@ -850,7 +956,7 @@ TEST_F(SidebarServiceTest, HidesBuiltInItemsViaService) {
     }
     bookmark_item_index++;
   }
-  EXPECT_TRUE(found);
+  ASSERT_TRUE(found);
   // Update service to hide bookmarks item
   service_->RemoveItemAt(bookmark_item_index);
 
@@ -875,7 +981,7 @@ TEST_F(SidebarServiceTest, BuiltInItemUpdateTestWithBuiltInItemTypeKey) {
              static_cast<int>(SidebarItem::Type::kTypeBuiltIn));
     dict.Set(sidebar::kSidebarItemBuiltInItemTypeKey,
              static_cast<int>(SidebarItem::BuiltInItemType::kBraveTalk));
-    dict.Set(sidebar::kSidebarItemOpenInPanelKey, true);
+    dict.Set(sidebar::kSidebarItemWebPanelKey, true);
     base::ListValue list;
     list.Append(std::move(dict));
     prefs_.SetList(sidebar::kSidebarItems, std::move(list));
@@ -886,19 +992,15 @@ TEST_F(SidebarServiceTest, BuiltInItemUpdateTestWithBuiltInItemTypeKey) {
   // Brave Talk and Reading list.
   auto expected_count = 2UL;
 #if BUILDFLAG(ENABLE_PLAYLIST)
-  if (base::FeatureList::IsEnabled(playlist::features::kPlaylist)) {
-    expected_count += 1;
-  }
+  expected_count += 1;
 #endif
 
 #if BUILDFLAG(ENABLE_AI_CHAT)
-  if (ai_chat::features::IsAIChatEnabled()) {
-    expected_count += 1;
-  }
+  expected_count += 1;
 #endif
 
   // Check service has updated built-in item. Previously url was deprecated.xxx.
-  EXPECT_EQ(expected_count, service_->items().size());
+  ASSERT_EQ(expected_count, service_->items().size());
   EXPECT_EQ(GURL(kBraveTalkURL), service_->items()[0].url);
 
   // Simulate re-launch and check service has still updated items.
@@ -907,7 +1009,7 @@ TEST_F(SidebarServiceTest, BuiltInItemUpdateTestWithBuiltInItemTypeKey) {
   InitService();
 
   // Check service has updated built-in item. Previously url was deprecated.xxx.
-  EXPECT_EQ(expected_count, service_->items().size());
+  ASSERT_EQ(expected_count, service_->items().size());
   EXPECT_EQ(GURL(kBraveTalkURL), service_->items()[0].url);
 }
 #endif  // BUILDFLAG(ENABLE_BRAVE_TALK)
@@ -922,7 +1024,7 @@ TEST_F(SidebarServiceTest, BuiltInItemDoesntHaveHistoryItem) {
              static_cast<int>(SidebarItem::Type::kTypeBuiltIn));
     dict.Set(sidebar::kSidebarItemBuiltInItemTypeKey,
              static_cast<int>(SidebarItem::BuiltInItemType::kHistory));
-    dict.Set(sidebar::kSidebarItemOpenInPanelKey, true);
+    dict.Set(sidebar::kSidebarItemWebPanelKey, true);
 
     base::ListValue list;
     list.Append(std::move(dict));
@@ -993,7 +1095,7 @@ class SidebarServiceTestWithPlaylist : public SidebarServiceTest {
   bool SidebarHasDefaultPanelItem() const {
     const auto items = service_->items();
     auto iter = std::ranges::find_if(items, [](const SidebarItem& item) {
-      return item.type == SidebarItem::Type::kTypeBuiltIn && item.open_in_panel;
+      return item.is_built_in_type() && item.opens_in_panel();
     });
     return iter != items.end();
   }
@@ -1001,7 +1103,7 @@ class SidebarServiceTestWithPlaylist : public SidebarServiceTest {
   void RemoveAnySidebarPanelItem() {
     const auto items = service_->items();
     auto iter = std::ranges::find_if(items, [](const SidebarItem& item) {
-      return item.type == SidebarItem::Type::kTypeBuiltIn && item.open_in_panel;
+      return item.is_built_in_type() && item.opens_in_panel();
     });
     if (iter == items.end()) {
       return;
@@ -1136,13 +1238,6 @@ class SidebarServiceOrderingTest : public SidebarServiceTest {
 
   ~SidebarServiceOrderingTest() override = default;
 
-  void SetUp() override {
-    SidebarServiceTest::SetUp();
-#if BUILDFLAG(ENABLE_AI_CHAT)
-    scoped_feature_list_.InitAndEnableFeature(ai_chat::features::kAIChat);
-#endif
-  }
-
   bool ValidateBuiltInTypesOrdering(
       const std::vector<SidebarItem::BuiltInItemType>& defined_order) {
     size_t srv_items_index = 0, dbt_index = 0;
@@ -1171,7 +1266,7 @@ class SidebarServiceOrderingTest : public SidebarServiceTest {
       const std::vector<SidebarItem::BuiltInItemType>& defined_order,
       const size_t expected_items_loaded) {
     GetPrefs()->Set(kSidebarItems,
-                    std::move(sidebar_prefs.Find("sidebar_items")->Clone()));
+                    sidebar_prefs.Find("sidebar_items")->Clone());
 
     InitService();
 
@@ -1179,9 +1274,6 @@ class SidebarServiceOrderingTest : public SidebarServiceTest {
     EXPECT_TRUE(ValidateBuiltInTypesOrdering(defined_order))
         << "Wrong order detected";
   }
-
- private:
-  base::test::ScopedFeatureList scoped_feature_list_;
 };
 
 TEST_F(SidebarServiceOrderingTest, BuiltInItemsDefaultOrder) {
@@ -1247,10 +1339,8 @@ TEST_F(SidebarServiceOrderingTest, LoadFromPrefsAllBuiltInVisible) {
 #endif
 
 #if BUILDFLAG(ENABLE_PLAYLIST)
-  if (base::FeatureList::IsEnabled(playlist::features::kPlaylist)) {
-    expected_count++;
-    items.push_back(SidebarItem::BuiltInItemType::kPlaylist);
-  }
+  expected_count++;
+  items.push_back(SidebarItem::BuiltInItemType::kPlaylist);
 #endif  // BUILDFLAG(ENABLE_PLAYLIST)
   LoadFromPrefsTest(std::move(sidebar), items, expected_count);
 }
@@ -1289,10 +1379,8 @@ TEST_F(SidebarServiceOrderingTest, LoadFromPrefsWalletBuiltInHidden) {
 #endif
 
 #if BUILDFLAG(ENABLE_PLAYLIST)
-  if (base::FeatureList::IsEnabled(playlist::features::kPlaylist)) {
-    expected_count++;
-    items.push_back(SidebarItem::BuiltInItemType::kPlaylist);
-  }
+  expected_count++;
+  items.push_back(SidebarItem::BuiltInItemType::kPlaylist);
 #endif  // BUILDFLAG(ENABLE_PLAYLIST)
 
   LoadFromPrefsTest(std::move(sidebar), items, expected_count);
@@ -1336,29 +1424,40 @@ TEST_F(SidebarServiceOrderingTest, LoadFromPrefsAIChatBuiltInNotListed) {
 #endif
 
 #if BUILDFLAG(ENABLE_PLAYLIST)
-  if (base::FeatureList::IsEnabled(playlist::features::kPlaylist)) {
-    expected_count++;
-    items.push_back(SidebarItem::BuiltInItemType::kPlaylist);
-  }
+  expected_count++;
+  items.push_back(SidebarItem::BuiltInItemType::kPlaylist);
 #endif  // BUILDFLAG(ENABLE_PLAYLIST)
 
   LoadFromPrefsTest(std::move(sidebar), items, expected_count);
 }
 
+class SidebarServiceWithoutWebPanelTest : public SidebarServiceTest {
+ public:
+  SidebarServiceWithoutWebPanelTest() {
+    scoped_feature_list_.InitAndDisableFeature(features::kSidebarWebPanel);
+  }
+  ~SidebarServiceWithoutWebPanelTest() override = default;
+
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_;
+};
+
 // is_web_panel_type() is always false if feature is disabled.
-TEST_F(SidebarServiceTest, WebPanelItemTest) {
+TEST_F(SidebarServiceWithoutWebPanelTest, WebPanelItemTest) {
   InitService();
 
-  SidebarItem item = SidebarItem::Create(
-      GURL("https://www.brave.com/"), u"brave software",
-      SidebarItem::Type::kTypeWeb, SidebarItem::BuiltInItemType::kNone, false);
-  EXPECT_TRUE(item.is_web_type());
-  service_->AddItem(item);
+  const GURL item_url("https://www.brave.com/");
+  const std::u16string item_title(u"brave software");
+
+  const auto tab_item = SidebarItem::CreateWebTabItem(item_url, item_title);
+  EXPECT_TRUE(tab_item.is_web_type());
+  service_->AddItem(tab_item);
   const int web_type_item_index = service_->items().size() - 1;
 
-  item.open_in_panel = true;
-  EXPECT_FALSE(item.is_web_panel_type());
-  service_->AddItem(item);
+  const auto panel_item = SidebarItem::CreateWebPanelItem(item_url, item_title);
+  EXPECT_FALSE(panel_item.is_web_panel_type());
+  EXPECT_FALSE(panel_item.opens_in_panel());
+  service_->AddItem(panel_item);
   const int web_panel_type_item_index = web_type_item_index + 1;
 
   ResetService();
@@ -1368,7 +1467,29 @@ TEST_F(SidebarServiceTest, WebPanelItemTest) {
   EXPECT_TRUE(service_->items()[web_type_item_index].is_web_type());
   EXPECT_FALSE(
       service_->items()[web_panel_type_item_index].is_web_panel_type());
+  // The declared type still round-trips, so enabling the feature later restores
+  // the panel behavior.
+  EXPECT_EQ(SidebarItem::PanelType::kWebPanel,
+            service_->items()[web_panel_type_item_index].panel_type);
 }
+
+#if BUILDFLAG(ENABLE_BRAVE_TALK)
+// Brave Talk is declared as a web panel item, but opens in a tab while the
+// feature is disabled.
+TEST_F(SidebarServiceWithoutWebPanelTest, BraveTalkPanelTypeTest) {
+  InitService();
+
+  const auto& items = service_->items();
+  auto talk_iter =
+      std::ranges::find(items, SidebarItem::BuiltInItemType::kBraveTalk,
+                        &SidebarItem::built_in_item_type);
+  ASSERT_NE(talk_iter, items.end());
+  EXPECT_EQ(SidebarItem::PanelType::kWebPanel, talk_iter->panel_type);
+  EXPECT_FALSE(talk_iter->is_side_panel_type());
+  EXPECT_FALSE(talk_iter->is_web_panel_type());
+  EXPECT_FALSE(talk_iter->opens_in_panel());
+}
+#endif  // BUILDFLAG(ENABLE_BRAVE_TALK)
 
 class SidebarServiceWithWebPanelTest : public SidebarServiceTest {
  public:
@@ -1384,17 +1505,18 @@ class SidebarServiceWithWebPanelTest : public SidebarServiceTest {
 TEST_F(SidebarServiceWithWebPanelTest, WebPanelItemTest) {
   InitService();
 
-  SidebarItem item = SidebarItem::Create(
-      GURL("https://www.brave.com/"), u"brave software",
-      SidebarItem::Type::kTypeWeb, SidebarItem::BuiltInItemType::kNone, false);
-  EXPECT_TRUE(item.is_web_type());
-  service_->AddItem(item);
+  const GURL item_url("https://www.brave.com/");
+  const std::u16string item_title(u"brave software");
+
+  const auto tab_item = SidebarItem::CreateWebTabItem(item_url, item_title);
+  EXPECT_TRUE(tab_item.is_web_type());
+  service_->AddItem(tab_item);
   const int web_type_item_index = service_->items().size() - 1;
 
-  item.open_in_panel = true;
-  EXPECT_TRUE(item.is_web_type());
-  EXPECT_TRUE(item.is_web_panel_type());
-  service_->AddItem(item);
+  const auto panel_item = SidebarItem::CreateWebPanelItem(item_url, item_title);
+  EXPECT_TRUE(panel_item.is_web_type());
+  EXPECT_TRUE(panel_item.is_web_panel_type());
+  service_->AddItem(panel_item);
   const int web_panel_type_item_index = web_type_item_index + 1;
 
   ResetService();
@@ -1404,5 +1526,22 @@ TEST_F(SidebarServiceWithWebPanelTest, WebPanelItemTest) {
   EXPECT_TRUE(service_->items()[web_type_item_index].is_web_type());
   EXPECT_TRUE(service_->items()[web_panel_type_item_index].is_web_panel_type());
 }
+
+#if BUILDFLAG(ENABLE_BRAVE_TALK)
+TEST_F(SidebarServiceWithWebPanelTest, BraveTalkPanelTypeTest) {
+  InitService();
+
+  const auto& items = service_->items();
+  auto talk_iter =
+      std::ranges::find(items, SidebarItem::BuiltInItemType::kBraveTalk,
+                        &SidebarItem::built_in_item_type);
+  ASSERT_NE(talk_iter, items.end());
+  EXPECT_EQ(SidebarItem::PanelType::kWebPanel, talk_iter->panel_type);
+  // It opens the web panel, not a side panel entry - it has no panel id.
+  EXPECT_FALSE(talk_iter->is_side_panel_type());
+  EXPECT_TRUE(talk_iter->is_web_panel_type());
+  EXPECT_TRUE(talk_iter->opens_in_panel());
+}
+#endif  // BUILDFLAG(ENABLE_BRAVE_TALK)
 
 }  // namespace sidebar

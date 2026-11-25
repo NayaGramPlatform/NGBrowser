@@ -10,7 +10,6 @@
 #include "brave/components/brave_rewards/content/rewards_service.h"
 #include "brave/components/brave_rewards/core/rewards_util.h"
 #include "brave/components/l10n/common/test/scoped_default_locale.h"
-#include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_command_controller.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
@@ -112,7 +111,7 @@ IN_PROC_BROWSER_TEST_F(BraveRewardsOFACTest, RewardsPagesAccess) {
   {
     const brave_l10n::test::ScopedDefaultLocale locale("es_CU");  // "Cuba"
     auto* rfh = ui_test_utils::NavigateToURL(browser(), url);
-    EXPECT_TRUE(rfh);
+    ASSERT_TRUE(rfh);
     EXPECT_FALSE(rfh->IsErrorDocument());
   }
 }

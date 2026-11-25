@@ -9,7 +9,6 @@
 #include "brave/browser/ui/views/toolbar/brave_toolbar_view.h"
 #include "build/build_config.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/views/frame/horizontal_tab_strip_region_view.h"
 #include "chrome/browser/ui/views/tab_search_bubble_host.h"
 #include "chrome/browser/ui/views/tabs/shared/tab_strip_combo_button.h"
@@ -82,6 +81,7 @@ IN_PROC_BROWSER_TEST_F(BraveHorizontalTabStripRegionViewBrowserTest,
       brave_tabs::kVerticalTabsEnabled, true);
   RunScheduledLayouts();
   bubble_host = browser_view()->GetTabSearchBubbleHost();
+  ASSERT_TRUE(bubble_host);
   EXPECT_FALSE(tab_strip_combo->GetVisible())
       << "tabstrip combo is hidden in vertical tab";
   EXPECT_TRUE(toolbar_combo->GetVisible());
@@ -92,5 +92,7 @@ IN_PROC_BROWSER_TEST_F(BraveHorizontalTabStripRegionViewBrowserTest,
   const auto back_button_index = toolbar_view()->GetIndexOf(
       browser_view()->toolbar_button_provider()->GetBackButton());
   const auto combo_button_index = toolbar_view()->GetIndexOf(toolbar_combo);
+  ASSERT_TRUE(back_button_index.has_value());
+  ASSERT_TRUE(combo_button_index.has_value());
   EXPECT_EQ(*combo_button_index + 1, *back_button_index);
 }

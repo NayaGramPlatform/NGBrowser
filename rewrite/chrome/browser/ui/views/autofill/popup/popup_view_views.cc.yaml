@@ -1,0 +1,19 @@
+# Copyright (c) 2026 The Brave Authors. All rights reserved.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this file,
+# You can obtain one at https://mozilla.org/MPL/2.0/.
+
+substitutions:
+  - description: |-
+      Create the password favicon loader through a Brave factory.
+
+      Upstream's loader can request favicons from the Google favicon server
+      through LargeIconService, which off-the-record profiles share with the
+      original profile, so the request would leave an off-the-record profile's
+      network context, and in a Tor window bypass Tor.
+      `CreatePasswordFaviconLoader`, defined in chromium_src, gives
+      off-the-record profiles a loader that only fetches the site's own favicon,
+      through the profile's ImageFetcherService.
+    regex:
+      pattern: 'std::make_unique<PasswordFaviconLoaderImpl>('
+      replace: 'CreatePasswordFaviconLoader(profile,'

@@ -1,10 +1,10 @@
 diff --git a/components/gcm_driver/gcm_driver.h b/components/gcm_driver/gcm_driver.h
-index 96eeebe5d5027c49e14ecf6efc2f0f2fc6e87aee..014a91b502127de974850fccba6a3962861219e9 100644
+index da2997d56bb9ce6a2af3e306690828835d599bca..4095018b4f6e825b24cbac5b36fcb74d50a49c68 100644
 --- a/components/gcm_driver/gcm_driver.h
 +++ b/components/gcm_driver/gcm_driver.h
-@@ -296,6 +296,8 @@ class GCMDriver {
-                                     int interval_ms) = 0;
-   virtual void RemoveHeartbeatInterval(const std::string& scope) = 0;
+@@ -245,6 +245,8 @@ class GCMDriver {
+   // Allows the InstanceID system to integrate with GCM encryption storage.
+   virtual GCMEncryptionProvider* GetEncryptionProviderInternal();
  
 +  virtual void SetEnabled(bool enabled) {}
 +

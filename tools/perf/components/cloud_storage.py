@@ -2,12 +2,11 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at https://mozilla.org/MPL/2.0/.
-import os
 
 from enum import Enum
 
-import components.perf_test_utils as perf_test_utils
-import components.path_util as path_util
+from components import perf_test_utils
+from components import path_util
 
 with path_util.SysPath(path_util.GetDepotToolsDir()):
   # pytype: disable=import-error
@@ -43,7 +42,8 @@ def UploadFileToCloudStorage(folder: CloudFolder, path: str):
   s3_url = f's3://{_CLOUD_BUCKET}/{folder.value}/{sha1}'
   print(f'Uploading {path} to {s3_url}')
   success, _ = perf_test_utils.GetProcessOutput(
-      ['aws', 's3', 'cp', path, s3_url, '--sse', 'AES256'], timeout=10 * 60)
+    ['aws', 's3', 'cp', path, s3_url, '--sse', 'AES256'], timeout=10 * 60
+  )
   if not success:
     raise RuntimeError(f'Can\'t upload to {s3_url}')
   return path + '.sha1'

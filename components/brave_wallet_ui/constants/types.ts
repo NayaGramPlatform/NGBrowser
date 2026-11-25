@@ -5,13 +5,11 @@
 
 import { EntityId } from '@reduxjs/toolkit'
 
-import { TimeDelta } from 'gen/mojo/public/mojom/base/time.mojom.m.js'
-import * as BraveWallet from 'gen/brave/components/brave_wallet/common/brave_wallet.mojom.m.js'
+import * as BraveWallet from './brave_wallet'
 import {
   ExternalWallet,
   ExternalWalletProvider,
 } from '../../brave_rewards/resources/shared/lib/external_wallet'
-import * as MeldTypes from 'gen/brave/components/brave_wallet/common/meld_integration.mojom.m.js'
 
 import Amount from '../utils/amount'
 
@@ -21,12 +19,12 @@ export { BraveWallet }
 export { Url } from 'gen/url/mojom/url.mojom.m.js'
 export {
   MeldFiatCurrency,
-  MeldFilter,
   MeldCountry,
   MeldCryptoQuote,
   MeldServiceProvider,
   MeldPaymentMethod,
   MeldCryptoWidget,
+  MeldCryptoCurrency,
   CryptoBuySessionData,
   CryptoWidgetCustomerData,
 } from 'gen/brave/components/brave_wallet/common/meld_integration.mojom.m.js'
@@ -35,7 +33,6 @@ export type NftDropdownOptionId = 'collected' | 'hidden'
 export type DAppConnectionOptionsType = 'networks' | 'accounts' | 'main'
 
 export { Origin } from 'gen/url/mojom/origin.mojom.m.js'
-export { TimeDelta }
 
 export type HardwareWalletResponseCodeType =
   | 'deviceNotConnected'
@@ -44,7 +41,7 @@ export type HardwareWalletResponseCodeType =
   | 'transactionRejected'
 
 export type TokenPriceHistory = {
-  date: SerializableTimeDelta
+  date: number
   close: number
 }
 
@@ -180,7 +177,30 @@ export interface WalletState {
   isCardanoEnabled: boolean
   isCardanoDappSupportEnabled: boolean
   isPolkadotEnabled: boolean
+  isPolkadotDappSupportEnabled: boolean
+  isCardStackUiEnabled: boolean
 }
+
+/**
+ * The one operation that opened the hardware panel. Device retries may
+ * re-submit only this operation, never another pending queue entry.
+ */
+export type HardwareWalletOperation =
+  | {
+      type: 'signMessage'
+      id: number
+      accountUniqueKey: string
+    }
+  | {
+      type: 'signSolTransactions'
+      id: number
+      accountUniqueKey: string
+    }
+  | {
+      type: 'transaction'
+      id: string
+      accountUniqueKey: string
+    }
 
 export interface PanelState {
   hasInitialized: boolean
@@ -188,6 +208,7 @@ export interface PanelState {
   selectedPanel: PanelTypes
   connectingAccounts: string[]
   hardwareWalletCode?: HardwareWalletResponseCodeType
+  hardwareWalletOperation?: HardwareWalletOperation
 }
 
 export interface PageState {
@@ -298,12 +319,6 @@ export interface SendPolkadotTransactionParams extends BaseTransactionParams {
   assetId: number | undefined
 }
 
-/**
- * Used to properly store BraveWallet.TransactionInfo in redux store,
- * since bigints are not serializable by default
- */
-export type SerializableTimeDelta = Record<keyof TimeDelta, number>
-
 export type Defined<T> = Exclude<T, undefined>
 
 export type SerializableSolanaTxDataMaxRetries = {
@@ -346,11 +361,8 @@ export type SerializableTxDataUnion = {
  */
 export type SerializableTransactionInfo = Omit<
   BraveWallet.TransactionInfo,
-  'confirmedTime' | 'createdTime' | 'submittedTime' | 'txDataUnion'
+  'txDataUnion'
 > & {
-  confirmedTime: SerializableTimeDelta
-  createdTime: SerializableTimeDelta
-  submittedTime: SerializableTimeDelta
   txDataUnion: SerializableTxDataUnion
 }
 
@@ -405,6 +417,9 @@ export type TransactionPanelPayload = {
 
 export enum WalletRoutes {
   // index
+  Cards = '/cards',
+
+  // crypto index
   CryptoPage = '/crypto/:category/:id?',
 
   // onboarding
@@ -489,7 +504,9 @@ export enum WalletRoutes {
   // hardware wallet import modals
   AddHardwareAccountModalStart = '/crypto/accounts/add-account/hardware',
   AddHardwareAccountModal = '/crypto/accounts/add-account/hardware/:accountTypeName?',
-  RestoreAccountsModal = '/crypto/accounts/add-account/restore',
+
+  // unhide account modal
+  UnhideAccountsModal = '/crypto/accounts/add-account/unhide',
 
   // wallet backup
   Backup = '/crypto/backup-wallet',
@@ -656,6 +673,7 @@ export const DAppSupportedCoinTypes = [
   BraveWallet.CoinType.SOL,
   BraveWallet.CoinType.ETH,
   BraveWallet.CoinType.ADA,
+  BraveWallet.CoinType.DOT,
 ]
 
 export const CustomAssetSupportedCoinTypes = [
@@ -984,6 +1002,7 @@ export type WalletImportMode = 'seed' | 'metamask' | 'legacy'
 
 export interface BraveRewardsInfo {
   isRewardsEnabled: boolean
+  isRewardsCardVerified: boolean
   balance: number | undefined
   rewardsToken: BraveWallet.BlockchainToken | undefined
   provider: ExternalWalletProvider | undefined
@@ -1078,10 +1097,6 @@ export type zcashAddressOptionType = {
   label: string
 }
 
-export type MeldCryptoCurrency = MeldTypes.MeldCryptoCurrency & {
-  coingeckoId?: string
-}
-
 export type MaxPriorityFeeTypes = 'slow' | 'average' | 'fast'
 
 export type MaxPriorityFeeOptionType = {
@@ -1117,3 +1132,11 @@ export const SupportedBridgeCoinTypes = [
  * Used when selecting phrase length and creating a wallet.
  */
 export type RecoveryPhraseLengths = '12' | '24'
+
+export type WalletCardIds = 'crypto' | 'brave-rewards' | 'brave-rewards-card'
+
+export type WalletCardOption = {
+  id: WalletCardIds
+  label: string
+  icon: string
+}

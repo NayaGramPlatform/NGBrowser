@@ -1,0 +1,25 @@
+diff --git a/ios/web/web_state/web_state_impl.h b/ios/web/web_state/web_state_impl.h
+index 3181ad9ed9092f9085b8e22e4d18405b700f9ca9..38b1e7c599b0525cec033e739621b2d5a2a79af6 100644
+--- a/ios/web/web_state/web_state_impl.h
++++ b/ios/web/web_state/web_state_impl.h
+@@ -32,6 +32,10 @@
+ #import "url/gurl.h"
+ #import "url/origin.h"
+ 
++namespace web {
++class WebUIIOS;
++}
++
+ @class CRWWebController;
+ @protocol CRWWebViewProxy;
+ @protocol CRWWebViewNavigationProxy;
+@@ -404,6 +408,9 @@ class WebStateImpl final : public WebState {
+   UIColor* GetThemeColor() final;
+   UIColor* GetUnderPageBackgroundColor() final;
+ 
++  WebUIIOS* GetMainFrameWebUI();
++  size_t GetWebUICountForTesting();
++
+  protected:
+   // WebState:
+   void AddPolicyDecider(WebStatePolicyDecider* decider) final;

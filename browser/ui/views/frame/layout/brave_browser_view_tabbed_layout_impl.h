@@ -9,6 +9,7 @@
 #include <memory>
 #include <optional>
 
+#include "chrome/browser/ui/views/frame/layout/browser_view_layout_params.h"
 #include "chrome/browser/ui/views/frame/layout/browser_view_tabbed_layout_impl.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/gfx/geometry/rect.h"
@@ -53,18 +54,14 @@ class BraveBrowserViewTabbedLayoutImpl : public BrowserViewTabbedLayoutImpl {
       const gfx::Rect& sidebar_bounds,
       const gfx::Rect& panel_bounds,
       const gfx::Rect& visual_client_area);
-  // Returns the adjusted infobar bounds, resetting the width to
-  // |full_window_width| (undoing any panel-driven narrowing upstream applies)
-  // and then insetting by |vtab_insets| when vertical tabs are visible.
+  // Returns the adjusted infobar bounds, resetting the horizontal span to that
+  // of |visual_client_area| (undoing the narrowing and, for a leading panel,
+  // the rightward shift that upstream applies when a side panel is open) and
+  // then insetting by |vtab_insets| when vertical tabs are visible.
   static gfx::Rect ComputeAdjustedInfobarBounds(
       const gfx::Rect& current_bounds,
-      int full_window_width,
+      const gfx::Rect& visual_client_area,
       std::optional<gfx::Insets> vtab_insets);
-
-  // Returns the ideal sidebar width, given the current available width. Used
-  // for determining the target width in sidebar width animations.
-  int GetIdealSideBarWidth() const;
-  int GetIdealSideBarWidth(int available_width) const;
 
   // BrowserViewTabbedLayoutImpl overrides:
   gfx::Size GetMinimumSize(const views::View* host) const override;
@@ -99,8 +96,20 @@ class BraveBrowserViewTabbedLayoutImpl : public BrowserViewTabbedLayoutImpl {
   // non-virtual.
   gfx::Insets GetContentsMarginsForTesting() const;
 
-  // Test-only accessor for CalculateContentsCornerRadii(), which is private.
+  // Test-only accessor for GetInfobarMargins(), which is private.
+  gfx::Insets GetInfobarMarginsForTesting() const;
+
+  // Test-only accessor for GetUpstreamVerticalTabStripWidth(), which is
+  // private.
+  int GetUpstreamVerticalTabStripWidthForTesting() const;
+
+  // Test-only accessors for CalculateContentsCornerRadii() and
+  // CalculateWebPanelCornerRadii(), which are private.
   gfx::RoundedCornersF CalculateContentsCornerRadiiForTesting() const;
+  gfx::RoundedCornersF CalculateWebPanelCornerRadiiForTesting() const;
+
+  // Test-only accessor for CalculateInfobarCornerRadii(), which is private.
+  gfx::RoundedCornersF CalculateInfobarCornerRadiiForTesting() const;
 
   // Populates `layout_data_` with the given window state (and a zero side
   // panel width) so `CalculateSeparatorInfo()` can be exercised without
@@ -116,12 +125,22 @@ class BraveBrowserViewTabbedLayoutImpl : public BrowserViewTabbedLayoutImpl {
   void CalculateSideBarLayout(ProposedLayout& layout,
                               const BrowserLayoutParams& params) const;
   void InsetContentsContainerBounds(ProposedLayout& layout) const;
+  void MoveUpstreamVerticalTabStripToTrailingSide(
+      ProposedLayout& layout,
+      const BrowserLayoutParams& params) const;
+
   void AdjustInfobarLayout(ProposedLayout& layout,
                            const BrowserLayoutParams params) const;
 
   void UpdateInsetsForVerticalTabStrip();
+  void UpdateVerticalTabStripCorners(const BrowserLayoutParams& params);
 
   gfx::Insets GetContentsMargins() const;
+
+  // Returns the margins that float the infobar as its own card when rounded
+  // corners are in use, and no margins otherwise. Zero on the side a vertical
+  // tab strip abuts, as the strip pads itself from its neighbours.
+  gfx::Insets GetInfobarMargins() const;
 
   // Whether the contents area reaches the top edge of the window, which happens
   // when nothing above it (tab strip, toolbar, bookmark bar, infobar, focus
@@ -131,16 +150,43 @@ class BraveBrowserViewTabbedLayoutImpl : public BrowserViewTabbedLayoutImpl {
   // Whether the vertical tab strip / sidebar UI sits beside the contents area
   // rather than floating above it or being hidden.
   bool IsVerticalTabStripAtContentsEdge() const;
-  bool IsSidebarAtContentsEdge() const;
 
-  // Returns the corner radii for the contents area, where a corner meeting the
-  // window frame follows the window's corner and a corner meeting other UI
-  // uses the smaller border radius. Empty when the contents should not be
-  // rounded at all.
+  // Returns the width reserved for upstream's vertical tab strip, or 0 when it
+  // isn't laid out beside the contents (e.g. Brave's own vertical tabs are in
+  // use, or the strip is hidden). The strip's side is
+  // `IsVerticalTabStripLeading()`.
+  int GetUpstreamVerticalTabStripWidth() const;
+
+  // Which visual sides of a hosted area have other UI beyond them, rather than
+  // the window frame.
+  struct AdjacentUi {
+    bool left = false;
+    bool right = false;
+  };
+
+  // The UI laid out beside the contents area: the vertical tab strip and the
+  // sidebar / side panel. Neither is inside the contents area, so both corner
+  // radii calculations start from this.
+  AdjacentUi GetUiAtContentsEdges() const;
+
+  // Builds the radii for one hosted area. A side with UI beyond it is an
+  // interior edge and uses the smaller border radius; one reaching the window
+  // frame follows the window's corner.
+  gfx::RoundedCornersF AssembleCornerRadii(AdjacentUi adjacent_ui) const;
+
+  // Returns the corner radii for the contents area, and for the web panel
+  // hosted beside it. Empty when the contents should not be rounded at all.
+  // The web panel's are computed whether or not it is currently visible.
   gfx::RoundedCornersF CalculateContentsCornerRadii() const;
+  gfx::RoundedCornersF CalculateWebPanelCornerRadii() const;
 
   bool ShouldPushBookmarkBarForVerticalTabs() const;
   gfx::Insets GetInsetsConsideringVerticalTabHost() const;
+
+  // Returns the corner radii of the infobars inside the infobar container's
+  // rounded-corners outline border (the border itself is rounded by its own
+  // thickness more).
+  gfx::RoundedCornersF CalculateInfobarCornerRadii() const;
 
   // Whether the sidebar / vertical tab strip occupies the leading (lowest-X)
   // edge in stored coordinates. As stored bounds are paint-mirrored in RTL,

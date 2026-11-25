@@ -25,16 +25,18 @@
 #include "brave/browser/ui/views/side_panel/playlist/playlist_side_panel_coordinator.h"
 #include "brave/components/playlist/content/browser/playlist_service.h"
 #include "brave/components/playlist/content/browser/playlist_tab_helper.h"
-#include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/side_panel/side_panel_ui.h"
 #include "chrome/browser/ui/singleton_tabs.h"
+#include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
+#include "components/tabs/public/tab_interface.h"
 #include "third_party/abseil-cpp/absl/strings/str_format.h"
 #include "ui/base/cursor/cursor.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/mojom/dialog_button.mojom.h"
 #include "ui/views/border.h"
 #include "ui/views/controls/button/label_button.h"
+#include "ui/views/controls/scroll_view.h"
 #include "ui/views/controls/textfield/textfield.h"
 #include "ui/views/layout/fill_layout.h"
 
@@ -237,8 +239,9 @@ void ShowPlaylistAddBubble(content::WebContents* contents) {
   CHECK(browser_view);
 
   auto* tab_strip_model = browser_view->browser()->GetTabStripModel();
-  auto* playlist_tab_helper = PlaylistTabHelper::FromWebContents(
-      tab_strip_model->GetActiveWebContents());
+  auto* playlist_tab_helper =
+      PlaylistTabHelper::From(tabs::TabInterface::MaybeGetFromContents(
+          tab_strip_model->GetActiveWebContents()));
   if (playlist_tab_helper->found_items().empty()) {
     return;
   }

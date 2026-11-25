@@ -22,7 +22,7 @@ import LoadingPanel from '../components/loading-panel'
 import ContactSupport from '../components/contact-support'
 import PurchaseFailedPanel from '../components/purchase-failed-panel'
 import './mock-data/api'
-import '@brave/leo/tokens/css/variables.css'
+import '@brave/nala/tokens/css/variables.css'
 
 export default {
   title: 'VPN/Panels',
@@ -41,6 +41,7 @@ export default {
         expired: boolean('expired', false),
         isSelectingRegion: false,
         connectionStatus: select('Current Status', ConnectionState, ConnectionState.DISCONNECTED),
+        isReconnectingToAgent: boolean('isReconnectingToAgent', false),
         regions: mockRegionList,
         currentRegion: mockRegionList[2],
         smartProxyRoutingEnabled: boolean('smartProxyRoutingEnabled', true)
@@ -67,6 +68,17 @@ export const _Error = () => {
   return (
     <S.PanelFrame>
       <ErrorPanel showContactSupport={() => {}} />
+    </S.PanelFrame>
+  )
+}
+
+export const _ErrorAgentUnavailable = () => {
+  return (
+    <S.PanelFrame>
+      <ErrorPanel
+        showContactSupport={() => {}}
+        isAgentUnavailable
+      />
     </S.PanelFrame>
   )
 }

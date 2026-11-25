@@ -63,7 +63,7 @@ constexpr auto kCommandIcons =
         // The `Bookmarks` submenu
         {IDC_BOOKMARK_THIS_TAB, &kLeoBrowserBookmarkAddIcon},
         {IDC_BOOKMARK_ALL_TABS, &kLeoBrowserBookmarkPluralIcon},
-        {IDC_BRAVE_BOOKMARK_BAR_SUBMENU, &kLeoProductBookmarksIcon},
+        {IDC_BOOKMARK_BAR_SUBMENU, &kLeoProductBookmarksIcon},
         {IDC_SHOW_BOOKMARK_MANAGER, &kLeoWindowBookmarkIcon},
         {IDC_SHOW_BOOKMARK_SIDE_PANEL, &kLeoProductBookmarksIcon},
         {IDC_IMPORT_SETTINGS, &kLeoImportArrowIcon},
@@ -87,8 +87,7 @@ constexpr auto kCommandIcons =
 
         // The `Find and edit` submenu
         {IDC_FIND, &kLeoSearchIcon},
-        // Use when cut icon is ready.
-        // {IDC_CUT, &kLeoCutIcon},
+        {IDC_CUT, &kLeoCutIcon},
         {IDC_COPY, &kLeoCopyIcon},
         {IDC_PASTE, &kLeoClipboardIcon},
 
@@ -112,6 +111,7 @@ constexpr auto kCommandIcons =
         {IDC_NAME_WINDOW, &kLeoEditBoxIcon},
         {IDC_COMMANDER, &kLeoArrowSmallRightIcon},
         {IDC_SHOW_APPS_PAGE, &kLeoGrid04Icon},
+        {IDC_SHOW_READING_MODE, &kLeoProductSpeedreaderIcon},
         {IDC_PERFORMANCE, &kLeoNetworkSpeedFastIcon},
         {IDC_DEV_TOOLS, &kLeoCodeIcon},
         {IDC_TASK_MANAGER_APP_MENU, &kLeoWindowTaskManagerIcon},

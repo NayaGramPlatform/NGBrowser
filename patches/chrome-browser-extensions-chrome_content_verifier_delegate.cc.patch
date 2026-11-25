@@ -1,5 +1,5 @@
 diff --git a/chrome/browser/extensions/chrome_content_verifier_delegate.cc b/chrome/browser/extensions/chrome_content_verifier_delegate.cc
-index 3a05b1ead8fbe6eb2d6e4cd3babf55dd95e2aefd..eaa19f47acc6f6ef2905745fb3e67181f5ddf864 100644
+index 9bcc6129b14e02b13428b553a0731f98dba93b3f..5fa21840ad32bf1b4bd0bba319e61fbe2d68663a 100644
 --- a/chrome/browser/extensions/chrome_content_verifier_delegate.cc
 +++ b/chrome/browser/extensions/chrome_content_verifier_delegate.cc
 @@ -103,7 +103,7 @@ ChromeContentVerifierDelegate::GetDefaultMode() {

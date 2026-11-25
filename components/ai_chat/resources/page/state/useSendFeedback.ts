@@ -4,7 +4,7 @@
 // You can obtain one at https://mozilla.org/MPL/2.0/.
 
 import * as React from 'react'
-import { showAlert } from '@brave/leo/react/alertCenter'
+import { showAlert } from '@brave/nala/react/alertCenter'
 import { getLocale } from '$web-common/locale'
 import { ConversationAPI } from '../api/conversation_api'
 import { useAIChat } from './ai_chat_context'
@@ -25,6 +25,7 @@ export interface SendFeedbackState {
   handleRateMessage: (
     turnUuid: string,
     isLiked: boolean,
+    threadUuid?: string | null,
     ignoreFutureWarnings?: boolean,
   ) => Promise<void>
 }
@@ -62,7 +63,7 @@ export default function useSendFeedback(
   // send the rating. To cancel, set handleCloseRateMessagePrivacyModal.
   // Also further allows a feedback form after a negative rating.
   const handleRateMessage = React.useCallback(
-    async (turnUuid: string, isLiked: boolean) => {
+    async (turnUuid: string, isLiked: boolean, threadUuid?: string | null) => {
       // Reset feedback form
       feedbackId.current = null
       setIsFeedbackFormVisible(false)
@@ -78,6 +79,7 @@ export default function useSendFeedback(
       const response = await api.conversationHandler.rateMessage(
         isLiked,
         turnUuid,
+        threadUuid ?? null,
       )
       if (!response.ratingId) {
         showAlert({

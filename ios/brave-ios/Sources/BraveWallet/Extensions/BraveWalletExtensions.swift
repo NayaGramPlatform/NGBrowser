@@ -46,6 +46,8 @@ extension BraveWallet.TransactionInfo {
       .ethSwap,
       .solanaSwap:
       return false
+    case .erc721SetApprovalForAll:
+      return false
     @unknown default:
       return false
     }
@@ -131,12 +133,12 @@ extension BraveWallet.TransactionInfo {
     // Currently only supported by `EthTxManager`
     coin == .eth && (txStatus == .approved || txStatus == .submitted)
   }
-}
 
-extension BraveWallet.OriginInfo {
-  /// If the current OriginInfo matches the Brave Wallet origin
-  var isBraveWalletOrigin: Bool {
-    originSpec == WalletConstants.braveWalletOriginSpec
+  /// Return true transaction is for granting eth NFT set approval for all
+  /// This requires `txType` is `.erc721SetApprovalForAll` and `txArgs[1]` == `0x1`
+  var isGrantingERC721SetApprovalForAll: Bool {
+    guard txType == .erc721SetApprovalForAll, let secondArg = txArgs[safe: 1] else { return false }
+    return secondArg.caseInsensitiveCompare("0x1") == .orderedSame
   }
 }
 
@@ -688,7 +690,7 @@ extension BraveWallet.NftMetadata {
     URL(string: image)
   }
 
-  func httpfyIpfsUrl(ipfsApi: IpfsAPI) -> BraveWallet.NftMetadata {
+  func httpfyIpfsUrl() -> BraveWallet.NftMetadata {
     guard image.hasPrefix("ipfs://"),
       let url = URL(string: image)
     else {
@@ -697,7 +699,7 @@ extension BraveWallet.NftMetadata {
     return .init(
       name: self.name,
       description: self.desc,
-      image: ipfsApi.resolveGatewayUrl(for: url)?.absoluteString ?? self.image,
+      image: IpfsAPI.resolveGatewayUrl(for: url)?.absoluteString ?? self.image,
       imageData: self.imageData,
       externalUrl: self.externalUrl,
       attributes: self.attributes,
@@ -744,6 +746,8 @@ extension BraveWallet.TransactionType {
       return Strings.Wallet.txFunctionTypeOther
     case .solanaDappSignTransaction:
       return Strings.Wallet.txFunctionTypeSignDappTransaction
+    case .erc721SetApprovalForAll:
+      return Strings.Wallet.txFunctionTypeERC721SetApprovalForAllTransaction
     case .cardanoSendLovelace, .cardanoSendToken:  // not used in tx details
       fallthrough
     @unknown default:
@@ -767,7 +771,7 @@ extension BraveWallet.ZCashAddressError {
       return Strings.Wallet.sendErrorZecAddressOrchardPartMissing
     case .invalidAddressNetworkMismatch:
       return Strings.Wallet.sendErrorZecAddressNetworkMissmatch
-    case .notZCashAccount, .invalidSenderType:
+    case .notZCashAccount, .invalidSenderType, .invalidRecipientType:
       fallthrough
     @unknown default:
       return Strings.Wallet.unknownError
@@ -826,29 +830,6 @@ extension String {
       return AssetImageName.neon.rawValue
     } else {
       return nil
-    }
-  }
-}
-
-extension BraveWallet.MeldCryptoCurrency {
-  var displaySymbol: String {
-    currencyCode.separatedBy("_").first ?? currencyCode
-  }
-}
-
-extension BraveWallet.MeldCryptoCurrency {
-  var coin: BraveWallet.CoinType {
-    switch chainCode {
-    case "BTC":
-      return .btc
-    case "FIL":
-      return .fil
-    case "ZEC":
-      return .zec
-    case "SOLANA":
-      return .sol
-    default:
-      return .eth
     }
   }
 }

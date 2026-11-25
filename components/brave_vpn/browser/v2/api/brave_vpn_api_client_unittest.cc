@@ -16,9 +16,9 @@
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_future.h"
+#include "base/test/values_test_util.h"
 #include "base/types/expected.h"
-#include "brave/components/brave_account/endpoint_client/test_support.h"
-#include "brave/components/brave_account/endpoint_client/url_replacements.h"
+#include "base/values.h"
 #include "brave/components/brave_vpn/browser/v2/api/device_endpoints.h"
 #include "brave/components/brave_vpn/browser/v2/api/error_body.h"
 #include "brave/components/brave_vpn/browser/v2/api/purchase_endpoints.h"
@@ -26,16 +26,20 @@
 #include "brave/components/brave_vpn/browser/v2/api/region_endpoints.h"
 #include "brave/components/brave_vpn/browser/v2/api/support_endpoints.h"
 #include "brave/components/brave_vpn/browser/v2/api/transport_protocol.h"
+#include "brave/components/endpoint_client/test_support.h"
+#include "brave/components/endpoint_client/url_replacements.h"
 #include "net/base/net_errors.h"
 #include "net/http/http_status_code.h"
 #include "services/network/public/cpp/weak_wrapper_shared_url_loader_factory.h"
+#include "services/network/public/mojom/fetch_api.mojom.h"
 #include "services/network/test/test_url_loader_factory.h"
+#include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/abseil-cpp/absl/strings/str_format.h"
 
 namespace brave_vpn::v2 {
 namespace {
-using brave_account::endpoint_client::MockResponseFor;
+using endpoint_client::MockResponseFor;
 
 constexpr char kTestErrorTitle[] = "Test error title.";
 constexpr char kTestErrorMessage[] = "test error message";
@@ -317,7 +321,7 @@ using BraveVpnApiClientGetServerRegionsTest =
 
 TEST_P(BraveVpnApiClientGetServerRegionsTest, MapsResponseToResult) {
   const auto& test_case = GetParam();
-  brave_account::endpoint_client::UrlReplacements url_replacements;
+  endpoint_client::UrlReplacements url_replacements;
   url_replacements.SetPath(base::StrCat(
       {endpoints::GetServerRegions::URL().path(), "/", kTestRegionPrecision}));
   MockResponseFor<endpoints::GetServerRegions>(
@@ -396,7 +400,7 @@ using BraveVpnApiClientGetProfileCredentialsTest =
 
 TEST_P(BraveVpnApiClientGetProfileCredentialsTest, MapsResponseToResult) {
   const auto& test_case = GetParam();
-  brave_account::endpoint_client::UrlReplacements url_replacements;
+  endpoint_client::UrlReplacements url_replacements;
   url_replacements.SetHost(kTestHostname);
   MockResponseFor<endpoints::GetProfileCredentials>(
       url_loader_factory_, test_case.response, url_replacements);
@@ -426,7 +430,7 @@ using BraveVpnApiClientVerifyCredentialsTest =
 
 TEST_P(BraveVpnApiClientVerifyCredentialsTest, MapsResponseToResult) {
   const auto& test_case = GetParam();
-  brave_account::endpoint_client::UrlReplacements url_replacements;
+  endpoint_client::UrlReplacements url_replacements;
   url_replacements.SetHost(kTestHostname);
   url_replacements.SetPath(
       base::StrCat({endpoints::VerifyCredentials::URL().path(), "/",
@@ -456,7 +460,7 @@ using BraveVpnApiClientInvalidateCredentialsTest =
 
 TEST_P(BraveVpnApiClientInvalidateCredentialsTest, MapsResponseToResult) {
   const auto& test_case = GetParam();
-  brave_account::endpoint_client::UrlReplacements url_replacements;
+  endpoint_client::UrlReplacements url_replacements;
   url_replacements.SetHost(kTestHostname);
   url_replacements.SetPath(
       base::StrCat({endpoints::InvalidateCredentials::URL().path(), "/",
@@ -489,7 +493,7 @@ using BraveVpnApiClientGetAvailableMultihopExitRegionsTest =
 TEST_P(BraveVpnApiClientGetAvailableMultihopExitRegionsTest,
        MapsResponseToResult) {
   const auto& test_case = GetParam();
-  brave_account::endpoint_client::UrlReplacements url_replacements;
+  endpoint_client::UrlReplacements url_replacements;
   url_replacements.SetHost(kTestHostname);
   url_replacements.SetPath(
       base::StrCat({endpoints::GetAvailableMultihopExitRegions::URL().path(),
@@ -521,7 +525,7 @@ using BraveVpnApiClientSetMultihopExitRegionTest =
 
 TEST_P(BraveVpnApiClientSetMultihopExitRegionTest, MapsResponseToResult) {
   const auto& test_case = GetParam();
-  brave_account::endpoint_client::UrlReplacements url_replacements;
+  endpoint_client::UrlReplacements url_replacements;
   url_replacements.SetHost(kTestHostname);
   url_replacements.SetPath(
       base::StrCat({endpoints::SetMultihopExitRegion::URL().path(), "/",
@@ -553,7 +557,7 @@ using BraveVpnApiClientClearMultihopExitRegionTest =
 
 TEST_P(BraveVpnApiClientClearMultihopExitRegionTest, MapsResponseToResult) {
   const auto& test_case = GetParam();
-  brave_account::endpoint_client::UrlReplacements url_replacements;
+  endpoint_client::UrlReplacements url_replacements;
   url_replacements.SetHost(kTestHostname);
   url_replacements.SetPath(
       base::StrCat({endpoints::SetMultihopExitRegion::URL().path(), "/",
@@ -580,7 +584,7 @@ class BraveVpnApiClientRequestBodyTest : public BraveVpnApiClientTestBase {};
 
 TEST_F(BraveVpnApiClientRequestBodyTest,
        ClearMultihopExitRegionSendsDisabledSentinel) {
-  brave_account::endpoint_client::UrlReplacements url_replacements;
+  endpoint_client::UrlReplacements url_replacements;
   url_replacements.SetHost(kTestHostname);
   url_replacements.SetPath(
       base::StrCat({endpoints::SetMultihopExitRegion::URL().path(), "/",
@@ -610,10 +614,9 @@ TEST_F(BraveVpnApiClientRequestBodyTest,
                               kTestHostname, kTestClientId, kTestApiAuthToken);
 
   ASSERT_TRUE(sent_body.has_value());
-  const auto parsed =
-      base::JSONReader::ReadDict(*sent_body, base::JSON_PARSE_RFC);
-  ASSERT_TRUE(parsed);
-  EXPECT_EQ(*parsed->FindString("multihop-exit-region"), "disabled");
+  EXPECT_THAT(base::test::ParseJsonDict(*sent_body, base::JSON_PARSE_RFC),
+              base::test::DictionaryHasValue("multihop-exit-region",
+                                             base::Value("disabled")));
 }
 
 }  // namespace brave_vpn::v2

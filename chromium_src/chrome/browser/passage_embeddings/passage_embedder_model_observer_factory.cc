@@ -8,34 +8,35 @@
 // HistoryEmbeddingsService) refuse to build without this observer, so this
 // keeps the on-device AI embedder from being created when the toggle is off.
 // Applied at service creation, so a toggle change takes effect on restart.
+// The hook is inserted by
+// rewrite/chrome/browser/passage_embeddings/
+// passage_embedder_model_observer_factory.cc.yaml.
 
 #include "brave/components/local_ai/buildflags/buildflags.h"
-#include "chrome/browser/history_embeddings/history_embeddings_utils.h"
 #include "chrome/browser/profiles/profile.h"
 #include "content/public/browser/browser_context.h"
 
-// Implemented in //brave/browser/passage_embeddings:chromium_impl. Returns the
-// setting the profile's embedding services were built with.
-bool BraveIsHistoryEmbeddingsEnabled(Profile* profile);
-
-namespace history_embeddings {
-
-// Per-profile overload the macro below routes the upstream no-arg call to,
-// using the `context` in scope at the call site.
-bool IsHistoryEmbeddingsFeatureEnabled(content::BrowserContext* context) {
-  Profile* profile = Profile::FromBrowserContext(context);
 #if BUILDFLAG(ENABLE_LOCAL_AI)
-  return BraveIsHistoryEmbeddingsEnabled(profile);
+// Implemented in //brave/browser/history_embeddings:status. Returns the setting
+// the profile's embedding services were built with. Forward declared to keep
+// this override free of a compile-time dependency on //brave.
+bool BraveHistoryEmbeddingsEnabledAtStartup(Profile* profile);
+#endif  // BUILDFLAG(ENABLE_LOCAL_AI)
+
+namespace passage_embeddings {
+namespace {
+
+bool BraveShouldBuildPassageEmbedderModelObserver(
+    content::BrowserContext* context) {
+#if BUILDFLAG(ENABLE_LOCAL_AI)
+  return BraveHistoryEmbeddingsEnabledAtStartup(
+      Profile::FromBrowserContext(context));
 #else
-  return IsHistoryEmbeddingsEnabledForProfile(profile);
+  return false;
 #endif  // BUILDFLAG(ENABLE_LOCAL_AI)
 }
 
-}  // namespace history_embeddings
-
-#define IsHistoryEmbeddingsFeatureEnabled() \
-  IsHistoryEmbeddingsFeatureEnabled(context)
+}  // namespace
+}  // namespace passage_embeddings
 
 #include <chrome/browser/passage_embeddings/passage_embedder_model_observer_factory.cc>
-
-#undef IsHistoryEmbeddingsFeatureEnabled

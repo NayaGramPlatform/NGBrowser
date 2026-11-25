@@ -5,7 +5,8 @@
 
 #include "brave/ios/browser/ai_chat/ai_chat_service_factory.h"
 
-#include "base/no_destructor.h"
+#include <utility>
+
 #include "brave/components/ai_chat/core/browser/ai_chat_credential_manager.h"
 #include "brave/components/ai_chat/core/browser/ai_chat_feedback_api.h"
 #include "brave/components/ai_chat/core/browser/ai_chat_metrics.h"
@@ -25,35 +26,24 @@
 
 namespace ai_chat {
 
-// static
-AIChatService* AIChatServiceFactory::GetForProfile(ProfileIOS* profile) {
-  return GetInstance()->GetServiceForProfileAs<AIChatService>(profile, true);
-}
-
-// static
-AIChatServiceFactory* AIChatServiceFactory::GetInstance() {
-  static base::NoDestructor<AIChatServiceFactory> instance;
-  return instance.get();
-}
-
-AIChatServiceFactory::AIChatServiceFactory()
-    : ProfileKeyedServiceFactoryIOS("AIChatService",
-                                    ProfileSelection::kNoInstanceInIncognito,
-                                    ServiceCreation::kCreateLazily,
-                                    TestingCreation::kCreateService) {
+AIChatServiceFactory::AIChatServiceFactory(PassKey key)
+    : TypedProfileKeyedServiceFactoryIOS(
+          std::move(key),
+          "AIChatService",
+          ProfileSelection::kNoInstanceInIncognito,
+          ServiceCreation::kCreateLazily,
+          TestingCreation::kCreateService) {
   DependsOn(misc_metrics::ProfileMiscMetricsServiceFactory::GetInstance());
   DependsOn(TabTrackerServiceFactory::GetInstance());
 }
 
-AIChatServiceFactory::~AIChatServiceFactory() {}
-
 std::unique_ptr<KeyedService> AIChatServiceFactory::BuildServiceInstanceFor(
-    ProfileIOS* profile) const {
+    ProfileIOS& profile) const {
   if (!features::IsAIChatEnabled()) {
     return nullptr;
   }
 
-  if (profile->IsOffTheRecord()) {
+  if (profile.IsOffTheRecord()) {
     return nullptr;
   }
 
@@ -61,7 +51,7 @@ std::unique_ptr<KeyedService> AIChatServiceFactory::BuildServiceInstanceFor(
       [](ProfileIOS* profile) {
         return skus::SkusServiceFactory::GetForProfile(profile);
       },
-      base::Unretained(profile));
+      base::Unretained(&profile));
 
   auto credential_manager = std::make_unique<AIChatCredentialManager>(
       std::move(skus_service_getter), GetApplicationContext()->GetLocalState());
@@ -72,11 +62,11 @@ std::unique_ptr<KeyedService> AIChatServiceFactory::BuildServiceInstanceFor(
   return std::make_unique<AIChatService>(
       ModelServiceFactory::GetForProfile(profile),
       TabTrackerServiceFactory::GetForProfile(profile),
-      std::move(credential_manager), user_prefs::UserPrefs::Get(profile),
+      std::move(credential_manager), user_prefs::UserPrefs::Get(&profile),
       profile_metrics ? profile_metrics->GetAIChatMetrics() : nullptr,
       GetApplicationContext()->GetOSCryptAsync(),
-      profile->GetSharedURLLoaderFactory(),
-      version_info::GetChannelString(::GetChannel()), profile->GetStatePath());
+      profile.GetSharedURLLoaderFactory(),
+      version_info::GetChannelString(::GetChannel()), profile.GetStatePath());
 }
 
 }  // namespace ai_chat

@@ -1,12 +1,21 @@
 diff --git a/chrome/browser/extensions/api/developer_private/extension_info_generator.cc b/chrome/browser/extensions/api/developer_private/extension_info_generator.cc
-index 832d389b0ebedcdcdcd1f1540378cfab097c0f58..d10f8fac03ec2e14c3ffef0521960fae44ae29f9 100644
+index 71a1a3e558502b59b9a4438ac2eeac72e2c2f332..a18d21b08f8861aca7d93670854ed09569f8d9ec 100644
 --- a/chrome/browser/extensions/api/developer_private/extension_info_generator.cc
 +++ b/chrome/browser/extensions/api/developer_private/extension_info_generator.cc
+@@ -564,7 +564,7 @@ void ExtensionInfoGenerator::FillExtensionInfo(const Extension& extension,
+                                                   extension_prefs_);
+   switch (blocklist_state) {
+     case BitMapBlocklistState::BLOCKLISTED_MALWARE:
+-      blocklist_text = IDS_EXTENSIONS_BLOCKLISTED_MALWARE;
++      blocklist_text = BraveGetMalwareBlocklistText(extension.id());
+       break;
+     case BitMapBlocklistState::BLOCKLISTED_SECURITY_VULNERABILITY:
+       blocklist_text = IDS_EXTENSIONS_BLOCKLISTED_SECURITY_VULNERABILITY;
 @@ -747,6 +747,7 @@ void ExtensionInfoGenerator::FillExtensionInfo(const Extension& extension,
  #else
    info.incognito_access_pending_change = false;
  #endif
-+  BRAVE_CREATE_EXTENSION_INFO_HELPER
++  info.is_split_mode = IncognitoInfo::IsSplitMode(&extension);
  
    // User Scripts toggle.
    info.user_scripts_access.is_enabled =

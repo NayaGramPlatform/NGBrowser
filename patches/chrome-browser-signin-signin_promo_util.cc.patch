@@ -1,12 +1,31 @@
 diff --git a/chrome/browser/signin/signin_promo_util.cc b/chrome/browser/signin/signin_promo_util.cc
-index 390c496101fab1332d2fa575e65015dabde19b2b..d572292d98558b60dcd7b3f2ec589fc3a7176cc0 100644
+index c0b1e601f20e65a43f466fe3fffb1a47130c8ba3..10baced31a54e5f323d8c52313bba316d9d69993 100644
 --- a/chrome/browser/signin/signin_promo_util.cc
 +++ b/chrome/browser/signin/signin_promo_util.cc
-@@ -673,6 +673,7 @@ bool CanShowPromoForSyncableDataType(SignInPromoType type, Profile& profile) {
+@@ -632,6 +632,7 @@ bool CanShowPromoForSyncableDataType(SignInPromoType type, Profile& profile) {
  // Needs additional checks depending on the type of the promo.
  // `profile` is the profile of the tab the promo would be shown on.
  bool ShouldShowSignInPromoCommon(Profile& profile, SignInPromoType type) {
-+  SHOULD_SHOW_SIGNIN_PROMO_COMMON
++  if ((true)) return false;
    if (profile.IsOffTheRecord()) {
      return false;
    }
+@@ -688,6 +689,7 @@ bool ShouldShowSignInPromoCommon(Profile& profile, SignInPromoType type) {
+ #if BUILDFLAG(ENABLE_EXTENSIONS)
+ bool ShouldShowExtensionSignInPromo(Profile& profile,
+                                     const extensions::Extension& extension) {
++  if ((true)) return false;
+ #if BUILDFLAG(ENABLE_DICE_SUPPORT)
+   if (!extensions::sync_util::ShouldSync(&profile, &extension)) {
+     return false;
+@@ -979,6 +981,10 @@ void ComputeProfileMenuAvatarButtonPromoInfo(
+     Profile& profile,
+     base::OnceCallback<void(ProfileMenuAvatarButtonPromoInfo)> result_callback,
+     bool allow_batch_upload_promos) {
++  if ((true)) {
++    std::move(result_callback).Run(ProfileMenuAvatarButtonPromoInfo{});
++    return;
++  }
+   BatchUploadService* batch_upload =
+       BatchUploadServiceFactory::GetForProfile(&profile);
+   if (!batch_upload) {

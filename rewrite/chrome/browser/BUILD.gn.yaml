@@ -11,9 +11,15 @@ substitutions:
       values:
         - //brave/browser:core
 
-  - description: Add the Brave browser public_deps.
+  - description: Depend on the Android extensions UI with the core.
+    regex:
+      pattern: 'if (enable_desktop_android_extensions) {'
+      replace: 'if (is_android && enable_extensions_core) {'
+
+  - description: >-
+      Our about_flags.cc override includes brave/browser/about_flags.cc, which
+      directly includes the v8 buildflags header.
     add_literal_to_list:
-      target: browser_public_dependencies
-      list_name: public_deps
-      literal: brave_chrome_browser_public_deps
-      import: //brave/browser/sources.gni
+      target: core
+      list_name: deps
+      literal: '[ "//brave/components/v8/buildflags" ]'

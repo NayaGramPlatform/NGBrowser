@@ -9,14 +9,19 @@ import org.objectweb.asm.ClassVisitor;
 
 public class BraveReaderModeManagerClassAdapter extends BraveClassVisitor {
     static String sReaderModeManagerClassName =
-            "org/chromium/chrome/browser/dom_distiller/ReaderModeManager";
+            "org/chromium/chrome/browser/reader_mode/ReaderModeManager";
     static String sBraveReaderModeManagerClassName =
-            "org/chromium/chrome/browser/dom_distiller/BraveReaderModeManager";
+            "org/chromium/chrome/browser/reader_mode/BraveReaderModeManager";
 
     public BraveReaderModeManagerClassAdapter(ClassVisitor visitor) {
         super(visitor);
 
         redirectConstructor(sReaderModeManagerClassName, sBraveReaderModeManagerClassName);
+
+        changeMethodOwner(
+                sReaderModeManagerClassName,
+                "shouldUseReaderModeMessages",
+                sBraveReaderModeManagerClassName);
 
         deleteField(sBraveReaderModeManagerClassName, "mTab");
         makeProtectedField(sReaderModeManagerClassName, "mTab");

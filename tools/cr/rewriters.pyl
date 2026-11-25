@@ -47,6 +47,10 @@
 #                 since captures are spliced into generated code as a single
 #                 expression -- so a capture suits a declaration or a type, not
 #                 text whose own spacing matters (a string literal, a comment).
+#       utils:    optional { name: rule body } of ast-grep utility rules the
+#                 template refers to with `matches: name`, for a sub-rule it
+#                 needs in several places (ast-grep reads no YAML anchors).
+#                 They take no inputs, so they are passed through as they are.
 #
 #   "ast.rewriter" — edits each node a matcher finds:
 #       matcher:  id of the "ast.matcher" op locating the node(s).
@@ -72,6 +76,8 @@
 #                 when the matcher can legitimately find several nodes but the
 #                 rewrite belongs to only the first (e.g. a class that reopens
 #                 `private:` more than once).
+#       last_match: optional bool; the same, for the last match. An op sets at
+#                 most one of the two.
 #       result:   { node: <kind> } being replaced.
 #
 # An op yields every match in source order; the caller (plaster) decides how
@@ -404,6 +410,128 @@ regex: ^{class_name}$
             },
         },
 
+        # The directives a C++ source opens with, ahead of its first
+        # declaration, whose text `selector` (a regex) matches: includes,
+        # `#import`s, `#define`s, `#pragma`s and conditional blocks holding no
+        # declarations, at file scope or directly inside the include guard.
+        # A conditional block holding a declaration ends the run, as the
+        # declaration itself would. The guard is not one of the directives, but
+        # the `#define` opening it is.
+        #
+        # An include binds `$HEADER` to the header as included (quotes or
+        # angle brackets and all; an `#import`'s also carries any comment
+        # after it), and one inside the guard binds `$GUARD` too.
+        #
+        # tree-sitter stumbles over some macros (e.g. `BEGIN_METADATA`), but
+        # only into a local ERROR node, and those sit below the directives this
+        # reads, so the source is parsed as is. A file whose own directives are
+        # unparsable shows as having none.
+        "cxx.find_preamble_directive": {
+            "template": """\
+any:
+  - kind: preproc_include
+    has:
+      field: path
+      pattern: $HEADER
+  - kind: preproc_call
+    all:
+      - has:
+          field: directive
+          regex: '^#[ \\t]*import$'
+      - has:
+          field: argument
+          pattern: $HEADER
+  - kind: preproc_def
+  - kind: preproc_function_def
+  - kind: preproc_call
+  - all:
+      - any:
+          - kind: preproc_if
+          - kind: preproc_ifdef
+      - not:
+          any:
+            - matches: holds_declarations
+            - matches: include_guard
+regex: '{selector}'
+inside:
+  any:
+    - kind: translation_unit
+    - all:
+        - matches: include_guard
+        - pattern: $GUARD
+not:
+  follows:
+    stopBy: end
+    any:
+      - matches: declaration
+      - matches: holds_declarations
+""",
+            "utils": {
+                # What may follow the directives at file scope, ERROR nodes
+                # included, since they only show up where code is.
+                "declaration": """\
+any:
+  - kind: declaration
+  - kind: function_definition
+  - kind: linkage_specification
+  - kind: type_definition
+  - kind: class_specifier
+  - kind: struct_specifier
+  - kind: union_specifier
+  - kind: enum_specifier
+  - kind: namespace_definition
+  - kind: namespace_alias_definition
+  - kind: concept_definition
+  - kind: using_declaration
+  - kind: alias_declaration
+  - kind: static_assert_declaration
+  - kind: template_declaration
+  - kind: template_instantiation
+  - kind: expression_statement
+  - kind: compound_statement
+  - kind: attributed_statement
+  - kind: ERROR
+""",
+                "holds_declarations": """\
+any:
+  - kind: preproc_if
+  - kind: preproc_ifdef
+has:
+  stopBy: end
+  matches: declaration
+""",
+                # An `#ifndef` with a bare `#define` that nothing but comments
+                # follows, which tells it apart from a macro given a default
+                # (`#ifndef FOO` / `#define FOO 1` / `#endif`) in a `.cc`.
+                "include_guard": """\
+kind: preproc_ifdef
+regex: '^#[ \\t]*ifndef'
+inside:
+  kind: translation_unit
+has:
+  kind: preproc_def
+  not:
+    has:
+      field: value
+      kind: preproc_arg
+not:
+  precedes:
+    stopBy: end
+    any:
+      - matches: declaration
+      - kind: preproc_include
+      - kind: preproc_def
+      - kind: preproc_function_def
+      - kind: preproc_call
+      - kind: preproc_if
+      - kind: preproc_ifdef
+""",
+            },
+            "result": {
+                "node": "preproc_include",
+            },
+        },
+
         # A `runtime_enabled_features.json5` feature entry: the object, in
         # that file's list of features, whose `name` field is `feature_name`.
         #
@@ -724,6 +852,60 @@ has:
                 "node": "expression_statement",
             },
         },
+
+        # The file's first statement, which an import is inserted above so it
+        # lands after the copyright comment block at the top, or at the first
+        # line in the file if there is no copyright header.
+        #
+        # The `any` is the `statement` supertype transcribed: the declaration
+        # kinds WebUI sources open with, plus `import_statement` and the
+        # `expression_statement` a bare call is. `nthChild` needs `ofRule` to
+        # repeat the set, since without it a leading copyright comment counts
+        # as the first child and nothing matches.
+        #
+        # The result node is therefore whichever of those kinds opens the
+        # file, which could be an import_statement in a file that already
+        # imports something, named below as the representative.
+        "ts.find_first_statement": {
+            "template": """\
+any:
+  - kind: import_statement
+  - kind: export_statement
+  - kind: expression_statement
+  - kind: lexical_declaration
+  - kind: variable_declaration
+  - kind: class_declaration
+  - kind: abstract_class_declaration
+  - kind: function_declaration
+  - kind: interface_declaration
+  - kind: enum_declaration
+  - kind: type_alias_declaration
+  - kind: ambient_declaration
+  - kind: debugger_statement
+inside:
+  kind: program
+nthChild:
+  position: 1
+  ofRule:
+    any:
+      - kind: import_statement
+      - kind: export_statement
+      - kind: expression_statement
+      - kind: lexical_declaration
+      - kind: variable_declaration
+      - kind: class_declaration
+      - kind: abstract_class_declaration
+      - kind: function_declaration
+      - kind: interface_declaration
+      - kind: enum_declaration
+      - kind: type_alias_declaration
+      - kind: ambient_declaration
+      - kind: debugger_statement
+""",
+            "result": {
+                "node": "import_statement",
+            },
+        },
     },
     "ast.rewriter": {
 
@@ -963,15 +1145,71 @@ has:
             },
         },
 
+        # `text` inserted above the preamble directive `selector` picks, as
+        # the line(s) it opens with. The caller lays `text` out in full,
+        # blank lines included, since only it knows the include groups around
+        # the directive.
+        "cxx.insert_before_preamble_directive": {
+            "matcher": "cxx.find_preamble_directive",
+            "inputs": ["selector", "text"],
+            "replace": {
+                "re_pattern": "^",
+                "replace": "{text}",
+            },
+            "result": {
+                "node": "preproc_include",
+            },
+        },
+
+        # `text` inserted below the preamble directive `selector` picks. A
+        # directive's node spans its line's newline, except for a conditional
+        # block's, which stops at `#endif` and leaves that line's remainder
+        # (e.g. `  // BUILDFLAG(IS_WIN)\n`) as `rest`, folded in and re-emitted
+        # so `text` starts on a line of its own.
+        "cxx.insert_after_preamble_directive": {
+            "matcher": "cxx.find_preamble_directive",
+            "inputs": ["selector", "rest", "text"],
+            "replace": {
+                "consume_after": "{rest}",
+                "re_pattern": "\\Z",
+                "replace": "{rest}{text}",
+            },
+            "result": {
+                "node": "preproc_include",
+            },
+        },
+
+        # The same, below the last directive, where a source's preamble ends
+        # and its declarations start.
+        "cxx.insert_after_preamble": {
+            "matcher": "cxx.find_preamble_directive",
+            "inputs": ["selector", "rest", "text"],
+            "last_match": True,
+            "replace": {
+                "consume_after": "{rest}",
+                "re_pattern": "\\Z",
+                "replace": "{rest}{text}",
+            },
+            "result": {
+                "node": "preproc_include",
+            },
+        },
+
         # Both ops below set a feature entry's `base_feature_status`, which is
         # what forces the default state of the `base::Feature` the entry
-        # generates. Which one applies depends on whether the entry already
-        # declares the field, so the two are paired and chosen between by
-        # `js.set_blink_runtime_enabled_feature_state`'s frontend rewriter.
+        # generates, and mark the entry `brave_base_feature_overridden`, which
+        # generates that `base::Feature` with `BASE_OVERRIDDEN_FEATURE`. Blink
+        # copies a `base::Feature` into its runtime flag only when it is
+        # enabled or overridden, so without the mark a disabled default leaves
+        # the flag at what `status` says. Which op applies depends on whether
+        # the entry already declares the field, so the two are paired and
+        # chosen between by `js.set_blink_runtime_enabled_feature_state`'s
+        # frontend rewriter.
         #
-        # We leave a trailing comment on the field, so the substitution always
-        # produces a diff even when upstream's own value already agrees with
-        # ours, as feature flags are preemtively overridden most of the time.
+        # The mark goes right before the field, so it always produces a diff
+        # even when upstream's own value already agrees with ours, as feature
+        # flags are preemptively overridden most of the time, and it leaves a
+        # trailing comment upstream has on the field in place.
 
         # The field is absent, so it is inserted directly after `name`. The
         # negative lookahead is what establishes absence; with the field
@@ -984,8 +1222,9 @@ has:
                     "([ \\t]*)((?<![A-Za-z0-9_])name:\\s*\"[^\"]*\",)"
                     "(?![\\s\\S]*?(?<![A-Za-z0-9_])base_feature_status:)",
                 "replace":
-                    "\\1\\2\\n\\1base_feature_status: \"{value}\",  "
-                    "// feature state is enforced via plaster rewrite.",
+                    "\\1\\2\\n"
+                    "\\1brave_base_feature_overridden: true,\\n"
+                    "\\1base_feature_status: \"{value}\",",
             },
             "result": {
                 "node": "object",
@@ -995,19 +1234,19 @@ has:
         # The field is already declared, so only its value changes, wherever
         # in the entry it sits. Upstream tends to put it last, next to
         # `copied_from_base_feature_if`, rather than beside `name`. The
-        # optional trailing group swallows a comment an earlier run left, so
-        # reapplying does not stack up copies of it.
+        # optional group swallows a mark an earlier run left, so reapplying
+        # does not stack up copies of it.
         "js.set_blink_runtime_enabled_feature_state": {
             "matcher": "js.find_runtime_feature_entry",
             "inputs": ["feature_name", "value"],
             "replace": {
                 "re_pattern":
-                    "((?<![A-Za-z0-9_])base_feature_status:\\s*\")[^\"]*(\",)"
-                    "(?:[ \\t]*// feature state is enforced via plaster "
-                    "rewrite\\.)?",
+                    "([ \\t]*)"
+                    "(?:brave_base_feature_overridden: true,\\n[ \\t]*)?"
+                    "((?<![A-Za-z0-9_])base_feature_status:\\s*\")[^\"]*(\",)",
                 "replace":
-                    "\\1{value}\\2  "
-                    "// feature state is enforced via plaster rewrite.",
+                    "\\1brave_base_feature_overridden: true,\\n"
+                    "\\1\\2{value}\\3",
             },
             "result": {
                 "node": "object",
@@ -1215,6 +1454,29 @@ has:
             },
             "result": {
                 "node": "expression_statement",
+            },
+        },
+
+        # The full `import` statement inserted above the file's first
+        # statement, i.e. at the top of the file but under its copyright
+        # header. The zero-width `^` inserts without re-emitting the statement
+        # itself, which may be a whole class declaration.
+        #
+        # The caller passes the statement in full (rather than just the module
+        # specifier) so it controls the spelling: imports upstream carries
+        # both with and without a trailing semicolon. `separator` is the blank
+        # line the import needs when the statement below it is code, and
+        # nothing when that statement is another import or an export, which
+        # would otherwise be split off from the block it belongs to.
+        "ts.add_import": {
+            "matcher": "ts.find_first_statement",
+            "inputs": ["import", "separator"],
+            "replace": {
+                "re_pattern": "^",
+                "replace": "{import}\\n{separator}",
+            },
+            "result": {
+                "node": "import_statement",
             },
         },
     },

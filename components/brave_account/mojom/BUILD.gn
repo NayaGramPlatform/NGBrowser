@@ -21,16 +21,13 @@ mojom("mojom") {
     "reset_password.mojom",
   ]
 
-  if (!is_android && !is_ios) {
-    # This is for desktop only. Mobile platforms should load the WebUI by
-    # navigating to it in a browser tab.
-    sources += [ "brave_account_row.mojom" ]
-  }
-
   generate_java = true
-  generate_legacy_js_bindings = true
 
   webui_module_path = "/"
+
+  if (!is_android && !is_ios) {
+    enabled_features = [ "is_desktop" ]
+  }
 }
 
 if (is_ios) {

@@ -3,6 +3,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this file,
 // You can obtain one at https://mozilla.org/MPL/2.0/.
 
+import JSZip from 'jszip'
 import * as ops from './file_ops'
 import {
   createFakeWorkspace,
@@ -376,6 +377,47 @@ describe('createFile', () => {
   })
 })
 
+describe('writeBinaryFile', () => {
+  const kBytes = new Uint8Array([0, 0xff, 0x25, 0x50])
+
+  it('creates a file with the given bytes', async () => {
+    const root = createFakeWorkspace()
+    expect(await ops.writeBinaryFile(root, 'out/a.pdf', kBytes)).toBe(
+      'Created out/a.pdf (4 bytes)',
+    )
+    expect(snapshotFakeWorkspace(root)).toEqual({ 'out/a.pdf': kBytes })
+  })
+
+  it('overwrites an existing file', async () => {
+    const root = createFakeWorkspace({ 'a.pdf': 'old contents' })
+    expect(await ops.writeBinaryFile(root, 'a.pdf', kBytes)).toBe(
+      'Overwrote a.pdf (4 bytes)',
+    )
+    expect(snapshotFakeWorkspace(root)).toEqual({ 'a.pdf': kBytes })
+  })
+
+  it('rejects a path that escapes the workspace', async () => {
+    const root = createFakeWorkspace()
+    await expect(ops.writeBinaryFile(root, '../a.pdf', kBytes)).rejects.toThrow(
+      'path escapes the workspace root',
+    )
+  })
+})
+
+describe('normalizePath', () => {
+  it('drops empty and . segments', () => {
+    expect(ops.normalizePath('./a//b/./c.html')).toBe('a/b/c.html')
+    expect(ops.normalizePath('/a/')).toBe('a')
+    expect(ops.normalizePath('')).toBe('')
+  })
+
+  it('rejects a path that escapes the workspace', () => {
+    expect(() => ops.normalizePath('a/../../b')).toThrow(
+      'path escapes the workspace root',
+    )
+  })
+})
+
 describe('appendFile', () => {
   it('appends to an existing file', async () => {
     const root = createFakeWorkspace({ 'a.txt': 'one\n' })
@@ -402,6 +444,43 @@ describe('appendFile', () => {
     expect(snapshotFakeWorkspace(root)).toEqual({
       'a.txt': 'one\ntwo\nthree',
     })
+  })
+})
+
+describe('deleteFile', () => {
+  it('deletes a file at the root', async () => {
+    const root = createFakeWorkspace({ 'a.txt': 'a', 'b.txt': 'b' })
+    expect(await ops.deleteFile(root, 'a.txt')).toBe('Deleted a.txt')
+    expect(snapshotFakeWorkspace(root)).toEqual({ 'b.txt': 'b' })
+  })
+
+  it('deletes a nested file and keeps its now-empty directory', async () => {
+    const root = createFakeWorkspace({ 'src/a.ts': 'a' })
+    expect(await ops.deleteFile(root, './src//a.ts')).toBe('Deleted src/a.ts')
+    expect(snapshotFakeWorkspace(root)).toEqual({})
+    expect(await ops.isDirectory(root, 'src')).toBe(true)
+  })
+
+  it('rejects a file that does not exist', async () => {
+    const root = createFakeWorkspace({ 'a.txt': 'a' })
+    await expect(ops.deleteFile(root, 'nope.txt')).rejects.toThrow()
+    await expect(ops.deleteFile(root, 'nope/a.txt')).rejects.toThrow()
+    expect(snapshotFakeWorkspace(root)).toEqual({ 'a.txt': 'a' })
+  })
+
+  it('rejects a directory, even an empty one', async () => {
+    const root = createFakeWorkspace({ 'src/a.ts': 'a', 'docs/': '' })
+    await expect(ops.deleteFile(root, 'src')).rejects.toThrow()
+    await expect(ops.deleteFile(root, 'docs')).rejects.toThrow()
+    expect(snapshotFakeWorkspace(root)).toEqual({ 'src/a.ts': 'a' })
+    expect(await ops.isDirectory(root, 'docs')).toBe(true)
+  })
+
+  it('rejects the workspace root', async () => {
+    const root = createFakeWorkspace({ 'a.txt': 'a' })
+    await expect(ops.deleteFile(root, '')).rejects.toThrow('empty file path')
+    await expect(ops.deleteFile(root, '/')).rejects.toThrow('empty file path')
+    expect(snapshotFakeWorkspace(root)).toEqual({ 'a.txt': 'a' })
   })
 })
 
@@ -548,6 +627,7 @@ describe('workspace confinement', () => {
       escapes,
     )
     await expect(ops.insert(root, '../a.txt', 0, 'x')).rejects.toThrow(escapes)
+    await expect(ops.deleteFile(root, '../a.txt')).rejects.toThrow(escapes)
   })
 
   it('rejects .. in the middle of a path', async () => {
@@ -577,5 +657,63 @@ describe('workspace confinement', () => {
     // root, so this reads the workspace's own a.txt.
     const root = createFakeWorkspace(layout)
     expect(await ops.viewFile(root, '/a.txt', undefined)).toBe('1\tcontents')
+  })
+})
+
+describe('zipWorkspace', () => {
+  // Lists every entry in the archive, with the contents of each file.
+  async function entries(zip: JSZip): Promise<Record<string, string | null>> {
+    const out: Record<string, string | null> = {}
+    for (const entry of Object.values(zip.files)) {
+      out[entry.name] = entry.dir ? null : await entry.async('string')
+    }
+    return out
+  }
+
+  it('archives every file and folder, keeping empty folders', async () => {
+    const root = createFakeWorkspace({
+      'notes.txt': 'hello',
+      'src/main.ts': 'export {}',
+      'src/lib/util.ts': 'export const x = 1',
+      'empty/': '',
+    })
+    expect(await entries(await ops.zipWorkspace(root))).toEqual({
+      'notes.txt': 'hello',
+      'src/': null,
+      'src/main.ts': 'export {}',
+      'src/lib/': null,
+      'src/lib/util.ts': 'export const x = 1',
+      'empty/': null,
+    })
+  })
+
+  it('stores bytes, not decoded text', async () => {
+    const root = createFakeWorkspace({ 'bin.dat': 'aé' })
+    const zip = await ops.zipWorkspace(root)
+    expect(await zip.file('bin.dat')!.async('uint8array')).toEqual(
+      new Uint8Array([0x61, 0xc3, 0xa9]),
+    )
+  })
+
+  it('produces an archive that round-trips', async () => {
+    const root = createFakeWorkspace({ 'a/b.txt': 'b' })
+    const bytes = await (
+      await ops.zipWorkspace(root)
+    ).generateAsync({
+      type: 'uint8array',
+    })
+    const reloaded = await JSZip.loadAsync(bytes)
+    expect(await reloaded.file('a/b.txt')!.async('string')).toBe('b')
+  })
+
+  it('is empty for an empty workspace', async () => {
+    const zip = await ops.zipWorkspace(createFakeWorkspace({}))
+    expect(Object.keys(zip.files)).toEqual([])
+  })
+
+  it('fails rather than silently omitting an unreadable file', async () => {
+    const root = createFakeWorkspace({ 'a.txt': 'a', 'secret.txt': 's' })
+    makeFileUnreadable(root, 'secret.txt')
+    await expect(ops.zipWorkspace(root)).rejects.toThrow('NotAllowedError')
   })
 })

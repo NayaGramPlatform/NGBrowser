@@ -11,13 +11,12 @@
 
 #include "base/strings/strcat.h"
 #include "base/values.h"
-#include "brave/components/brave_account/endpoint_client/request_types.h"
-#include "brave/components/brave_account/endpoint_client/response.h"
-#include "brave/components/brave_vpn/browser/v2/api/empty_request_body.h"
 #include "brave/components/brave_vpn/browser/v2/api/endpoint_constants.h"
 #include "brave/components/brave_vpn/browser/v2/api/error_body.h"
 #include "brave/components/brave_vpn/browser/v2/api/raw_json_response_body.h"
 #include "brave/components/brave_vpn/browser/v2/api/transport_protocol.h"
+#include "brave/components/endpoint_client/request_types.h"
+#include "brave/components/endpoint_client/response.h"
 #include "url/gurl.h"
 #include "url/url_constants.h"
 
@@ -59,10 +58,8 @@ struct GetProfileCredentialsRequestBody {
 };
 
 struct GetProfileCredentials {
-  using Request =
-      brave_account::endpoint_client::POST<GetProfileCredentialsRequestBody>;
-  using Response = brave_account::endpoint_client::Response<RawJsonResponseBody,
-                                                            VpnErrorBody>;
+  using Request = endpoint_client::Post<GetProfileCredentialsRequestBody>;
+  using Response = endpoint_client::Response<RawJsonResponseBody, VpnErrorBody>;
 
   static GURL URL() {
     return GURL(base::StrCat({url::kHttpsScheme, url::kStandardSchemeSeparator,
@@ -74,9 +71,8 @@ struct GetProfileCredentials {
 // VerifyCredentials API confirms a VPN credential (identified by a client-id
 // path segment and an api auth token) has not been invalidated.
 struct VerifyCredentials {
-  using Request = brave_account::endpoint_client::GET<EmptyRequestBody>;
-  using Response = brave_account::endpoint_client::Response<RawJsonResponseBody,
-                                                            VpnErrorBody>;
+  using Request = endpoint_client::Get;
+  using Response = endpoint_client::Response<RawJsonResponseBody, VpnErrorBody>;
 
   static GURL URL() {
     return GURL(base::StrCat({url::kHttpsScheme, url::kStandardSchemeSeparator,
@@ -100,10 +96,8 @@ struct InvalidateCredentialsRequestBody {
 };
 
 struct InvalidateCredentials {
-  using Request =
-      brave_account::endpoint_client::POST<InvalidateCredentialsRequestBody>;
-  using Response = brave_account::endpoint_client::Response<RawJsonResponseBody,
-                                                            VpnErrorBody>;
+  using Request = endpoint_client::Post<InvalidateCredentialsRequestBody>;
+  using Response = endpoint_client::Response<RawJsonResponseBody, VpnErrorBody>;
 
   static GURL URL() {
     return GURL(base::StrCat({url::kHttpsScheme, url::kStandardSchemeSeparator,
@@ -117,9 +111,8 @@ struct InvalidateCredentials {
 // client-id path segment and an api auth token). Response is forwarded
 // verbatim.
 struct GetAvailableMultihopExitRegions {
-  using Request = brave_account::endpoint_client::GET<EmptyRequestBody>;
-  using Response = brave_account::endpoint_client::Response<RawJsonResponseBody,
-                                                            VpnErrorBody>;
+  using Request = endpoint_client::Get;
+  using Response = endpoint_client::Response<RawJsonResponseBody, VpnErrorBody>;
 
   static GURL URL() {
     return GURL(base::StrCat({url::kHttpsScheme, url::kStandardSchemeSeparator,
@@ -142,10 +135,8 @@ struct SetMultihopExitRegionRequestBody {
 };
 
 struct SetMultihopExitRegion {
-  using Request =
-      brave_account::endpoint_client::POST<SetMultihopExitRegionRequestBody>;
-  using Response = brave_account::endpoint_client::Response<RawJsonResponseBody,
-                                                            VpnErrorBody>;
+  using Request = endpoint_client::Post<SetMultihopExitRegionRequestBody>;
+  using Response = endpoint_client::Response<RawJsonResponseBody, VpnErrorBody>;
 
   static GURL URL() {
     return GURL(base::StrCat({url::kHttpsScheme, url::kStandardSchemeSeparator,

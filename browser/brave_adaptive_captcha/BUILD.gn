@@ -16,17 +16,17 @@ source_set("impl") {
     "//brave/components/brave_adaptive_captcha",
     "//brave/components/brave_rewards/core/buildflags",
     "//chrome/browser/profiles:profile",
-    "//chrome/browser/ui",
+    "//chrome/browser/ui/browser_window",
     "//components/keyed_service/content",
     "//components/user_prefs",
   ]
 
   if (enable_brave_rewards) {
     deps += [ "//brave/browser/brave_rewards" ]
-  }
 
-  if (!is_android) {
-    deps += [ "//chrome/browser/ui/browser_window" ]
+    if (!is_android) {
+      deps += [ "//brave/browser/ui/brave_rewards" ]
+    }
   }
 }
 

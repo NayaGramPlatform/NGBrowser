@@ -12,6 +12,7 @@
 
 #include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
+#include "base/test/run_until.h"
 #include "base/test/test_future.h"
 #include "brave/components/brave_wallet/browser/permission_utils.h"
 #include "brave/components/brave_wallet/common/brave_wallet.mojom.h"
@@ -19,7 +20,6 @@
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/browser/permissions/permission_manager_factory.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/tabs/tab_enums.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/test/base/in_process_browser_test.h"
@@ -160,7 +160,8 @@ IN_PROC_BROWSER_TEST_F(PermissionManagerBrowserTest, RequestPermissions) {
         web_contents()->GetPrimaryMainFrame(),
         request_permissions_future.GetCallback());
 
-    content::RunAllTasksUntilIdle();
+    ASSERT_TRUE(
+        base::test::RunUntil([&] { return observer->IsShowingBubble(); }));
 
     EXPECT_TRUE(permission_request_manager->IsRequestInProgress());
     EXPECT_TRUE(observer->IsShowingBubble());
@@ -200,7 +201,8 @@ IN_PROC_BROWSER_TEST_F(PermissionManagerBrowserTest, RequestPermissions) {
         web_contents()->GetPrimaryMainFrame(),
         request_permissions_future.GetCallback());
 
-    content::RunAllTasksUntilIdle();
+    ASSERT_TRUE(
+        base::test::RunUntil([&] { return observer->IsShowingBubble(); }));
     EXPECT_TRUE(permission_request_manager->IsRequestInProgress());
     EXPECT_TRUE(observer->IsShowingBubble());
     // update anchor should not dismiss the bubble
@@ -291,7 +293,8 @@ IN_PROC_BROWSER_TEST_F(PermissionManagerBrowserTest,
     BraveWalletPermissionContext::RequestWalletPermissions(
         addresses, test_case.permission, url::Origin::Create(url),
         web_contents()->GetPrimaryMainFrame(), base::DoNothing());
-    content::RunAllTasksUntilIdle();
+    ASSERT_TRUE(
+        base::test::RunUntil([&] { return observer->IsShowingBubble(); }));
 
     EXPECT_TRUE(permission_request_manager->IsRequestInProgress());
     EXPECT_TRUE(observer->IsShowingBubble());
@@ -403,7 +406,8 @@ class PermissionManagerIncognitoBrowserTest : public InProcessBrowserTest {
         web_contents->GetPrimaryMainFrame(),
         request_permissions_future.GetCallback());
 
-    content::RunAllTasksUntilIdle();
+    ASSERT_TRUE(
+        base::test::RunUntil([&] { return observer->IsShowingBubble(); }));
     permissions::BraveWalletPermissionContext::AcceptOrCancel(
         {address}, brave_wallet::mojom::PermissionLifetimeOption::kForever,
         web_contents);

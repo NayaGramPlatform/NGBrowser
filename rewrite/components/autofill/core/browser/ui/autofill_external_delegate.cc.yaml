@@ -24,7 +24,12 @@ substitutions:
     preempt_function_impl:
       function_name: AutofillExternalDelegate::DidAcceptSuggestion
       code: |-
-        if (manager_->client().BraveHandleSuggestion(suggestion,
-                                                      last_query_.field_id)) {
+        if (manager_->client().BraveHandleSuggestion(suggestion, field_id)) {
           return;
         }
+
+  - description: |-
+      Include what the substitutions above use
+    add_include:
+      header:
+        - components/autofill/core/browser/integrators/password_form_classification.h

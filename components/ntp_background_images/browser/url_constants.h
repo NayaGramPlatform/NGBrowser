@@ -9,7 +9,7 @@
 namespace ntp_background_images {
 
 inline constexpr char kBackgroundWallpaperHost[] = "background-wallpaper";
-inline constexpr char kBrandedWallpaperHost[] = "branded-wallpaper";
+inline constexpr char kNewTabTakeoverWallpaperHost[] = "branded-wallpaper";
 inline constexpr char kSponsoredImagesPath[] = "sponsored-images/";
 
 inline constexpr char kSponsoredSiteImageHost[] = "sponsored-site-image";
@@ -22,6 +22,7 @@ inline constexpr char kCampaignsKey[] = "campaigns";
 inline constexpr char kLogoKey[] = "logo";
 
 inline constexpr char kCampaignIdKey[] = "campaignId";
+inline constexpr char kCampaignTypeKey[] = "type";
 inline constexpr char kCampaignMetricsKey[] = "metrics";
 
 inline constexpr char kImagesKey[] = "images";
@@ -42,6 +43,8 @@ inline constexpr char kWallpaperFilePathKey[] = "wallpaperImagePath";
 inline constexpr char kWallpaperColorKey[] = "wallpaperColor";
 inline constexpr char kWallpaperMetricTypeKey[] = "metricType";
 inline constexpr char kWallpaperTypeKey[] = "type";
+inline constexpr char kShouldDisplayNewTabTakeoverDisclosureKey[] =
+    "shouldDisplayNewTabTakeoverDisclosure";
 inline constexpr char kWallpaperRandomKey[] = "random";
 inline constexpr char kWallpaperFocalPointXKey[] = "wallpaperFocalPointX";
 inline constexpr char kWallpaperFocalPointYKey[] = "wallpaperFocalPointY";

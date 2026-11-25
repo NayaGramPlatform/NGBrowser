@@ -5,7 +5,6 @@
 
 #include "brave/components/brave_wallet/browser/zcash/zcash_grpc_utils.h"
 
-#include <memory>
 #include <optional>
 #include <string>
 #include <utility>
@@ -53,7 +52,7 @@ TEST(ZCashGrpcUtilsTest, TestTxStreamHandler) {
         base::BindLambdaForTesting([&]() { resume_called = true; });
     handler.OnDataReceived("", std::move(resume_closure));
     EXPECT_EQ(0u, handler.messages().size());
-    EXPECT_TRUE(resume_called.value());
+    EXPECT_EQ(resume_called, true);
   }
 
   auto message = GetPrefixedProtobuf("message1");
@@ -64,7 +63,7 @@ TEST(ZCashGrpcUtilsTest, TestTxStreamHandler) {
         base::BindLambdaForTesting([&]() { resume_called = true; });
     handler.OnDataReceived(message.substr(0, 3), std::move(resume_closure));
     EXPECT_EQ(0u, handler.messages().size());
-    EXPECT_TRUE(resume_called.value());
+    EXPECT_EQ(resume_called, true);
   }
 
   // Complete message
@@ -75,7 +74,7 @@ TEST(ZCashGrpcUtilsTest, TestTxStreamHandler) {
     handler.OnDataReceived(message.substr(3, message.size()),
                            std::move(resume_closure));
     EXPECT_EQ(1u, handler.messages().size());
-    EXPECT_TRUE(resume_called.value());
+    EXPECT_EQ(resume_called, true);
   }
 
   // Another message, but almost received
@@ -86,7 +85,7 @@ TEST(ZCashGrpcUtilsTest, TestTxStreamHandler) {
     handler.OnDataReceived(message.substr(0, message.size() - 1),
                            std::move(resume_closure));
     EXPECT_EQ(1u, handler.messages().size());
-    EXPECT_TRUE(resume_called.value());
+    EXPECT_EQ(resume_called, true);
   }
 
   // Complete
@@ -97,7 +96,7 @@ TEST(ZCashGrpcUtilsTest, TestTxStreamHandler) {
     handler.OnDataReceived(message.substr(message.size() - 1, 1),
                            std::move(resume_closure));
     EXPECT_EQ(2u, handler.messages().size());
-    EXPECT_TRUE(resume_called.value());
+    EXPECT_EQ(resume_called, true);
   }
 
   auto bundled_message = base::StrCat(
@@ -109,7 +108,7 @@ TEST(ZCashGrpcUtilsTest, TestTxStreamHandler) {
         base::BindLambdaForTesting([&]() { resume_called = true; });
     handler.OnDataReceived(bundled_message, std::move(resume_closure));
     EXPECT_EQ(4u, handler.messages().size());
-    EXPECT_TRUE(resume_called.value());
+    EXPECT_EQ(resume_called, true);
   }
 }
 

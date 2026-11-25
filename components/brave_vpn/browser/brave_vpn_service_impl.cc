@@ -328,8 +328,9 @@ void BraveVpnServiceImpl::ResetConnectionState() {
   connection_manager_->ResetConnectionState();
 }
 
-void BraveVpnServiceImpl::EnableOnDemand(bool enable) {
+void BraveVpnServiceImpl::EnableAutoReconnect(bool enable) {
 #if BUILDFLAG(IS_MAC)
+  // On macOS, auto-reconnect is implemented with NEVPNManager OnDemand rules.
   local_prefs_->SetBoolean(prefs::kBraveVPNOnDemandEnabled, enable);
 
   // If not connected, do nothing because on-demand bit will
@@ -343,7 +344,8 @@ void BraveVpnServiceImpl::EnableOnDemand(bool enable) {
 #endif
 }
 
-void BraveVpnServiceImpl::GetOnDemandState(GetOnDemandStateCallback callback) {
+void BraveVpnServiceImpl::GetAutoReconnectState(
+    GetAutoReconnectStateCallback callback) {
 #if BUILDFLAG(IS_MAC)
   std::move(callback).Run(
       /*available*/ true,
@@ -376,9 +378,10 @@ void BraveVpnServiceImpl::AllowLanTraffic(bool allow) {
 #if BUILDFLAG(ENABLE_BRAVE_VPN_WIREGUARD)
   local_prefs_->SetBoolean(prefs::kBraveVPNWireguardAllowLanTraffic, allow);
 
-  // TODO(https://github.com/brave/brave-browser/issues/58993): Need to
-  // create new config whenever setting is changed because existing config
-  // is used when connected from status tray.
+  if (delegate_) {
+    delegate_->SetAllowLanTraffic(allow);
+  }
+
   if (IsConnected()) {
     VLOG(2) << __func__ << " : reconnect to apply this change(" << allow
             << ") to current connection";

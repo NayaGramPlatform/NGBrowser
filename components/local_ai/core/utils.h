@@ -10,11 +10,34 @@
 
 #include "mojo/public/cpp/base/big_buffer.h"
 
+class PrefService;
+
 namespace base {
 class FilePath;
 }  // namespace base
 
 namespace local_ai {
+
+enum class OnDeviceSpeechModel;
+
+// Whether Brave's feature and the Local AI master switch both allow on-device
+// speech recognition. A null `local_state` reads as the switch's default, on.
+bool CanOfferOnDeviceSpeech(const PrefService* local_state);
+
+// The model that the user enabled (`prefs::kOnDeviceSpeechModel`), or
+// std::nullopt when the user enabled none. A null `local_state` reads as none.
+std::optional<OnDeviceSpeechModel> GetEnabledOnDeviceSpeechModel(
+    const PrefService* local_state);
+
+// Enables `model`, in place of the model that the user enabled before.
+void EnableOnDeviceSpeechModel(PrefService& local_state,
+                               OnDeviceSpeechModel model);
+
+// Whether `model` is to be on disk. True when `CanOfferOnDeviceSpeech` is true,
+// `kBraveOnDeviceSpeechMultilingual` is enabled for the multilingual model, and
+// the user enabled `model`. A null `local_state` reads as not enabled.
+bool ShouldInstallOnDeviceSpeechModel(const PrefService* local_state,
+                                      OnDeviceSpeechModel model);
 
 // Reads a file directly into BigBuffer storage. For files >64KB BigBuffer
 // uses shared memory. Returns std::nullopt if the file can't be opened, is

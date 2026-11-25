@@ -1,5 +1,5 @@
 diff --git a/chrome/browser/extensions/BUILD.gn b/chrome/browser/extensions/BUILD.gn
-index 563383fc71d7bc73f0af0fd2130879d0844ba2af..d1a3691b05c1ad8d3ea5424e7f1289f4420375e7 100644
+index 6f019132d9a5b21e42ae57fec82014d70dffc673..12d224d1dcf3d46a0bc5a6e0d2dd7604a7c22728 100644
 --- a/chrome/browser/extensions/BUILD.gn
 +++ b/chrome/browser/extensions/BUILD.gn
 @@ -2,6 +2,7 @@
@@ -10,7 +10,7 @@ index 563383fc71d7bc73f0af0fd2130879d0844ba2af..d1a3691b05c1ad8d3ea5424e7f1289f4
  import("//build/config/chromebox_for_meetings/buildflags.gni")
  import("//build/config/features.gni")
  import("//build/config/ozone.gni")
-@@ -646,6 +647,7 @@ source_set("extensions") {
+@@ -656,6 +657,7 @@ source_set("extensions") {
      "//ui/native_window_tracker",
      "//ui/shell_dialogs",
    ]
@@ -18,3 +18,45 @@ index 563383fc71d7bc73f0af0fd2130879d0844ba2af..d1a3691b05c1ad8d3ea5424e7f1289f4
    public_deps = [
      "//chrome/browser/extensions/api/messaging",
      "//chrome/browser/media/webrtc",
+@@ -712,7 +714,7 @@ source_set("extensions") {
+       "//components/optimization_guide/core:features",
+     ]
+ 
+-    if (enable_desktop_android_extensions) {
++    if (enable_extensions_core) {
+       sources += [
+         # These files are temporary workarounds to allow for a lightweight
+         # extensions runtime in desktop-android builds. They should be removed
+@@ -2047,6 +2049,7 @@ source_set("unit_tests") {
+     "//base",
+     "//base/test:test_config",
+     "//base/test:test_support",
++    "//brave/browser/extensions",
+     "//chrome/browser:global_features",
+     "//chrome/browser/background",
+     "//chrome/browser/bookmarks",
+@@ -2223,7 +2226,7 @@ source_set("unit_tests") {
+       ]
+     }
+ 
+-    if (enable_service_discovery) {
++    if (enable_service_discovery && (!is_android || is_desktop_android)) {
+       sources += [ "api/mdns/mdns_api_unittest.cc" ]
+       deps += [ "//chrome/browser/extensions/api/mdns" ]
+     }
+@@ -2337,6 +2340,7 @@ source_set("unit_tests") {
+ }
+ 
+ # By default these tests run on Win, Mac, Linux, Chrome OS and desktop Android.
++if (!is_android || is_desktop_android) {
+ source_set("browser_tests") {
+   testonly = true
+ 
+@@ -3273,6 +3277,7 @@ source_set("browser_tests") {
+   deps +=
+       [ "//chrome/browser/extensions/api/image_writer_private:browser_tests" ]
+ }
++}
+ 
+ source_set("interactive_ui_tests") {
+   testonly = true

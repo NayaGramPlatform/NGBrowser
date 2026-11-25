@@ -12,15 +12,16 @@
 #include <utility>
 
 #include "base/base64.h"
+#include "base/callback_list.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/location.h"
 #include "base/run_loop.h"
 #include "base/scoped_observation.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
-#include "base/task/sequenced_task_runner.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
+#include "base/test/test_future.h"
 #include "base/test/values_test_util.h"
 #include "brave/components/brave_wallet/browser/blockchain_registry.h"
 #include "brave/components/brave_wallet/browser/brave_wallet_constants.h"
@@ -38,7 +39,6 @@
 #include "brave/components/brave_wallet/browser/solana_tx_state_manager.h"
 #include "brave/components/brave_wallet/browser/test_utils.h"
 #include "brave/components/brave_wallet/browser/tx_service.h"
-#include "brave/components/brave_wallet/browser/tx_storage.h"
 #include "brave/components/brave_wallet/common/brave_wallet.mojom.h"
 #include "brave/components/brave_wallet/common/brave_wallet_constants.h"
 #include "brave/components/brave_wallet/common/brave_wallet_types.h"
@@ -266,6 +266,7 @@ class SolanaTxManagerUnitTest : public testing::Test {
                                         "}");
           } else if (*method == "sendTransaction") {
             send_transaction_calls_++;
+            rpc_request_callbacks_.Notify();
             url_loader_factory_.AddResponse(
                 request.url.spec(),
                 "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":\"" + tx_hash +
@@ -296,6 +297,8 @@ class SolanaTxManagerUnitTest : public testing::Test {
                      *method == "getFeeForMessage") {
             url_loader_factory_.AddResponse(request.url.spec(), content);
           } else if (*method == "getSignatureStatuses") {
+            signature_statuses_calls_++;
+            rpc_request_callbacks_.Notify();
             if (!get_signature_statuses) {
               url_loader_factory_.AddResponse(request.url.spec(), "",
                                               net::HTTP_REQUEST_TIMEOUT);
@@ -443,7 +446,68 @@ class SolanaTxManagerUnitTest : public testing::Test {
     run_loop.Run();
   }
 
-  void WaitForUpdatePendingTransactions() { task_environment_.RunUntilIdle(); }
+  // Idle polling can fast-forward the block tracker while requests are in
+  // flight.
+  [[nodiscard]] bool WaitForRpcCalls(const size_t& calls, size_t count) {
+    if (calls >= count) {
+      return true;
+    }
+
+    base::test::TestFuture<void> request_received;
+    auto subscription =
+        rpc_request_callbacks_.Add(base::BindLambdaForTesting([&] {
+          if (calls >= count && !request_received.IsReady()) {
+            request_received.SetValue();
+          }
+        }));
+    return request_received.Wait();
+  }
+
+  // Waits until a getSignatureStatuses request has been served after
+  // `calls_before` was sampled.
+  [[nodiscard]] bool WaitForSignatureStatusesRequest(size_t calls_before) {
+    return WaitForRpcCalls(signature_statuses_calls_, calls_before + 1);
+  }
+
+  // Waits until at least `count` sendTransaction requests have been served.
+  [[nodiscard]] bool WaitForSendTransactionCalls(size_t count) {
+    return WaitForRpcCalls(send_transaction_calls_, count);
+  }
+
+  [[nodiscard]] bool WaitForTxStatus(const std::string& meta_id,
+                                     mojom::TransactionStatus status) {
+    auto meta = solana_tx_manager()->GetTxForTesting(meta_id);
+    if (meta && meta->status() == status) {
+      return true;
+    }
+
+    // Idle polling can advance mock time past the transaction's drop deadline.
+    base::test::TestFuture<void> status_changed;
+    testing::NiceMock<MockTxStateManagerObserver> observer(
+        &solana_tx_manager()->GetSolanaTxStateManager());
+    ON_CALL(observer, OnTransactionStatusChanged(testing::_))
+        .WillByDefault([&](mojom::TransactionInfoPtr tx_info) {
+          if (tx_info->id == meta_id && tx_info->tx_status == status &&
+              !status_changed.IsReady()) {
+            status_changed.SetValue();
+          }
+        });
+    return status_changed.Wait();
+  }
+
+  // Approves the tx and waits for the getSignatureStatuses request that the
+  // resulting pending tx update issues, then lets its response be processed,
+  // so the status check can't run against a later SetInterceptor().
+  void ApproveTransactionAndWaitForStatusCheck(const std::string& meta_id) {
+    const size_t calls_before = signature_statuses_calls_;
+    ApproveTransaction(meta_id);
+    ASSERT_TRUE(WaitForSignatureStatusesRequest(calls_before));
+    // The counter only shows the request was issued. The response is consumed
+    // inside SolanaTxManager::OnGetSignatureStatuses(), which has no test hook
+    // to wait on, so flush the already queued response delivery. No time is
+    // advanced (MOCK_TIME), so this can't run later block tracker polls.
+    task_environment_.RunUntilIdle();
+  }
 
   void TestMakeSystemProgramTransferTxData(
       const std::string& from,
@@ -690,6 +754,8 @@ class SolanaTxManagerUnitTest : public testing::Test {
   uint64_t last_valid_block_height2_ = 0;
   uint64_t last_valid_block_height3_ = 0;
   size_t send_transaction_calls_ = 0;
+  size_t signature_statuses_calls_ = 0;
+  base::RepeatingClosureList rpc_request_callbacks_;
   mojom::SolanaFeeEstimationPtr fee_estimation1_;
 };
 
@@ -782,7 +848,7 @@ TEST_F(SolanaTxManagerUnitTest, AddAndApproveTransaction) {
                            from_account, &meta_id2);
   auto tx_meta2 = solana_tx_manager()->GetTxForTesting(meta_id2);
   ASSERT_TRUE(tx_meta2);
-  EXPECT_TRUE(tx_meta2->tx()->fee_estimation());
+  ASSERT_TRUE(tx_meta2->tx()->fee_estimation());
   EXPECT_EQ(tx_meta2->tx()->fee_estimation()->base_fee, 5000U);
   EXPECT_EQ(tx_meta2->tx()->fee_estimation()->compute_units, 0U);
   EXPECT_EQ(tx_meta2->tx()->fee_estimation()->fee_per_compute_unit, 0U);
@@ -801,7 +867,7 @@ TEST_F(SolanaTxManagerUnitTest, AddAndApproveTransaction) {
                            from_account, &meta_id3);
   auto tx_meta3 = solana_tx_manager()->GetTxForTesting(meta_id3);
   ASSERT_TRUE(tx_meta3);
-  EXPECT_TRUE(tx_meta3->tx()->fee_estimation());
+  ASSERT_TRUE(tx_meta3->tx()->fee_estimation());
   EXPECT_EQ(tx_meta3->tx()->fee_estimation()->base_fee, 5000U);
   EXPECT_EQ(tx_meta3->tx()->fee_estimation()->compute_units, 76249U);
   EXPECT_EQ(tx_meta3->tx()->fee_estimation()->fee_per_compute_unit, 1U);
@@ -839,13 +905,14 @@ TEST_F(SolanaTxManagerUnitTest, AddAndApproveTransaction) {
   EXPECT_EQ(tx_meta5->from(), from_account);
   EXPECT_EQ(tx_meta5->status(), mojom::TransactionStatus::Unapproved);
 
-  ApproveTransaction(meta_id4);
-  WaitForUpdatePendingTransactions();
+  ASSERT_NO_FATAL_FAILURE(ApproveTransactionAndWaitForStatusCheck(meta_id4));
 
   tx->message()->set_recent_blockhash(latest_blockhash1_);
   tx->message()->set_last_valid_block_height(last_valid_block_height1_);
-  tx->set_wired_tx(base::Base64Encode(*tx->GetSignedTransactionBytes(
-      keyring_service_.get(), from_account, nullptr)));
+  auto signed_bytes = tx->GetSignedTransactionBytes(keyring_service_.get(),
+                                                    from_account, nullptr);
+  ASSERT_TRUE(signed_bytes);
+  tx->set_wired_tx(base::Base64Encode(*signed_bytes));
 
   tx_meta4 = solana_tx_manager()->GetTxForTesting(meta_id4);
   ASSERT_TRUE(tx_meta4);
@@ -859,8 +926,7 @@ TEST_F(SolanaTxManagerUnitTest, AddAndApproveTransaction) {
   // Send another tx.
   SetInterceptor(latest_blockhash1_, last_valid_block_height1_, tx_hash2_, "",
                  false, last_valid_block_height1_);
-  ApproveTransaction(meta_id5);
-  WaitForUpdatePendingTransactions();
+  ASSERT_NO_FATAL_FAILURE(ApproveTransactionAndWaitForStatusCheck(meta_id5));
 
   tx_meta5 = solana_tx_manager()->GetTxForTesting(meta_id5);
   ASSERT_TRUE(tx_meta5);
@@ -1071,7 +1137,7 @@ TEST_F(SolanaTxManagerUnitTest, WalletOrigin) {
   auto tx_meta = solana_tx_manager()->GetTxForTesting(meta_id);
   ASSERT_TRUE(tx_meta);
   EXPECT_EQ(tx_meta->chain_id(), mojom::kSolanaMainnet);
-  EXPECT_EQ(tx_meta->origin(), url::Origin::Create(GURL("chrome://wallet")));
+  EXPECT_FALSE(tx_meta->dapp_origin());
 }
 
 TEST_F(SolanaTxManagerUnitTest, SomeSiteOrigin) {
@@ -1094,7 +1160,7 @@ TEST_F(SolanaTxManagerUnitTest, SomeSiteOrigin) {
   auto tx_meta = solana_tx_manager()->GetTxForTesting(meta_id);
   ASSERT_TRUE(tx_meta);
   EXPECT_EQ(tx_meta->chain_id(), mojom::kSolanaMainnet);
-  EXPECT_EQ(tx_meta->origin(),
+  EXPECT_EQ(tx_meta->dapp_origin(),
             url::Origin::Create(GURL("https://some.site.com")));
 }
 
@@ -1441,7 +1507,7 @@ TEST_F(SolanaTxManagerUnitTest, DropTxWithInvalidBlockhash) {
   AddUnapprovedTransaction(mojom::kSolanaMainnet, system_transfer_data.Clone(),
                            from, &meta_id1);
   ASSERT_FALSE(meta_id1.empty());
-  ApproveTransaction(meta_id1);
+  ASSERT_NO_FATAL_FAILURE(ApproveTransactionAndWaitForStatusCheck(meta_id1));
 
   SetInterceptor(latest_blockhash2_, last_valid_block_height2_, tx_hash2_, "",
                  false, last_valid_block_height1_);
@@ -1453,9 +1519,7 @@ TEST_F(SolanaTxManagerUnitTest, DropTxWithInvalidBlockhash) {
   AddUnapprovedTransaction(mojom::kSolanaMainnet, system_transfer_data.Clone(),
                            from, &meta_id2);
   ASSERT_FALSE(meta_id2.empty());
-  ApproveTransaction(meta_id2);
-
-  WaitForUpdatePendingTransactions();
+  ASSERT_NO_FATAL_FAILURE(ApproveTransactionAndWaitForStatusCheck(meta_id2));
 
   // Check two submitted tx.
   auto pending_transactions =
@@ -1484,7 +1548,7 @@ TEST_F(SolanaTxManagerUnitTest, DropTxWithInvalidBlockhash) {
   // Fast forward to have block tracker run with the new interceptor.
   task_environment_.FastForwardBy(
       base::Seconds(kSolanaBlockTrackerTimeInSeconds));
-  WaitForUpdatePendingTransactions();
+  ASSERT_TRUE(WaitForTxStatus(meta_id1, mojom::TransactionStatus::Dropped));
 
   // Check blockhash1 should be dropped, blockhash2 stay as submitted.
   auto dropped_transactions =
@@ -1516,7 +1580,7 @@ TEST_F(SolanaTxManagerUnitTest, DropTxWithInvalidBlockhash_DappBlockhash) {
   AddUnapprovedTransaction(mojom::kSolanaMainnet, system_transfer_data.Clone(),
                            sol_account(), &meta_id1);
   ASSERT_FALSE(meta_id1.empty());
-  ApproveTransaction(meta_id1);
+  ASSERT_NO_FATAL_FAILURE(ApproveTransactionAndWaitForStatusCheck(meta_id1));
 
   std::string meta_id2;
   auto system_transfer_data2 = system_transfer_data.Clone();
@@ -1526,7 +1590,7 @@ TEST_F(SolanaTxManagerUnitTest, DropTxWithInvalidBlockhash_DappBlockhash) {
                            std::move(system_transfer_data2), sol_account(),
                            &meta_id2);
   ASSERT_FALSE(meta_id2.empty());
-  ApproveTransaction(meta_id2);
+  ASSERT_NO_FATAL_FAILURE(ApproveTransactionAndWaitForStatusCheck(meta_id2));
 
   auto tx_meta2 = solana_tx_manager()->GetTxForTesting(meta_id2);
   ASSERT_TRUE(tx_meta2);
@@ -1536,8 +1600,6 @@ TEST_F(SolanaTxManagerUnitTest, DropTxWithInvalidBlockhash_DappBlockhash) {
       last_valid_block_height2_ + kSolanaValidBlockHeightThreshold);
   ASSERT_TRUE(
       solana_tx_manager()->GetSolanaTxStateManager().AddOrUpdateTx(*tx_meta2));
-
-  WaitForUpdatePendingTransactions();
 
   // Last valid block height should be set during ApproveTransaction.
   auto tx_meta = solana_tx_manager()->GetTxForTesting(meta_id1);
@@ -1561,7 +1623,10 @@ TEST_F(SolanaTxManagerUnitTest, DropTxWithInvalidBlockhash_DappBlockhash) {
   // Transaction stay as submitted.
   task_environment_.FastForwardBy(
       base::Seconds(kSolanaBlockTrackerTimeInSeconds));
-  WaitForUpdatePendingTransactions();
+  // Non-event: the blockhash is unchanged, so no pending tx update is
+  // triggered and there is nothing to wait for. RunUntilIdle() only flushes
+  // already queued work before asserting that nothing changed.
+  task_environment_.RunUntilIdle();
 
   tx_meta = solana_tx_manager()->GetTxForTesting(meta_id1);
   ASSERT_TRUE(tx_meta);
@@ -1581,7 +1646,7 @@ TEST_F(SolanaTxManagerUnitTest, DropTxWithInvalidBlockhash_DappBlockhash) {
                  last_valid_block_height1_ + 151, "[null, null]");
   task_environment_.FastForwardBy(
       base::Seconds(kSolanaBlockTrackerTimeInSeconds));
-  WaitForUpdatePendingTransactions();
+  ASSERT_TRUE(WaitForTxStatus(meta_id1, mojom::TransactionStatus::Dropped));
 
   tx_meta = solana_tx_manager()->GetTxForTesting(meta_id1);
   ASSERT_TRUE(tx_meta);
@@ -1610,8 +1675,7 @@ TEST_F(SolanaTxManagerUnitTest, DropTxAfterSafeDropThreshold) {
   ASSERT_FALSE(meta_id1.empty());
 
   send_transaction_calls_ = 0;
-  ApproveTransaction(meta_id1);
-  WaitForUpdatePendingTransactions();
+  ASSERT_NO_FATAL_FAILURE(ApproveTransactionAndWaitForStatusCheck(meta_id1));
   EXPECT_EQ(send_transaction_calls_, 1u);
 
   auto tx = solana_tx_manager()->GetTxForTesting(meta_id1);
@@ -1625,7 +1689,7 @@ TEST_F(SolanaTxManagerUnitTest, DropTxAfterSafeDropThreshold) {
                  true, last_valid_block_height1_, "[null]");
   task_environment_.FastForwardBy(
       base::Seconds(kSolanaBlockTrackerTimeInSeconds));
-  WaitForUpdatePendingTransactions();
+  ASSERT_TRUE(WaitForTxStatus(meta_id1, mojom::TransactionStatus::Dropped));
 
   EXPECT_EQ(send_transaction_calls_, 0u);
   tx = solana_tx_manager()->GetTxForTesting(meta_id1);
@@ -1833,8 +1897,7 @@ TEST_F(SolanaTxManagerUnitTest, RebroadcastTransaction) {
   ASSERT_FALSE(meta_id1.empty());
 
   // No rebroadcast when first sending out the tx.
-  ApproveTransaction(meta_id1);
-  WaitForUpdatePendingTransactions();
+  ASSERT_NO_FATAL_FAILURE(ApproveTransactionAndWaitForStatusCheck(meta_id1));
   EXPECT_EQ(send_transaction_calls_, 1u);
 
   // Rebradcast should happen once for tx with null signature status.
@@ -1843,7 +1906,9 @@ TEST_F(SolanaTxManagerUnitTest, RebroadcastTransaction) {
                  last_valid_block_height1_, "[null]");
   task_environment_.FastForwardBy(
       base::Seconds(kSolanaBlockTrackerTimeInSeconds));
-  WaitForUpdatePendingTransactions();
+  ASSERT_TRUE(WaitForSendTransactionCalls(1u));
+  // Non-event: flush queued work so a spurious second send would be counted.
+  task_environment_.RunUntilIdle();
   EXPECT_EQ(send_transaction_calls_, 1u);
 
   // Rebroadcast should happen once when tx is not confirmed and latest
@@ -1856,7 +1921,9 @@ TEST_F(SolanaTxManagerUnitTest, RebroadcastTransaction) {
 
   task_environment_.FastForwardBy(
       base::Seconds(kSolanaBlockTrackerTimeInSeconds));
-  WaitForUpdatePendingTransactions();
+  ASSERT_TRUE(WaitForSendTransactionCalls(1u));
+  // Non-event: flush queued work so a spurious second send would be counted.
+  task_environment_.RunUntilIdle();
   EXPECT_EQ(send_transaction_calls_, 1u);
 
   // No rebroadcast when blockhash is expired.
@@ -1865,9 +1932,14 @@ TEST_F(SolanaTxManagerUnitTest, RebroadcastTransaction) {
                  kMockGetFeeForMessageResponse, true, last_valid_block_height2_,
                  R"([{"slot": 100, "confirmations": 100, "err": null,
                       "confirmationStatus": "processed"}])");
+  const size_t statuses_calls_before_expired = signature_statuses_calls_;
   task_environment_.FastForwardBy(
       base::Seconds(kSolanaBlockTrackerTimeInSeconds));
-  WaitForUpdatePendingTransactions();
+  ASSERT_TRUE(WaitForSignatureStatusesRequest(statuses_calls_before_expired));
+  // Non-event: an expired blockhash must not trigger a rebroadcast, so there
+  // is no condition to wait for. RunUntilIdle() only flushes the already
+  // queued status response before asserting that nothing was sent.
+  task_environment_.RunUntilIdle();
   EXPECT_EQ(send_transaction_calls_, 0u);
 
   SetInterceptor(latest_blockhash2_, last_valid_block_height2_, "",
@@ -1881,14 +1953,14 @@ TEST_F(SolanaTxManagerUnitTest, RebroadcastTransaction) {
   ASSERT_FALSE(meta_id2.empty());
 
   // Avoid cached blockhash being used when approve.
+  const size_t statuses_calls_before = signature_statuses_calls_;
   task_environment_.FastForwardBy(
       base::Seconds(kSolanaBlockTrackerTimeInSeconds));
-  WaitForUpdatePendingTransactions();
+  ASSERT_TRUE(WaitForSignatureStatusesRequest(statuses_calls_before));
 
   // No rebroadcast when first sending out the tx with customized MaxRetries.
   send_transaction_calls_ = 0;
-  ApproveTransaction(meta_id2);
-  WaitForUpdatePendingTransactions();
+  ASSERT_NO_FATAL_FAILURE(ApproveTransactionAndWaitForStatusCheck(meta_id2));
   EXPECT_EQ(send_transaction_calls_, 1u);
 
   // Rebroadcast when tx signature status is null with customized MaxRetries.
@@ -1897,7 +1969,7 @@ TEST_F(SolanaTxManagerUnitTest, RebroadcastTransaction) {
   send_transaction_calls_ = 0;
   task_environment_.FastForwardBy(
       base::Seconds(kSolanaBlockTrackerTimeInSeconds));
-  WaitForUpdatePendingTransactions();
+  ASSERT_TRUE(WaitForSendTransactionCalls(1u));
   EXPECT_EQ(send_transaction_calls_, 1u);
 }
 
@@ -1949,7 +2021,6 @@ TEST_F(SolanaTxManagerUnitTest, GetSolanaTxFeeEstimation) {
 
   ASSERT_TRUE(
       solana_tx_manager()->GetSolanaTxStateManager().AddOrUpdateTx(meta));
-  task_environment_.RunUntilIdle();
 
   // Call fetch fee estimation with appropriate interceptors. Verify median and
   // priority fees.

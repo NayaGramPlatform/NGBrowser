@@ -3,6 +3,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+#include <utility>
+
 #include "base/feature_list.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
@@ -15,8 +17,11 @@
 #include "base/process/process_iterator.h"
 #include "base/run_loop.h"
 #include "base/strings/strcat.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
+#include "base/test/scoped_feature_list.h"
+#include "base/test/test_timeouts.h"
 #include "base/test/thread_test_helper.h"
 #include "base/time/time.h"
 #include "brave/browser/brave_browser_process.h"
@@ -29,6 +34,7 @@
 #include "brave/components/constants/pref_names.h"
 #include "brave/components/tor/brave_tor_client_updater.h"
 #include "brave/components/tor/brave_tor_pluggable_transport_updater.h"
+#include "brave/components/tor/constants.h"
 #include "brave/components/tor/tor_launcher_factory.h"
 #include "brave/components/tor/tor_launcher_observer.h"
 #include "brave/components/tor/tor_profile_service.h"
@@ -39,7 +45,6 @@
 #include "chrome/browser/prefs/incognito_mode_prefs.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/autofill/chrome_autofill_client.h"
-#include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/browser_window/public/profile_browser_collection.h"
 #include "chrome/common/chrome_paths.h"
@@ -49,6 +54,7 @@
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/autofill/content/browser/content_autofill_driver.h"
 #include "components/autofill/core/browser/foundations/browser_autofill_manager.h"
+#include "components/crx_file/id_util.h"
 #include "components/policy/core/common/policy_pref_names.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/ssl_host_state_delegate.h"
@@ -57,6 +63,7 @@
 #include "content/public/test/test_utils.h"
 #include "gmock/gmock.h"
 #include "net/base/features.h"
+#include "testing/gtest/include/gtest/gtest.h"
 #include "url/gurl.h"
 #include "url/origin.h"
 
@@ -158,11 +165,13 @@ class BraveTorBrowserTest : public InProcessBrowserTest {
   }
 
   void DownloadTorClient() const {
-    DownloadTorComponent(tor::kTorClientComponentId);
+    DownloadTorComponent(crx_file::id_util::GenerateIdFromHash(
+        tor::kTorClientComponentPublicKeySHA256));
   }
 
   void DownloadTorPluggableTransports() const {
-    DownloadTorComponent(tor::kTorPluggableTransportComponentId);
+    DownloadTorComponent(crx_file::id_util::GenerateIdFromHash(
+        tor::kTorPluggableTransportComponentPublicKeySHA256));
   }
 
   void SetUpDefaultCommandLine(base::CommandLine* command_line) override {
@@ -200,16 +209,36 @@ class BraveTorBrowserTest : public InProcessBrowserTest {
   }
 
   void WaitForUpdaterThread(brave_component_updater::BraveComponent* updater) {
+    WaitForTaskRunner(updater->GetTaskRunner());
+  }
+
+  // BraveTorClientUpdater runs its file deletes on its own sequence, which
+  // differs from the BraveComponent one.
+  void WaitForUpdaterThread(tor::BraveTorClientUpdater* updater) {
+    WaitForTaskRunner(updater->GetTaskRunner());
+  }
+
+  void WaitForTaskRunner(scoped_refptr<base::SequencedTaskRunner> runner) {
     scoped_refptr<base::ThreadTestHelper> io_helper(
-        new base::ThreadTestHelper(updater->GetTaskRunner()));
+        new base::ThreadTestHelper(std::move(runner)));
     ASSERT_TRUE(io_helper->Run());
   }
 
-  void WaitForProcess(const std::string& name) {
+  // Polls on purpose: process start/exit does not wake the UI thread, so
+  // base::test::RunUntil would not re-check the condition.
+  [[nodiscard]] testing::AssertionResult WaitForProcess(
+      const std::string& name) {
+    const auto deadline =
+        base::TimeTicks::Now() + TestTimeouts::action_max_timeout();
     while (!base::GetProcessCount(base::FilePath::FromASCII(name).value(),
                                   nullptr)) {
+      if (base::TimeTicks::Now() >= deadline) {
+        return testing::AssertionFailure()
+               << "Timed out waiting for process " << name << " to start";
+      }
       NonBlockingDelay(base::Milliseconds(25));
     }
+    return testing::AssertionSuccess();
   }
 
   void WaitProcessExit(int pid) {
@@ -219,11 +248,19 @@ class BraveTorBrowserTest : public InProcessBrowserTest {
     }
   }
 
-  void WaitProcessExit(const std::string& name) {
+  [[nodiscard]] testing::AssertionResult WaitProcessExit(
+      const std::string& name) {
+    const auto deadline =
+        base::TimeTicks::Now() + TestTimeouts::action_max_timeout();
     while (base::GetProcessCount(base::FilePath::FromASCII(name).value(),
                                  nullptr)) {
+      if (base::TimeTicks::Now() >= deadline) {
+        return testing::AssertionFailure()
+               << "Timed out waiting for process " << name << " to exit";
+      }
       NonBlockingDelay(base::Milliseconds(25));
     }
+    return testing::AssertionSuccess();
   }
 };
 
@@ -253,10 +290,11 @@ IN_PROC_BROWSER_TEST_F(BraveTorBrowserTest, OpenCloseDisableTorWindow) {
     EXPECT_TRUE(
         TorProfileServiceFactory::IsTorDisabled(browser()->GetProfile()));
 
+    // The deletes are posted to the client updater's own sequence; flush it,
+    // then the component must be gone.
     WaitForUpdaterThread(g_brave_browser_process->tor_client_updater());
-    content::RunAllTasksUntilIdle();
-
-    EXPECT_FALSE(CheckComponentExists(tor::kTorClientComponentId));
+    EXPECT_FALSE(CheckComponentExists(crx_file::id_util::GenerateIdFromHash(
+        tor::kTorClientComponentPublicKeySHA256)));
   }
 }
 
@@ -301,7 +339,8 @@ IN_PROC_BROWSER_TEST_F(BraveTorWithCustomProfileBrowserTest,
   EXPECT_TRUE(tor.tor_profile);
 
   // Pluggable transport component isn't installed.
-  EXPECT_FALSE(CheckComponentExists(tor::kTorPluggableTransportComponentId));
+  EXPECT_FALSE(CheckComponentExists(crx_file::id_util::GenerateIdFromHash(
+      tor::kTorPluggableTransportComponentPublicKeySHA256)));
   EXPECT_EQ(
       0, base::GetProcessCount(
              base::FilePath::FromASCII(tor::kSnowflakeExecutableName).value(),
@@ -319,8 +358,9 @@ IN_PROC_BROWSER_TEST_F(BraveTorWithCustomProfileBrowserTest,
   TorProfileServiceFactory::SetTorBridgesConfig(bridges_config);
 
   // Wait Snowflake executable is launched.
-  EXPECT_TRUE(CheckComponentExists(tor::kTorPluggableTransportComponentId));
-  WaitForProcess(tor::kSnowflakeExecutableName);
+  EXPECT_TRUE(CheckComponentExists(crx_file::id_util::GenerateIdFromHash(
+      tor::kTorPluggableTransportComponentPublicKeySHA256)));
+  ASSERT_TRUE(WaitForProcess(tor::kSnowflakeExecutableName));
 
   EXPECT_TRUE(
       g_brave_browser_process->tor_pluggable_transport_updater()->IsReady());
@@ -333,8 +373,8 @@ IN_PROC_BROWSER_TEST_F(BraveTorWithCustomProfileBrowserTest,
   TorProfileServiceFactory::SetTorBridgesConfig(bridges_config);
 
   // Obfs4 executable is launched.
-  WaitForProcess(tor::kSnowflakeExecutableName);
-  WaitForProcess(tor::kObfs4ExecutableName);
+  ASSERT_TRUE(WaitForProcess(tor::kSnowflakeExecutableName));
+  ASSERT_TRUE(WaitForProcess(tor::kObfs4ExecutableName));
 
   // Disable tor.
   TorProfileServiceFactory::SetTorDisabled(true);
@@ -352,7 +392,8 @@ IN_PROC_BROWSER_TEST_F(BraveTorWithCustomProfileBrowserTest,
 IN_PROC_BROWSER_TEST_F(BraveTorWithCustomProfileBrowserTest,
                        MAYBE_SetupBridges) {
   // Tor is disabled in PRE, check pluggable transports are removed.
-  EXPECT_FALSE(CheckComponentExists(tor::kTorPluggableTransportComponentId));
+  EXPECT_FALSE(CheckComponentExists(crx_file::id_util::GenerateIdFromHash(
+      tor::kTorPluggableTransportComponentPublicKeySHA256)));
 
   // Pluggable transport processes was terminated at exit.
   EXPECT_EQ(
@@ -401,7 +442,6 @@ IN_PROC_BROWSER_TEST_F(BraveTorWithCustomProfileBrowserTest, Incognito) {
   // disabled.
   EXPECT_FALSE(does_element_exist("torEnabled"));
   EXPECT_FALSE(is_element_enabled("useBridges"));
-  EXPECT_TRUE(is_element_enabled("onionOnlyInTorWindows"));
   EXPECT_TRUE(is_element_enabled("torSnowflake"));
 
   auto* tor_profile = OpenTorWindow();
@@ -422,7 +462,7 @@ IN_PROC_BROWSER_TEST_F(BraveTorWithCustomProfileBrowserTest, Incognito) {
       browser()->GetProfile()->GetPrefs(),
       policy::IncognitoModeAvailability::kEnabled);
   tor_profile = OpenTorWindow();
-  EXPECT_NE(nullptr, tor_profile);
+  ASSERT_TRUE(tor_profile);
   EXPECT_TRUE(tor_profile->IsTor());
 
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(),
@@ -432,7 +472,6 @@ IN_PROC_BROWSER_TEST_F(BraveTorWithCustomProfileBrowserTest, Incognito) {
   EXPECT_TRUE(does_element_exist("torEnabled"));
   EXPECT_TRUE(is_element_enabled("torEnabled"));
   EXPECT_TRUE(is_element_enabled("useBridges"));
-  EXPECT_TRUE(is_element_enabled("onionOnlyInTorWindows"));
   EXPECT_TRUE(is_element_enabled("torSnowflake"));
 }
 
@@ -442,10 +481,11 @@ IN_PROC_BROWSER_TEST_F(BraveTorWithCustomProfileBrowserTest, Autofill) {
   browser()->GetProfile()->GetPrefs()->SetBoolean(kBraveAutofillPrivateWindows,
                                                   false);
   auto* tor_profile = OpenTorWindow();
-  EXPECT_NE(nullptr, tor_profile);
+  ASSERT_TRUE(tor_profile);
   EXPECT_TRUE(tor_profile->IsTor());
   auto* tor_browser =
       ProfileBrowserCollection::GetForProfile(tor_profile)->FindTabbedBrowser();
+  ASSERT_TRUE(tor_browser);
   content::WebContents* web_contents =
       tor_browser->GetTabStripModel()->GetActiveWebContents();
   TestAutofillInWindow(web_contents, fake_url, false);
@@ -480,13 +520,14 @@ IN_PROC_BROWSER_TEST_F(BraveTorBrowserTest, MAYBE_PRE_ResetBridges) {
   EXPECT_TRUE(tor.tor_profile);
 
   // Wait Snowflake executable is launched.
-  EXPECT_TRUE(CheckComponentExists(tor::kTorPluggableTransportComponentId));
-  WaitForProcess(tor::kSnowflakeExecutableName);
+  EXPECT_TRUE(CheckComponentExists(crx_file::id_util::GenerateIdFromHash(
+      tor::kTorPluggableTransportComponentPublicKeySHA256)));
+  ASSERT_TRUE(WaitForProcess(tor::kSnowflakeExecutableName));
 
   // Reset bridges
   bridges_config.use_bridges = tor::BridgesConfig::Usage::kNotUsed;
   TorProfileServiceFactory::SetTorBridgesConfig(bridges_config);
-  WaitProcessExit(tor::kSnowflakeExecutableName);
+  ASSERT_TRUE(WaitProcessExit(tor::kSnowflakeExecutableName));
   WaitForUpdaterThread(
       g_brave_browser_process->tor_pluggable_transport_updater());
 }
@@ -499,8 +540,10 @@ IN_PROC_BROWSER_TEST_F(BraveTorBrowserTest, MAYBE_PRE_ResetBridges) {
 IN_PROC_BROWSER_TEST_F(BraveTorBrowserTest, MAYBE_ResetBridges) {
   // Tor is enabled and bridges are disabled check pluggable transports are
   // removed.
-  EXPECT_TRUE(CheckComponentExists(tor::kTorClientComponentId));
-  EXPECT_FALSE(CheckComponentExists(tor::kTorPluggableTransportComponentId));
+  EXPECT_TRUE(CheckComponentExists(crx_file::id_util::GenerateIdFromHash(
+      tor::kTorClientComponentPublicKeySHA256)));
+  EXPECT_FALSE(CheckComponentExists(crx_file::id_util::GenerateIdFromHash(
+      tor::kTorPluggableTransportComponentPublicKeySHA256)));
 }
 
 IN_PROC_BROWSER_TEST_F(BraveTorBrowserTest, HttpAllowlistIsolation) {
@@ -562,18 +605,10 @@ class BraveTorBrowserTest_EnableTorHttpsOnlyFlag
       public ::testing::WithParamInterface<bool> {
  public:
   BraveTorBrowserTest_EnableTorHttpsOnlyFlag() {
-    if (IsBraveHttpsByDefaultEnabled()) {
-      std::vector<base::test::FeatureRef> enabled_features{
-          net::features::kBraveTorWindowsHttpsOnly};
-      std::vector<base::test::FeatureRef> disabled_features;
-      if (IsBraveHttpsByDefaultEnabled()) {
-        enabled_features.push_back(net::features::kBraveHttpsByDefault);
-      } else {
-        disabled_features.push_back(net::features::kBraveHttpsByDefault);
-      }
-      scoped_feature_list_.InitWithFeatures(enabled_features,
-                                            disabled_features);
-    }
+    scoped_feature_list_.InitWithFeatureStates(
+        {{net::features::kBraveTorWindowsHttpsOnly, true},
+         {net::features::kBraveHttpsByDefault,
+          IsBraveHttpsByDefaultEnabled()}});
   }
 
   ~BraveTorBrowserTest_EnableTorHttpsOnlyFlag() override = default;
@@ -591,6 +626,7 @@ IN_PROC_BROWSER_TEST_P(BraveTorBrowserTest_EnableTorHttpsOnlyFlag,
   DownloadTorClient();
 
   Profile* tor_profile = OpenTorWindow();
+  ASSERT_TRUE(tor_profile);
   PrefService* prefs = tor_profile->GetPrefs();
   // Check that HTTPS-Only Mode has been enabled for the Tor window.
   EXPECT_TRUE(prefs->GetBoolean(prefs::kHttpsOnlyModeEnabled));

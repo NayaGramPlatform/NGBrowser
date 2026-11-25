@@ -39,19 +39,22 @@ public class TransactionConfirmationStore: ObservableObject, WalletObserverStore
   @Published var proposedAllowance: String = ""
   /// The details of this transaction
   @Published var transactionDetails: String = ""
-  /// The gas esitimation for this eip1559 transaction
+  /// The gas estimation for this eip1559 transaction
   @Published var eip1559GasEstimation: BraveWallet.GasEstimation1559?
-  /// The gas premium for filcoin transaction
+  /// The gas premium for filecoin transaction
   @Published var filTxGasPremium: String?
-  /// The gas limit for filcoin transaction
+  /// The gas limit for filecoin transaction
   @Published var filTxGasLimit: String?
-  /// The gas fee cap for filcoin transaction
+  /// The gas fee cap for filecoin transaction
   @Published var filTxGasFeeCap: String?
-  /// The origin info of this transaction
-  @Published var originInfo: BraveWallet.OriginInfo?
-  /// This is an id for the unppproved transaction that is currently displayed on screen
+  /// The dApp origin info of this transaction
+  @Published var dappOriginInfo: BraveWallet.DappOriginInfo?
+  /// This is an id for the unapproved transaction that is currently displayed on screen
   @Published var activeTransactionId: BraveWallet.TransactionInfo.ID = "" {
     didSet {
+      if activeTransactionId != oldValue {
+        isShowingSetApprovalForAllConfirmation = false
+      }
       if let tx = allTxs.first(where: { $0.id == activeTransactionId }) {
         updateTransaction(with: tx)
         activeTxStatus = tx.txStatus
@@ -96,7 +99,10 @@ public class TransactionConfirmationStore: ObservableObject, WalletObserverStore
   @Published var isShowingActiveTxStatus: Bool = false
   @Published var confirmButtonTitle: String = Strings.Wallet.confirm
 
-  /// This is a list of all unpproved transactions iterated through all the accounts for all supported keyrings
+  /// An extra confirmation step for `.erc721SetApprovalForAll` tx
+  @Published var isShowingSetApprovalForAllConfirmation: Bool = false
+
+  /// This is a list of all unapproved transactions iterated through all the accounts for all supported keyrings
   var unapprovedTxs: [BraveWallet.TransactionInfo] {
     return allTxs.filter { $0.txStatus == .unapproved }
   }
@@ -216,7 +222,6 @@ public class TransactionConfirmationStore: ObservableObject, WalletObserverStore
   private let bitcoinWalletService: BraveWalletBitcoinWalletService
   private let zcashWalletService: BraveWalletZCashWalletService
   private let cardanoWalletService: BraveWalletCardanoWalletService
-  private let ipfsApi: IpfsAPI
   private let assetManager: WalletUserAssetManagerType
   private var selectedChain: BraveWallet.NetworkInfo = .init()
   private var txServiceObserver: TxServiceObserver?
@@ -238,7 +243,6 @@ public class TransactionConfirmationStore: ObservableObject, WalletObserverStore
     bitcoinWalletService: BraveWalletBitcoinWalletService,
     zcashWalletService: BraveWalletZCashWalletService,
     cardanoWalletService: BraveWalletCardanoWalletService,
-    ipfsApi: IpfsAPI,
     userAssetManager: WalletUserAssetManagerType
   ) {
     self.assetRatioService = assetRatioService
@@ -252,7 +256,6 @@ public class TransactionConfirmationStore: ObservableObject, WalletObserverStore
     self.bitcoinWalletService = bitcoinWalletService
     self.zcashWalletService = zcashWalletService
     self.cardanoWalletService = cardanoWalletService
-    self.ipfsApi = ipfsApi
     self.assetManager = userAssetManager
 
     self.setupObservers()
@@ -389,11 +392,11 @@ public class TransactionConfirmationStore: ObservableObject, WalletObserverStore
       }
 
       if activeParsedTransaction.transaction.id != parsedTransaction.transaction.id {
-        clearTrasactionInfoBeforeUpdate()
+        clearTransactionInfoBeforeUpdate()
       }
       activeParsedTransaction = parsedTransaction
       updateIsContractAddress()
-      await updateComfirmButtonTitle()
+      await updateConfirmButtonTitle()
 
       await fetchActiveTransactionDetails(
         accounts: allAccountsForCoin,
@@ -452,6 +455,19 @@ public class TransactionConfirmationStore: ObservableObject, WalletObserverStore
     self.activeTxStatusStore = nil
   }
 
+  /// Whether or not there is an active transaction status to display.
+  ///
+  /// Setting this to `false` closes the active transaction status store. Setting it to `true` has no
+  /// effect.
+  var isShowingTxStatus: Bool {
+    get { activeTxStatusStore != nil }
+    set {
+      if !newValue {
+        closeTxStatusStore()
+      }
+    }
+  }
+
   func updateAllTx(with txId: String) async -> Bool {
     // cancel or speed up only supported for .eth
     guard let txInfo = await txService.transactionInfo(coinType: .eth, txMetaId: txId),
@@ -506,7 +522,7 @@ public class TransactionConfirmationStore: ObservableObject, WalletObserverStore
     return .none
   }
 
-  private func clearTrasactionInfoBeforeUpdate() {
+  private func clearTransactionInfoBeforeUpdate() {
     // clear fields that could have dynamic async changes
     fiat = ""
     gasFiat = ""
@@ -703,7 +719,7 @@ public class TransactionConfirmationStore: ObservableObject, WalletObserverStore
     shouldFetchCurrentAllowance: Bool,
     shouldFetchGasTokenBalance: Bool
   ) async {
-    originInfo = activeParsedTransaction.transaction.originInfo
+    dappOriginInfo = activeParsedTransaction.transaction.dappOriginInfo
     transactionDetails = activeTransactionDetails
 
     switch activeParsedTransaction.details {
@@ -947,6 +963,48 @@ public class TransactionConfirmationStore: ObservableObject, WalletObserverStore
           )
         }
       }
+    case .erc721SetApprovalForAll(let details):
+      // Revoking falls back to the standard send layout, which needs an amount
+      // to display. No value moves either way, so the total is the gas fee.
+      if !activeParsedTransaction.transaction.isGrantingERC721SetApprovalForAll {
+        symbol = activeParsedTransaction.networkSymbol
+        value = "0"
+      }
+
+      if let gasFee = details.gasFee {
+        gasValue = gasFee.fee
+        gasFiat = gasFee.fiat
+        gasSymbol = activeParsedTransaction.networkSymbol
+        gasAssetRatio =
+          Double(
+            assetRatios.getTokenPrice(for: activeParsedTransaction.network.nativeToken)?.price
+              ?? "0"
+          ) ?? 0
+
+        if let gasBalance = gasTokenBalanceCache[network.chainId]?[
+          activeParsedTransaction.fromAccountInfo.id
+        ] {
+          if let gasValue = BDouble(gasFee.fee),
+            BDouble(gasBalance) > gasValue
+          {
+            isBalanceSufficient = true
+          } else {
+            isBalanceSufficient = false
+          }
+        } else if shouldFetchGasTokenBalance {
+          if let account = accounts.first(where: {
+            $0.id == activeParsedTransaction.fromAccountInfo.id
+          }) {
+            await fetchGasTokenBalance(
+              token: network.nativeToken,
+              account: account,
+              network: network
+            )
+          }
+        }
+      }
+
+      totalFiat = gasFiat
     case .solDappTransaction(let details), .solSwapTransaction(let details):
       symbol = details.symbol ?? ""
       value = details.fromAmount
@@ -1078,28 +1136,35 @@ public class TransactionConfirmationStore: ObservableObject, WalletObserverStore
   @MainActor func confirm(
     transaction: BraveWallet.TransactionInfo
   ) async -> String? {
-    isTxSubmitting = true
-    let (success, error, message) = await txService.approveTransaction(
-      coinType: transaction.coin,
-      chainId: transaction.chainId,
-      txMetaId: transaction.id
-    )
-    if error.tag == .providerError {
-      transactionProviderErrorRegistry[transaction.id] = TransactionProviderError(
-        code: error.providerError.rawValue,
-        message: message
+    if transaction.isGrantingERC721SetApprovalForAll, !isShowingSetApprovalForAllConfirmation {
+      isShowingSetApprovalForAllConfirmation = true
+      return nil
+    } else {
+      isShowingSetApprovalForAllConfirmation = false
+      isTxSubmitting = true
+      let (success, error, message) = await txService.approveTransaction(
+        coinType: transaction.coin,
+        chainId: transaction.chainId,
+        txMetaId: transaction.id
       )
-    } else if error.tag == .solanaProviderError {
-      transactionProviderErrorRegistry[transaction.id] = TransactionProviderError(
-        code: error.solanaProviderError.rawValue,
-        message: message
-      )
+      if error.tag == .providerError {
+        transactionProviderErrorRegistry[transaction.id] = TransactionProviderError(
+          code: error.providerError.rawValue,
+          message: message
+        )
+      } else if error.tag == .solanaProviderError {
+        transactionProviderErrorRegistry[transaction.id] = TransactionProviderError(
+          code: error.solanaProviderError.rawValue,
+          message: message
+        )
+      }
+      return success ? nil : message
     }
-    return success ? nil : message
   }
 
   @MainActor func reject(transaction: BraveWallet.TransactionInfo) async -> Bool {
-    await txService.rejectTransaction(
+    isShowingSetApprovalForAllConfirmation = false
+    return await txService.rejectTransaction(
       coinType: transaction.coin,
       chainId: transaction.chainId,
       txMetaId: transaction.id
@@ -1253,7 +1318,7 @@ public class TransactionConfirmationStore: ObservableObject, WalletObserverStore
     }
   }
 
-  @MainActor private func updateComfirmButtonTitle() async {
+  @MainActor private func updateConfirmButtonTitle() async {
     guard activeParsedTransaction.coin == .zec,
       let zecTxData = activeParsedTransaction.transaction.txDataUnion.zecTxData
     else {

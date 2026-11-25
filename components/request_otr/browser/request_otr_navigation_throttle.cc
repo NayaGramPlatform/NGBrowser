@@ -10,7 +10,6 @@
 
 #include "base/check.h"
 #include "base/feature_list.h"
-#include "base/metrics/histogram_macros.h"
 #include "brave/components/request_otr/browser/request_otr_blocking_page.h"
 #include "brave/components/request_otr/browser/request_otr_controller_client.h"
 #include "brave/components/request_otr/browser/request_otr_service.h"
@@ -18,14 +17,12 @@
 #include "brave/components/request_otr/common/features.h"
 #include "brave/components/request_otr/common/pref_names.h"
 #include "components/prefs/pref_service.h"
-#include "components/profile_metrics/browser_profile_type.h"
 #include "components/security_interstitials/content/security_interstitial_tab_helper.h"
 #include "components/user_prefs/user_prefs.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/web_contents.h"
-#include "content/public/browser/web_contents_user_data.h"
 #include "net/base/features.h"
 #include "net/base/net_errors.h"
 #include "net/http/http_response_headers.h"
@@ -48,23 +45,20 @@ void RequestOTRNavigationThrottle::MaybeCreateAndAdd(
           request_otr::features::kBraveRequestOTRTab)) {
     return;
   }
-  DCHECK(request_otr_service);
 
   if (!base::FeatureList::IsEnabled(
           net::features::kBraveFirstPartyEphemeralStorage)) {
     return;
   }
 
-  // If this is the system profile, then we don't need the throttle.
-  content::NavigationHandle& navigation_handle = registry.GetNavigationHandle();
-  if (profile_metrics::GetBrowserProfileType(
-          navigation_handle.GetWebContents()->GetBrowserContext()) ==
-      profile_metrics::BrowserProfileType::kSystem) {
+  // Profiles without these services, e.g. the System profile, don't need the
+  // throttle.
+  if (!request_otr_service || !ephemeral_storage_service) {
     return;
   }
-  DCHECK(ephemeral_storage_service);
 
   // Don't block subframes.
+  content::NavigationHandle& navigation_handle = registry.GetNavigationHandle();
   if (!navigation_handle.IsInMainFrame()) {
     return;
   }

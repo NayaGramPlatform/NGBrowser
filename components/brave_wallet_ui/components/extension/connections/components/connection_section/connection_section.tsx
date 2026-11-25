@@ -4,7 +4,7 @@
 // You can obtain one at https://mozilla.org/MPL/2.0/.
 
 import * as React from 'react'
-import Button from '@brave/leo/react/button'
+import Button from '@brave/nala/react/button'
 
 // Types
 import { BraveWallet } from '../../../../../constants/types'
@@ -12,7 +12,6 @@ import { BraveWallet } from '../../../../../constants/types'
 // Queries
 import {
   useGetActiveOriginConnectedAccountIdsQuery,
-  useGetActiveOriginQuery,
   useGetNetworkForAccountOnActiveOriginQuery,
   useGetNetworksQuery,
   useRemoveSitePermissionMutation,
@@ -57,15 +56,14 @@ import { Column, Row, Text } from '../../../../shared/style'
 interface Props {
   coin: BraveWallet.CoinType
   selectedAccountId: BraveWallet.AccountId | undefined
+  activeOrigin: BraveWallet.OriginInfo
 }
 
 export const ConnectionSection = (props: Props) => {
-  const { coin, selectedAccountId } = props
+  const { coin, selectedAccountId, activeOrigin } = props
 
   // State
   const [isPermissionDenied, setIsPermissionDenied] =
-    React.useState<boolean>(false)
-  const [isSolanaConnected, setIsSolanaConnected] =
     React.useState<boolean>(false)
   const [showAccounts, setShowAccounts] = React.useState<boolean>(false)
   const [showNetworks, setShowNetworks] = React.useState<boolean>(false)
@@ -89,8 +87,6 @@ export const ConnectionSection = (props: Props) => {
   const [setSelectedAccount] = useSetSelectedAccountMutation()
 
   // Queries
-  const { data: activeOrigin = { eTldPlusOne: '', originSpec: '' } } =
-    useGetActiveOriginQuery()
   const { account: selectedAccount } = useAccountQuery(
     effectiveSelectedAccountId,
   )
@@ -98,6 +94,7 @@ export const ConnectionSection = (props: Props) => {
   const { data: networkForAccount } =
     useGetNetworkForAccountOnActiveOriginQuery({
       accountId: effectiveSelectedAccountId,
+      activeOriginSpec: activeOrigin?.originSpec,
     })
   const { data: networks = [] } = useGetNetworksQuery()
   const firstNetworkByCoin = networks.filter(
@@ -108,30 +105,21 @@ export const ConnectionSection = (props: Props) => {
     selectedNetworkForAccount || selectedNetworkState || firstNetworkByCoin
 
   const { data: connectedAccounts = [] } =
-    useGetActiveOriginConnectedAccountIdsQuery()
+    useGetActiveOriginConnectedAccountIdsQuery(activeOrigin.originSpec)
 
   // Computed
-  const isChromeOrigin = activeOrigin?.originSpec.startsWith('chrome')
+  const isChromeOrigin = activeOrigin.originSpec.startsWith('chrome')
 
   // Memos
   const isConnected = React.useMemo((): boolean => {
     if (!effectiveSelectedAccountId || isPermissionDenied) {
       return false
     }
-    if (coin === BraveWallet.CoinType.SOL) {
-      return isSolanaConnected
-    }
     return connectedAccounts.some(
       (accountId) =>
         accountId.uniqueKey === effectiveSelectedAccountId.uniqueKey,
     )
-  }, [
-    connectedAccounts,
-    effectiveSelectedAccountId,
-    coin,
-    isSolanaConnected,
-    isPermissionDenied,
-  ])
+  }, [connectedAccounts, effectiveSelectedAccountId, isPermissionDenied])
 
   const connectionStatusText = React.useMemo((): string => {
     if (isPermissionDenied) {
@@ -151,9 +139,12 @@ export const ConnectionSection = (props: Props) => {
 
   const onClickDisconnect = React.useCallback(async () => {
     if (effectiveSelectedAccountId) {
-      await removeSitePermission(effectiveSelectedAccountId)
+      await removeSitePermission({
+        accountId: effectiveSelectedAccountId,
+        originSpec: activeOrigin.originSpec,
+      })
     }
-  }, [effectiveSelectedAccountId, removeSitePermission])
+  }, [activeOrigin, effectiveSelectedAccountId, removeSitePermission])
 
   const onClickUnblock = React.useCallback(() => {
     chrome.tabs.create(
@@ -174,6 +165,7 @@ export const ConnectionSection = (props: Props) => {
     async (network: BraveWallet.NetworkInfo) => {
       if (effectiveSelectedAccountId) {
         await setNetworkForAccountOnActiveOrigin({
+          activeOriginSpec: activeOrigin.originSpec,
           accountId: effectiveSelectedAccountId,
           chainId: network.chainId,
         })
@@ -181,7 +173,11 @@ export const ConnectionSection = (props: Props) => {
         setShowNetworks(false)
       }
     },
-    [effectiveSelectedAccountId, setNetworkForAccountOnActiveOrigin],
+    [
+      activeOrigin,
+      effectiveSelectedAccountId,
+      setNetworkForAccountOnActiveOrigin,
+    ],
   )
 
   const onChangeAccount = React.useCallback(
@@ -201,7 +197,9 @@ export const ConnectionSection = (props: Props) => {
     [connectedAccounts, setSelectedAccount],
   )
 
-  const canChangeNetwork = props.coin !== BraveWallet.CoinType.ADA
+  const canChangeNetwork =
+    props.coin !== BraveWallet.CoinType.ADA
+    && props.coin !== BraveWallet.CoinType.DOT
   const onClickNetwork = React.useCallback(() => {
     if (canChangeNetwork) {
       setShowNetworks(true)
@@ -217,32 +215,10 @@ export const ConnectionSection = (props: Props) => {
   React.useEffect(() => {
     let subscribed = true
 
-    if (selectedAccount && coin === BraveWallet.CoinType.SOL) {
-      ;(async () => {
-        const { panelHandler } = getWalletPanelApiProxy()
-        await panelHandler
-          .isSolanaAccountConnected(selectedAccount.address)
-          .then((result) => {
-            if (subscribed) {
-              setIsSolanaConnected(result.connected)
-            }
-          })
-          .catch((e) => console.log(e))
-      })()
-    }
-
-    return () => {
-      subscribed = false
-    }
-  }, [selectedAccount, coin])
-
-  React.useEffect(() => {
-    let subscribed = true
-
     if (coin) {
       ;(async () => {
         await getWalletPanelApiProxy()
-          .braveWalletService.isPermissionDenied(coin)
+          .braveWalletService.isPermissionDenied(activeOrigin.originSpec, coin)
           .then((result) => {
             if (subscribed) {
               setIsPermissionDenied(result.denied)
@@ -375,6 +351,7 @@ export const ConnectionSection = (props: Props) => {
       >
         <DAppConnectionAccounts
           coin={coin}
+          originSpec={activeOrigin.originSpec}
           onChangeAccount={onChangeAccount}
         />
       </BottomSheet>

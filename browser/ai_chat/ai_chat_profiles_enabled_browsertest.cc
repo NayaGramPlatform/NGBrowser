@@ -18,7 +18,6 @@
 #include "chrome/browser/profiles/profile_window.h"
 #include "chrome/browser/renderer_context_menu/render_view_context_menu_test_util.h"
 #include "chrome/browser/ui/browser_window.h"
-#include "chrome/browser/ui/browser_window/public/browser_window_features.h"
 #include "chrome/browser/ui/location_bar/location_bar.h"
 #include "chrome/browser/ui/omnibox/omnibox_controller.h"
 #include "chrome/browser/ui/omnibox/omnibox_view.h"
@@ -66,11 +65,13 @@ class AIChatProfilesEnabledTest
       public ::testing::WithParamInterface<ProfileType> {
  public:
   AIChatProfilesEnabledTest() {
-    // Disable the global side panel feature so the AI Chat side panel entry
-    // is registered on the tab's SidePanelRegistry (the non-global path) for
-    // TabSidePanelRegistry below.
-    scoped_feature_list_.InitAndDisableFeature(
-        ai_chat::features::kAIChatGlobalSidePanelEverywhere);
+    // Pin kAIChat on. Disable the global side panel feature so the AI Chat
+    // side panel entry is registered on the tab's SidePanelRegistry (the
+    // non-global path) for TabSidePanelRegistry below.
+    scoped_feature_list_.InitWithFeatures(
+        /*enabled_features=*/{ai_chat::features::kAIChat},
+        /*disabled_features=*/
+        {ai_chat::features::kAIChatGlobalSidePanelEverywhere});
   }
   ~AIChatProfilesEnabledTest() override = default;
 
@@ -115,7 +116,7 @@ class AIChatProfilesEnabledTest
 };
 
 IN_PROC_BROWSER_TEST_P(AIChatProfilesEnabledTest, SidebarCheck) {
-  auto* sidebar_model = browser_->GetFeatures().sidebar_controller()->model();
+  auto* sidebar_model = sidebar::SidebarController::From(browser_)->model();
 
   bool is_in_sidebar = std::ranges::any_of(
       sidebar_model->GetAllSidebarItems(), [](const auto& item) {
@@ -137,7 +138,7 @@ IN_PROC_BROWSER_TEST_P(AIChatProfilesEnabledTest, Autocomplete) {
   const auto& providers = autocomplete_controller->providers();
   bool is_in_providers =
       std::ranges::any_of(providers, [](const auto& provider) {
-        return provider->type() == AutocompleteProvider::TYPE_BRAVE_LEO;
+        return provider->type() == AutocompleteProvider::Type::kBraveLeo;
       });
   if (IsAIChatEnabled()) {
     EXPECT_TRUE(is_in_providers);

@@ -19,10 +19,9 @@ class TabFeatures {
   TabFeatures(content::WebContents* web_contents, Profile* profile);
   ~TabFeatures();
 
-  NewTabPagePreloadPipelineManager* new_tab_page_preload_pipeline_manager();
+  tasks::TaskTabHelper* task_tab_helper();
 
-  enterprise_data_protection::DataProtectionNavigationController*
-  data_protection_controller();
+  SupervisedUserNavigationObserver* supervised_user_navigation_observer();
 
  private:
   friend BraveTabFeatures;

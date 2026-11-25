@@ -11,6 +11,7 @@
 #include "base/functional/bind.h"
 #include "brave/browser/ui/tabs/brave_tab_prefs.h"
 #include "brave/browser/ui/tabs/public/vertical_tab_controller.h"
+#include "brave/browser/ui/toolbars_small_icons.h"
 #include "brave/browser/ui/views/tabs/brave_tab_container.h"
 #include "brave/browser/ui/views/tabs/brave_tab_strip.h"
 #include "brave/browser/ui/views/workspaces/workspaces_bubble_controller.h"
@@ -18,7 +19,6 @@
 #include "brave/components/vector_icons/vector_icons.h"
 #include "build/build_config.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/browser_window/public/browser_window_features.h"
 #include "chrome/browser/ui/layout_constants.h"
 #include "chrome/browser/ui/tabs/features.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
@@ -113,11 +113,11 @@ void BraveTabStripScrollButton::UpdateIcon() {
   auto* cp = GetColorProvider();
   CHECK(cp);
 
-  SetImageModel(
-      STATE_DISABLED,
-      ui::ImageModel::FromVectorIcon(
-          icon_.get(),
-          cp->GetColor(kColorNewTabButtonCRForegroundFrameInactive), 16));
+  SetImageModel(STATE_DISABLED,
+                ui::ImageModel::FromVectorIcon(
+                    icon_.get(),
+                    cp->GetColor(kColorNewTabButtonCRForegroundFrameInactive),
+                    brave::GetToolbarsIconSize().value_or(16)));
 }
 
 bool BraveTabStripScrollButton::OnMousePressed(const ui::MouseEvent& event) {
@@ -262,9 +262,9 @@ void BraveHorizontalTabStripRegionView::CreateScrollButtonsIfNeeded() {
   tab_scroll_next_button_->SetFlipCanvasOnPaintForRTLUI(true);
 
   tab_scroll_previous_button_->SetTooltipText(
-      l10n_util::GetStringUTF16(IDS_TOOLTIP_TAB_SCROLL_LEADING));
+      l10n_util::GetStringUTF16(IDS_ACCNAME_TAB_SCROLL_LEADING));
   tab_scroll_next_button_->SetTooltipText(
-      l10n_util::GetStringUTF16(IDS_TOOLTIP_TAB_SCROLL_TRAILING));
+      l10n_util::GetStringUTF16(IDS_ACCNAME_TAB_SCROLL_TRAILING));
   tab_scroll_previous_button_->GetViewAccessibility().SetName(
       l10n_util::GetStringUTF16(IDS_ACCNAME_TAB_SCROLL_LEADING));
   tab_scroll_next_button_->GetViewAccessibility().SetName(
@@ -372,7 +372,7 @@ bool BraveHorizontalTabStripRegionView::ShouldShowHorizontalScrollButton()
 
 void BraveHorizontalTabStripRegionView::OnWorkspacesButtonPressed() {
   auto* bwi = tab_strip_->GetBrowserWindowInterface();
-  auto* controller = bwi->GetFeatures().workspaces_bubble_controller();
+  auto* controller = WorkspacesBubbleController::From(bwi);
   CHECK(controller);
   controller->ShowBubble(workspaces_button_, bwi->GetProfile());
 }
@@ -432,8 +432,7 @@ void BraveHorizontalTabStripRegionView::Layout(PassKey) {
   UpdateScrollButtonsVisibility();
   UpdateTabStripMargin();
 
-  if (!VerticalTabController::FromBrowser(
-           tab_strip_->GetBrowserWindowInterface())
+  if (!VerticalTabController::From(tab_strip_->GetBrowserWindowInterface())
            ->ShouldShowBraveVerticalTabs()) {
     if (workspaces_button_) {
       workspaces_button_->SetVisible(true);
@@ -505,9 +504,8 @@ void BraveHorizontalTabStripRegionView::UpdateTabStripMargin() {
 
   BrowserWindowInterface* browser_window_interface =
       tab_strip_->GetBrowserWindowInterface();
-  bool vertical_tabs =
-      VerticalTabController::FromBrowser(browser_window_interface)
-          ->ShouldShowBraveVerticalTabs();
+  bool vertical_tabs = VerticalTabController::From(browser_window_interface)
+                           ->ShouldShowBraveVerticalTabs();
 
   gfx::Insets margins;
 
@@ -607,8 +605,7 @@ void BraveHorizontalTabStripRegionView::UpdateTrailingScrollButtonMargin(
 void BraveHorizontalTabStripRegionView::OnDragEntered(
     const ui::DropTargetEvent& event) {
 #if BUILDFLAG(IS_LINUX)
-  if (!VerticalTabController::FromBrowser(
-           tab_strip_->GetBrowserWindowInterface())
+  if (!VerticalTabController::From(tab_strip_->GetBrowserWindowInterface())
            ->ShouldShowBraveVerticalTabs()) {
     return HorizontalTabStripRegionView::OnDragEntered(event);
   }
@@ -626,8 +623,7 @@ void BraveHorizontalTabStripRegionView::OnDragEntered(
 int BraveHorizontalTabStripRegionView::OnDragUpdated(
     const ui::DropTargetEvent& event) {
 #if BUILDFLAG(IS_LINUX)
-  if (!VerticalTabController::FromBrowser(
-           tab_strip_->GetBrowserWindowInterface())
+  if (!VerticalTabController::From(tab_strip_->GetBrowserWindowInterface())
            ->ShouldShowBraveVerticalTabs()) {
     return HorizontalTabStripRegionView::OnDragUpdated(event);
   }

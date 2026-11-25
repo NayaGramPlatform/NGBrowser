@@ -67,10 +67,10 @@ export const mockTransactionInfo: SerializableTransactionInfo = {
   txStatus: BraveWallet.TransactionStatus.Unapproved,
   txParams: ['address', 'amount'],
   txType: BraveWallet.TransactionType.ERC20Transfer,
-  createdTime: { microseconds: 0 },
-  submittedTime: { microseconds: 0 },
-  confirmedTime: { microseconds: 0 },
-  originInfo: mockUniswapOriginInfo,
+  createdTime: { msec: 0 },
+  submittedTime: { msec: 0 },
+  confirmedTime: { msec: 0 },
+  dappOriginInfo: mockUniswapOriginInfo,
   effectiveRecipient: '0x0d8775f648430679a709e98d2b0cb6250d2887ef',
   isRetriable: false,
   swapInfo: undefined,
@@ -123,10 +123,10 @@ export const mockSolanaTransactionInfo: SerializableTransactionInfo = {
   txStatus: 0,
   txParams: ['address', 'amount'],
   txType: BraveWallet.TransactionType.SolanaSPLTokenTransfer,
-  createdTime: { microseconds: 0 },
-  submittedTime: { microseconds: 0 },
-  confirmedTime: { microseconds: 0 },
-  originInfo: mockOriginInfo,
+  createdTime: { msec: 0 },
+  submittedTime: { msec: 0 },
+  confirmedTime: { msec: 0 },
+  dappOriginInfo: mockOriginInfo,
   effectiveRecipient: undefined,
   isRetriable: false,
   swapInfo: undefined,
@@ -235,10 +235,10 @@ export const mockSOLTXInstructions: SerializableTransactionInfo = {
   txStatus: 0,
   txParams: ['address', 'amount'],
   txType: BraveWallet.TransactionType.SolanaSPLTokenTransfer,
-  createdTime: { microseconds: 0 },
-  submittedTime: { microseconds: 0 },
-  confirmedTime: { microseconds: 0 },
-  originInfo: mockOriginInfo,
+  createdTime: { msec: 0 },
+  submittedTime: { msec: 0 },
+  confirmedTime: { msec: 0 },
+  dappOriginInfo: mockOriginInfo,
   effectiveRecipient: undefined,
   isRetriable: false,
   swapInfo: undefined,
@@ -320,12 +320,12 @@ export const mockSvmTxInfos: BraveWallet.TransactionInfo[] = [
 
 export const mockFilSendTransaction: FileCoinTransactionInfo = {
   chainId: BraveWallet.FILECOIN_MAINNET,
-  confirmedTime: { microseconds: BigInt(new Date().getUTCMilliseconds()) },
-  createdTime: { microseconds: BigInt(new Date().getUTCMilliseconds()) },
+  confirmedTime: { msec: Date.now() },
+  createdTime: { msec: Date.now() },
   fromAccountId: mockFilecoinAccount.accountId,
   id: 'fil-send-tx',
-  originInfo: undefined,
-  submittedTime: { microseconds: BigInt(new Date().getUTCMilliseconds()) },
+  dappOriginInfo: undefined,
+  submittedTime: { msec: Date.now() },
   txArgs: [],
   txDataUnion: {
     filTxData: {
@@ -388,18 +388,15 @@ export const mockEthSendTransaction = {
   txParams: [],
   txArgs: [],
   createdTime: {
-    microseconds: 1697722990427000,
+    msec: 1697722990427,
   },
   submittedTime: {
-    microseconds: 1697723019222000,
+    msec: 1697723019222,
   },
   confirmedTime: {
-    microseconds: 1697723040798000,
+    msec: 1697723040798,
   },
-  originInfo: {
-    originSpec: 'chrome://wallet',
-    eTldPlusOne: '',
-  },
+  dappOriginInfo: undefined,
   chainId: BraveWallet.MAINNET_CHAIN_ID,
   effectiveRecipient: mockEthAccount.accountId.address,
   isRetriable: false,
@@ -443,18 +440,15 @@ export const mockBtcSendTransaction = {
   txParams: [],
   txArgs: [],
   createdTime: {
-    microseconds: 1697722990427000,
+    msec: 1697722990427,
   },
   submittedTime: {
-    microseconds: 1697723019222000,
+    msec: 1697723019222,
   },
   confirmedTime: {
-    microseconds: 1697723040798000,
+    msec: 1697723040798,
   },
-  originInfo: {
-    originSpec: 'chrome://wallet',
-    eTldPlusOne: '',
-  },
+  dappOriginInfo: undefined,
   chainId: BraveWallet.BITCOIN_MAINNET,
   effectiveRecipient: mockBtcAccount.accountId.address,
   isRetriable: false,
@@ -500,18 +494,15 @@ export const mockZecSendTransaction: SerializableTransactionInfo = {
   txParams: [],
   txArgs: [],
   createdTime: {
-    microseconds: 1697722990427000,
+    msec: 1697722990427,
   },
   submittedTime: {
-    microseconds: 1697723019222000,
+    msec: 1697723019222,
   },
   confirmedTime: {
-    microseconds: 1697723040798000,
+    msec: 1697723040798,
   },
-  originInfo: {
-    originSpec: 'chrome://wallet',
-    eTldPlusOne: '',
-  },
+  dappOriginInfo: undefined,
   chainId: BraveWallet.Z_CASH_MAINNET,
   effectiveRecipient: mockZecAccount.accountId.address,
   isRetriable: false,
@@ -521,14 +512,14 @@ export const mockZecSendTransaction: SerializableTransactionInfo = {
 
 export const mockERC20TransferTransaction: SerializableTransactionInfo = {
   chainId: BraveWallet.MAINNET_CHAIN_ID,
-  confirmedTime: { microseconds: 0 },
-  createdTime: { microseconds: 1755121283613000 },
+  confirmedTime: { msec: 0 },
+  createdTime: { msec: 1755121283613 },
   effectiveRecipient: mockEthAccount.accountId.address,
   fromAccountId: mockEthAccount.accountId,
   id: 'ERC20-transfer-tx-1',
   isRetriable: false,
-  originInfo: mockOriginInfo,
-  submittedTime: { microseconds: 0 },
+  dappOriginInfo: mockOriginInfo,
+  submittedTime: { msec: 0 },
   swapInfo: undefined,
   swapInfoDeprecated: undefined,
   txArgs: ['0x0d8775f648430679a709e98d2b0cb6250d2887ef', '0x15ddf09c97b0000'],
@@ -846,7 +837,8 @@ export const mockETHSwapTransaction: BraveWallet.TransactionInfo = {
   txStatus: BraveWallet.TransactionStatus.Unapproved,
   swapInfo: {
     routeId: 'test-route-id',
-    sourceAmount: '0xde0b6b3a7640000',
+    // Matches the transaction value, as for a native asset swap.
+    sourceAmount: '0x15ddf09c97b0000',
     sourceTokenAddress: '',
     sourceCoin: BraveWallet.CoinType.ETH,
     sourceChainId: BraveWallet.MAINNET_CHAIN_ID,
@@ -860,23 +852,37 @@ export const mockETHSwapTransaction: BraveWallet.TransactionInfo = {
   },
 }
 
+// Token swap that also sends native value, e.g. a bridge fee.
+export const mockETHTokenSwapWithNativeValueTransaction: BraveWallet.TransactionInfo =
+  {
+    ...mockETHSwapTransaction,
+    id: 'mock-eth-token-swap-with-native-value-tx',
+    swapInfo: {
+      ...mockETHSwapTransaction.swapInfo!,
+      sourceAmount: '0x56bc75e2d63100000', // 100 BAT
+      sourceTokenAddress: mockBasicAttentionToken.contractAddress,
+      destinationAmount: '',
+      destinationAmountMin: '0x2386f26fc10000',
+      destinationTokenAddress: '',
+      destinationChainId: BraveWallet.BNB_SMART_CHAIN_MAINNET_CHAIN_ID,
+      provider: BraveWallet.SwapProvider.kSquid,
+    },
+  }
+
 export const mockETHNativeTokenSendTransaction = {
   chainId: BraveWallet.MAINNET_CHAIN_ID,
-  confirmedTime: { microseconds: 0 },
+  confirmedTime: { msec: 0 },
   createdTime: {
-    microseconds: 1697722990427000,
+    msec: 1697722990427,
   },
   submittedTime: {
-    microseconds: 0,
+    msec: 0,
   },
   effectiveRecipient: mockEthAccount.accountId.address,
   fromAccountId: mockAccount.accountId,
   id: 'eth-native-token-send-tx',
   isRetriable: false,
-  originInfo: {
-    originSpec: 'chrome://wallet',
-    eTldPlusOne: '',
-  },
+  dappOriginInfo: undefined,
   swapInfo: undefined,
   swapInfoDeprecated: undefined,
   txArgs: [],

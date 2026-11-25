@@ -12,7 +12,6 @@
 #include "base/time/time.h"
 #include "base/values.h"
 #include "brave/components/ai_chat/core/common/mojom/ai_chat.mojom.h"
-#include "brave/components/ai_chat/core/common/mojom/common.mojom.h"
 #include "brave/components/ai_chat/core/common/mojom/customization_settings.mojom.h"
 #include "brave/components/ai_chat/core/common/pref_names.h"
 #include "components/prefs/testing_pref_service.h"
@@ -240,7 +239,7 @@ TEST_F(AIChatPrefsTest, GetUserMemoryDictFromPrefs_CustomizationOnly) {
 
   auto result = GetUserMemoryDictFromPrefs(pref_service_);
 
-  EXPECT_TRUE(result.has_value());
+  ASSERT_TRUE(result.has_value());
   EXPECT_EQ(*result->FindString("name"), "John Doe");
   EXPECT_EQ(*result->FindString("job"), "Software Engineer");
   EXPECT_EQ(*result->FindString("tone"), "Professional");
@@ -270,15 +269,15 @@ TEST_F(AIChatPrefsTest, GetUserMemoryDictFromPrefs_MemoryOnly) {
 
   auto result = GetUserMemoryDictFromPrefs(pref_service_);
 
-  EXPECT_TRUE(result.has_value());
+  ASSERT_TRUE(result.has_value());
   EXPECT_FALSE(result->Find("name"));
   EXPECT_FALSE(result->Find("job"));
   EXPECT_FALSE(result->Find("tone"));
   EXPECT_FALSE(result->Find("other"));
 
   const base::ListValue* memories = result->FindList("memories");
-  EXPECT_TRUE(memories);
-  EXPECT_EQ(memories->size(), 2u);
+  ASSERT_TRUE(memories);
+  ASSERT_EQ(memories->size(), 2u);
   EXPECT_EQ((*memories)[0].GetString(), "I work as a software engineer");
   EXPECT_EQ((*memories)[1].GetString(), "I prefer dark mode");
 }
@@ -307,7 +306,7 @@ TEST_F(AIChatPrefsTest, GetUserMemoryDictFromPrefs_BothEnabled) {
 
   result = GetUserMemoryDictFromPrefs(pref_service_);
 
-  EXPECT_TRUE(result.has_value());
+  ASSERT_TRUE(result.has_value());
   EXPECT_EQ(*result->FindString("name"), "Jane Smith");
   EXPECT_EQ(*result->FindString("job"), "Designer");
   EXPECT_EQ(*result->FindString("tone"), "Friendly");
@@ -625,7 +624,7 @@ TEST_F(AIChatPrefsTest, AddSkillToPrefs_DuplicateShortcut) {
 
   // Verify still only one mode (duplicate rejected)
   skills = GetSkillsFromPrefs(pref_service_);
-  EXPECT_EQ(skills.size(), 1u);
+  ASSERT_EQ(skills.size(), 1u);
   EXPECT_EQ(skills[0]->prompt, "First prompt");
 }
 

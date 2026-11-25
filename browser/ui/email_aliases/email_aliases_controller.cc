@@ -9,12 +9,14 @@
 #include <optional>
 
 #include "base/check_is_test.h"
+#include "base/strings/utf_string_conversions.h"
+#include "base/types/to_address.h"
 #include "brave/browser/ui/webui/email_aliases/email_aliases_panel_ui.h"
 #include "brave/browser/ui/webui/email_aliases/email_aliases_promo_ui.h"
 #include "brave/components/constants/webui_url_constants.h"
 #include "brave/components/email_aliases/constants.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/singleton_tabs.h"
-#include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/webui/constrained_web_dialog_ui.h"
 #include "components/autofill/content/browser/content_autofill_driver.h"
 #include "content/public/browser/context_menu_params.h"
@@ -188,17 +190,25 @@ class EmailAliasesPromoDialogDelegate
 
 }  // namespace
 
+DEFINE_USER_DATA(EmailAliasesController);
+
 EmailAliasesController::EmailAliasesController(
-    BrowserView* browser_view,
+    BrowserWindowInterface& browser,
     EmailAliasesService* email_aliases_service)
-    : browser_view_(browser_view),
-      email_aliases_service_(email_aliases_service) {
-  CHECK(browser_view_);
+    : browser_(browser),
+      email_aliases_service_(email_aliases_service),
+      scoped_unowned_user_data_(browser.GetUnownedUserDataHost(), *this) {
   CHECK(email_aliases_service_.get());
 }
 
 EmailAliasesController::~EmailAliasesController() {
   CloseBubble();
+}
+
+// static
+EmailAliasesController* EmailAliasesController::From(
+    BrowserWindowInterface* browser) {
+  return Get(browser->GetUnownedUserDataHost());
 }
 
 bool EmailAliasesController::IsAvailableFor(
@@ -252,7 +262,7 @@ void EmailAliasesController::OpenSettingsPage(
   if (email_aliases_service_->ShouldShowPromo() && initiator) {
     ShowPromoBubble(initiator);
   } else {
-    ShowSingletonTabOverwritingNTP(browser_view_->browser(),
+    ShowSingletonTabOverwritingNTP(base::to_address(browser_),
                                    GURL(kEmailAliasesSettingsURL));
   }
 }
@@ -285,7 +295,7 @@ void EmailAliasesController::ShowPromoBubble(content::WebContents* initiator) {
 
 void EmailAliasesController::OnPromoBubbleClosed(const std::string&) {
   OnBubbleClosed({});
-  ShowSingletonTabOverwritingNTP(browser_view_->browser(),
+  ShowSingletonTabOverwritingNTP(base::to_address(browser_),
                                  GURL(kEmailAliasesSettingsURL));
 }
 

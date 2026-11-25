@@ -69,10 +69,10 @@ import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.local_database.BraveStatsTable;
 import org.chromium.chrome.browser.local_database.DatabaseHelper;
 import org.chromium.chrome.browser.local_database.SavedBandwidthTable;
-import org.chromium.chrome.browser.media.PictureInPicture;
 import org.chromium.chrome.browser.ntp.NtpUtil;
 import org.chromium.chrome.browser.omnibox.BraveLocationBarCoordinator;
 import org.chromium.chrome.browser.omnibox.LocationBarCoordinator;
+import org.chromium.chrome.browser.omnibox.styles.OmniboxResourceProvider;
 import org.chromium.chrome.browser.onboarding.OnboardingPrefManager;
 import org.chromium.chrome.browser.playlist.PlaylistServiceFactoryAndroid;
 import org.chromium.chrome.browser.playlist.PlaylistServiceObserverImpl;
@@ -99,6 +99,7 @@ import org.chromium.chrome.browser.toolbar.ToolbarTabController;
 import org.chromium.chrome.browser.toolbar.back_button.BackButtonCoordinator;
 import org.chromium.chrome.browser.toolbar.bottom.BottomToolbarConfiguration;
 import org.chromium.chrome.browser.toolbar.bottom.BottomToolbarVariationManager;
+import org.chromium.chrome.browser.toolbar.download_button.DownloadButtonCoordinator;
 import org.chromium.chrome.browser.toolbar.forward_button.ForwardButtonCoordinator;
 import org.chromium.chrome.browser.toolbar.home_button.HomeButton;
 import org.chromium.chrome.browser.toolbar.home_button.HomeButtonCoordinator;
@@ -507,7 +508,8 @@ public abstract class BraveToolbarLayoutImpl extends ToolbarLayout
 
                     @Override
                     public void onShown(Tab tab, @TabSelectionType int type) {
-                        if (!PictureInPicture.isEnabled(getContext())) {
+                        if (!BraveYouTubeScriptInjectorNativeHelper.isPictureInPictureEnabled(
+                                getContext())) {
                             hideYouTubePipIcon();
                         }
                         // Update shields button state when visible tab is changed.
@@ -635,7 +637,7 @@ public abstract class BraveToolbarLayoutImpl extends ToolbarLayout
 
         // Return early if picture in picture is not supported
         // or disabled in the OS settings.
-        if (!PictureInPicture.isEnabled(getContext())) {
+        if (!BraveYouTubeScriptInjectorNativeHelper.isPictureInPictureEnabled(getContext())) {
             if (mYouTubePipLayout.getVisibility() != View.GONE) {
                 mYouTubePipLayout.setVisibility(View.GONE);
                 invalidateToolbarSnapshotOnTablet();
@@ -1126,7 +1128,8 @@ public abstract class BraveToolbarLayoutImpl extends ToolbarLayout
             if (currentTab != null
                     && BraveYouTubeScriptInjectorNativeHelper.isPictureInPictureAvailable(
                             currentTab.getWebContents())) {
-                if (!PictureInPicture.isEnabled(getContext())) {
+                if (!BraveYouTubeScriptInjectorNativeHelper.isPictureInPictureEnabled(
+                        getContext())) {
                     hideYouTubePipIcon();
                     return;
                 }
@@ -1471,6 +1474,13 @@ public abstract class BraveToolbarLayoutImpl extends ToolbarLayout
             ImageViewCompat.setImageTintList(mYouTubePipButton, tint);
         }
 
+        // On the NTP ToolbarPhone paints the buttons with its own location bar color, which the
+        // text box color below does not match, e.g. over the bottom bar colored toolbar.
+        if (BraveReflectionUtil.equalTypes(this.getClass(), ToolbarPhone.class)
+                && !isIncognito()
+                && UrlUtilities.isNtpUrl(getToolbarDataProvider().getCurrentGurl())) {
+            return;
+        }
         final int textBoxColor =
                 ThemeUtils.getTextBoxColorForToolbarBackgroundInNonNativePage(
                         getContext(), color, isIncognito(), isCustomTab());
@@ -1616,10 +1626,12 @@ public abstract class BraveToolbarLayoutImpl extends ToolbarLayout
             @Nullable ForwardButtonCoordinator forwardButtonCoordinator,
             HomeButtonCoordinator homeButtonCoordinator,
             @Nullable SigninButtonCoordinator signinButtonCoordinator,
+            @Nullable DownloadButtonCoordinator downloadButtonCoordinator,
             ThemeColorProvider themeColorProvider,
             IncognitoStateProvider incognitoStateProvider,
             @Nullable Supplier<Integer> incognitoWindowCountSupplier,
-            WindowAndroid windowAndroid) {
+            WindowAndroid windowAndroid,
+            OmniboxResourceProvider omniboxResourceProvider) {
         super.initialize(
                 toolbarDataProvider,
                 tabController,
@@ -1634,10 +1646,12 @@ public abstract class BraveToolbarLayoutImpl extends ToolbarLayout
                 forwardButtonCoordinator,
                 homeButtonCoordinator,
                 signinButtonCoordinator,
+                downloadButtonCoordinator,
                 themeColorProvider,
                 incognitoStateProvider,
                 incognitoWindowCountSupplier,
-                windowAndroid);
+                windowAndroid,
+                omniboxResourceProvider);
 
         BraveMenuButtonCoordinator.setMenuFromBottom(
                 isMenuButtonOnBottomControls() || isMenuOnBottomWithBottomAddressBar());

@@ -1,0 +1,32 @@
+diff --git a/chrome/browser/extensions/api/api_browser_context_keyed_service_factories.cc b/chrome/browser/extensions/api/api_browser_context_keyed_service_factories.cc
+index b23167f7423f2f2e10e6abc9511fd4283cbb0c83..6883c633c581c9db7dea2fb2ce7d0ab4d873cb13 100644
+--- a/chrome/browser/extensions/api/api_browser_context_keyed_service_factories.cc
++++ b/chrome/browser/extensions/api/api_browser_context_keyed_service_factories.cc
+@@ -2,6 +2,7 @@
+ // Use of this source code is governed by a BSD-style license that can be
+ // found in the LICENSE file.
+ 
++#include "build/android_buildflags.h"
+ #include "build/build_config.h"
+ #include "chrome/browser/extensions/api/bookmarks/bookmarks_api.h"
+ #include "chrome/browser/extensions/api/bookmarks/bookmarks_api_watcher.h"
+@@ -69,7 +70,8 @@
+ #include "extensions/browser/api/bluetooth_low_energy/bluetooth_low_energy_api.h"
+ #endif
+ 
+-#if BUILDFLAG(ENABLE_SERVICE_DISCOVERY)
++#if BUILDFLAG(ENABLE_SERVICE_DISCOVERY) && \
++    (!BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_DESKTOP_ANDROID))
+ #include "chrome/browser/extensions/api/mdns/mdns_api.h"
+ #endif
+ 
+@@ -94,7 +96,8 @@ void EnsureApiBrowserContextKeyedServiceFactoriesBuilt() {
+   extensions::IdentityAPI::GetFactoryInstance();
+   extensions::image_writer::OperationManager::GetFactoryInstance();
+   extensions::IncognitoConnectability::EnsureFactoryBuilt();
+-#if BUILDFLAG(ENABLE_SERVICE_DISCOVERY)
++#if BUILDFLAG(ENABLE_SERVICE_DISCOVERY) && \
++    (!BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_DESKTOP_ANDROID))
+   extensions::MDnsAPI::GetFactoryInstance();
+ #endif
+   extensions::OmniboxAPI::GetFactoryInstance();

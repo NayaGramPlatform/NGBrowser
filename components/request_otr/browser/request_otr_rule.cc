@@ -15,27 +15,16 @@
 #include "base/logging.h"
 #include "base/types/expected.h"
 #include "base/values.h"
-#include "components/prefs/pref_service.h"
 #include "extensions/common/url_pattern.h"
 #include "net/base/url_util.h"
 #include "url/gurl.h"
 #include "url/origin.h"
-#include "url/url_constants.h"
 
 namespace {
 
 // request-otr.json keys
 constexpr char kInclude[] = "include";
 constexpr char kExclude[] = "exclude";
-
-// Removes trailing dot from |host_piece| if any.
-// Copied from extensions/common/url_pattern.cc
-std::string_view CanonicalizeHostForMatching(std::string_view host_piece) {
-  if (host_piece.ends_with('.')) {
-    host_piece.remove_suffix(1);
-  }
-  return host_piece;
-}
 
 }  // namespace
 
@@ -77,7 +66,7 @@ void RequestOTRRule::RegisterJSONConverter(
 // All eTLD+1 calculations for Request-OTR-Tab should flow through here so they
 // are consistent in their private registries configuration.
 const std::string RequestOTRRule::GetETLDForRequestOTR(std::string_view host) {
-  std::string_view host_piece = CanonicalizeHostForMatching(host);
+  std::string_view host_piece = URLPattern::CanonicalizeHostForMatching(host);
   return net::registry_controlled_domains::GetDomainAndRegistry(
       host_piece, net::registry_controlled_domains::PrivateRegistryFilter::
                       EXCLUDE_PRIVATE_REGISTRIES);

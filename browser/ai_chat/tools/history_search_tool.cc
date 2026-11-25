@@ -17,15 +17,15 @@
 #include "base/strings/utf_string_conversions.h"
 #include "base/time/time.h"
 #include "base/values.h"
+#include "brave/browser/history_embeddings/history_embeddings_service_factory.h"
+#include "brave/browser/history_embeddings/history_embeddings_utils.h"
 #include "brave/components/ai_chat/core/browser/tools/tool_input_properties.h"
 #include "brave/components/ai_chat/core/browser/tools/tool_utils.h"
 #include "brave/components/ai_chat/core/common/mojom/ai_chat.mojom.h"
-#include "chrome/browser/history_embeddings/history_embeddings_service_factory.h"
-#include "chrome/browser/history_embeddings/history_embeddings_utils.h"
+#include "brave/components/history_embeddings/content/history_embeddings_service.h"
+#include "brave/components/history_embeddings/core/history_embeddings_features.h"
 #include "chrome/browser/profiles/profile.h"
 #include "components/history/core/browser/url_row.h"
-#include "components/history_embeddings/content/history_embeddings_service.h"
-#include "components/history_embeddings/core/history_embeddings_features.h"
 #include "url/url_constants.h"
 
 namespace ai_chat {
@@ -164,10 +164,14 @@ HistorySearchTool::RequiresUserInteractionBeforeHandling(
   // C++ side only needs to surface a non-null challenge.
   return mojom::PermissionChallenge::New(
       /*assessment=*/std::nullopt, /*plan=*/std::nullopt,
-      /*description=*/std::nullopt, /*supports_allow_session=*/false);
+      /*title=*/std::nullopt, /*description=*/std::nullopt,
+      /*implications=*/std::nullopt,
+      /*supports_allow_session=*/false);
 }
 
-void HistorySearchTool::UserPermissionGranted(const std::string& tool_use_id) {
+void HistorySearchTool::UserPermissionGranted(
+    const std::string& tool_use_id,
+    const mojom::PermissionChallenge& challenge) {
   user_has_granted_permission_ = true;
 }
 
@@ -235,7 +239,8 @@ void HistorySearchTool::UseTool(const std::string& input_json,
   history_embeddings::HistoryEmbeddingsSearch* service =
       search_for_testing_
           ? search_for_testing_.get()
-          : HistoryEmbeddingsServiceFactory::GetForProfile(profile_);
+          : history_embeddings::HistoryEmbeddingsServiceFactory::GetForProfile(
+                profile_);
   if (!service) {
     std::move(callback).Run(
         CreateContentBlocksForText(
@@ -244,13 +249,13 @@ void HistorySearchTool::UseTool(const std::string& input_json,
     return;
   }
 
-  // history_embeddings::SearchResultCallback is a RepeatingCallback. Adapt
-  // the OnceCallback by heap-allocating it and letting base::Owned() tie its
-  // lifetime to the bound closure; OnSearchResult guards against the
+  // history_embeddings::SearchResultCallback is a RepeatingCallback.
+  // Adapt the OnceCallback by heap-allocating it and letting base::Owned() tie
+  // its lifetime to the bound closure; OnSearchResult guards against the
   // theoretical case of more than one fire.
   service->Search(
       /*previous_search_result=*/nullptr, *query, time_range_start, count,
-      /*skip_answering=*/true, /*url_id_filter=*/{},
+      /*url_id_filter=*/{},
       base::BindRepeating(
           &HistorySearchTool::OnSearchResult, weak_ptr_factory_.GetWeakPtr(),
           base::Owned(std::make_unique<UseToolCallback>(std::move(callback))),

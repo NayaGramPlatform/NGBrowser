@@ -5,7 +5,7 @@
 
 #include "base/time/time.h"
 #include "brave/components/brave_ads/core/internal/ad_units/test/ad_test_util.h"
-#include "brave/components/brave_ads/core/internal/creatives/conversions/test/creative_set_conversion_test_util.h"
+#include "brave/components/brave_ads/core/internal/creatives/conversions/test/campaign_conversion_test_util.h"
 #include "brave/components/brave_ads/core/internal/settings/test/settings_test_util.h"
 #include "brave/components/brave_ads/core/internal/user_engagement/ad_events/ad_event_builder.h"
 #include "brave/components/brave_ads/core/internal/user_engagement/ad_events/test/ad_event_test_util.h"
@@ -16,7 +16,7 @@
 #include "brave/components/brave_ads/core/mojom/brave_ads.mojom.h"
 #include "brave/components/brave_ads/core/public/ad_units/ad_info.h"
 
-// npm run test -- brave_unit_tests --filter=BraveAds*
+// pnpm test brave_unit_tests --filter=BraveAds*
 
 namespace brave_ads {
 
@@ -28,9 +28,9 @@ TEST_F(BraveAdsConversionsSearchResultAdTest,
   // Arrange
   const AdInfo ad = test::BuildAd(mojom::AdType::kSearchResultAd,
                                   /*use_random_uuids=*/false);
-  test::BuildAndSaveCreativeSetConversion(ad.creative_set_id,
-                                          test::kMatchingUrlPattern,
-                                          /*observation_window=*/base::Days(3));
+  test::BuildAndSaveCampaignConversion(ad.campaign_id,
+                                       test::kMatchingUrlPattern,
+                                       /*observation_window=*/base::Days(3));
   test::RecordAdEvents(ad, {mojom::ConfirmationType::kServedImpression,
                             mojom::ConfirmationType::kViewedImpression});
 
@@ -38,7 +38,8 @@ TEST_F(BraveAdsConversionsSearchResultAdTest,
   base::RunLoop run_loop;
   VerifyOnDidConvertAdExpectation(ad, ConversionActionType::kViewThrough,
                                   run_loop.QuitClosure());
-  conversions_->MaybeConvert(test::BuildDefaultConversionRedirectChain());
+  conversions_->MaybeConvert(test::kTabId,
+                             test::BuildDefaultConversionRedirectChain());
   run_loop.Run();
 }
 
@@ -49,15 +50,16 @@ TEST_F(BraveAdsConversionsSearchResultAdTest,
 
   const AdInfo ad = test::BuildAd(mojom::AdType::kSearchResultAd,
                                   /*use_random_uuids=*/false);
-  test::BuildAndSaveCreativeSetConversion(ad.creative_set_id,
-                                          test::kMatchingUrlPattern,
-                                          /*observation_window=*/base::Days(3));
+  test::BuildAndSaveCampaignConversion(ad.campaign_id,
+                                       test::kMatchingUrlPattern,
+                                       /*observation_window=*/base::Days(3));
   test::RecordAdEvents(ad, {mojom::ConfirmationType::kServedImpression,
                             mojom::ConfirmationType::kViewedImpression});
 
   // Act & Assert
   VerifyOnDidNotConvertAdExpectation();
-  conversions_->MaybeConvert(test::BuildDefaultConversionRedirectChain());
+  conversions_->MaybeConvert(test::kTabId,
+                             test::BuildDefaultConversionRedirectChain());
 }
 
 TEST_F(BraveAdsConversionsSearchResultAdTest,
@@ -65,9 +67,9 @@ TEST_F(BraveAdsConversionsSearchResultAdTest,
   // Arrange
   const AdInfo ad = test::BuildAd(mojom::AdType::kSearchResultAd,
                                   /*use_random_uuids=*/false);
-  test::BuildAndSaveCreativeSetConversion(ad.creative_set_id,
-                                          test::kMatchingUrlPattern,
-                                          /*observation_window=*/base::Days(3));
+  test::BuildAndSaveCampaignConversion(ad.campaign_id,
+                                       test::kMatchingUrlPattern,
+                                       /*observation_window=*/base::Days(3));
   test::RecordAdEvents(ad, {mojom::ConfirmationType::kServedImpression,
                             mojom::ConfirmationType::kViewedImpression,
                             mojom::ConfirmationType::kClicked});
@@ -76,7 +78,8 @@ TEST_F(BraveAdsConversionsSearchResultAdTest,
   base::RunLoop run_loop;
   VerifyOnDidConvertAdExpectation(ad, ConversionActionType::kClickThrough,
                                   run_loop.QuitClosure());
-  conversions_->MaybeConvert(test::BuildDefaultConversionRedirectChain());
+  conversions_->MaybeConvert(test::kTabId,
+                             test::BuildDefaultConversionRedirectChain());
   run_loop.Run();
 }
 
@@ -87,16 +90,17 @@ TEST_F(BraveAdsConversionsSearchResultAdTest,
 
   const AdInfo ad = test::BuildAd(mojom::AdType::kSearchResultAd,
                                   /*use_random_uuids=*/false);
-  test::BuildAndSaveCreativeSetConversion(ad.creative_set_id,
-                                          test::kMatchingUrlPattern,
-                                          /*observation_window=*/base::Days(3));
+  test::BuildAndSaveCampaignConversion(ad.campaign_id,
+                                       test::kMatchingUrlPattern,
+                                       /*observation_window=*/base::Days(3));
   test::RecordAdEvents(ad, {mojom::ConfirmationType::kServedImpression,
                             mojom::ConfirmationType::kViewedImpression,
                             mojom::ConfirmationType::kClicked});
 
   // Act & Assert
   VerifyOnDidNotConvertAdExpectation();
-  conversions_->MaybeConvert(test::BuildDefaultConversionRedirectChain());
+  conversions_->MaybeConvert(test::kTabId,
+                             test::BuildDefaultConversionRedirectChain());
 }
 
 TEST_F(BraveAdsConversionsSearchResultAdTest,
@@ -106,16 +110,17 @@ TEST_F(BraveAdsConversionsSearchResultAdTest,
 
   const AdInfo ad = test::BuildAd(mojom::AdType::kSearchResultAd,
                                   /*use_random_uuids=*/false);
-  test::BuildAndSaveCreativeSetConversion(ad.creative_set_id,
-                                          test::kMatchingUrlPattern,
-                                          /*observation_window=*/base::Days(3));
+  test::BuildAndSaveCampaignConversion(ad.campaign_id,
+                                       test::kMatchingUrlPattern,
+                                       /*observation_window=*/base::Days(3));
 
   // We do not record ad events for non-Rewards users.
   test::RecordAdEvents(ad, /*mojom_confirmation_types=*/{});
 
   // Act & Assert
   VerifyOnDidNotConvertAdExpectation();
-  conversions_->MaybeConvert(test::BuildDefaultConversionRedirectChain());
+  conversions_->MaybeConvert(test::kTabId,
+                             test::BuildDefaultConversionRedirectChain());
 }
 
 TEST_F(BraveAdsConversionsSearchResultAdTest,
@@ -125,9 +130,9 @@ TEST_F(BraveAdsConversionsSearchResultAdTest,
 
   const AdInfo ad = test::BuildAd(mojom::AdType::kSearchResultAd,
                                   /*use_random_uuids=*/false);
-  test::BuildAndSaveCreativeSetConversion(ad.creative_set_id,
-                                          test::kMatchingUrlPattern,
-                                          /*observation_window=*/base::Days(3));
+  test::BuildAndSaveCampaignConversion(ad.campaign_id,
+                                       test::kMatchingUrlPattern,
+                                       /*observation_window=*/base::Days(3));
 
   // We only record ad clicked and conversion events for non-Rewards users.
   test::RecordAdEvent(ad, mojom::ConfirmationType::kClicked);
@@ -136,7 +141,8 @@ TEST_F(BraveAdsConversionsSearchResultAdTest,
   base::RunLoop run_loop;
   VerifyOnDidConvertAdExpectation(ad, ConversionActionType::kClickThrough,
                                   run_loop.QuitClosure());
-  conversions_->MaybeConvert(test::BuildDefaultConversionRedirectChain());
+  conversions_->MaybeConvert(test::kTabId,
+                             test::BuildDefaultConversionRedirectChain());
   run_loop.Run();
 }
 

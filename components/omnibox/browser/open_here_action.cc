@@ -5,13 +5,12 @@
 
 #include "brave/components/omnibox/browser/open_here_action.h"
 
-#include <numeric>
 #include <utility>
 
 #include "build/build_config.h"
 #include "components/grit/brave_components_strings.h"
 #include "components/omnibox/browser/buildflags.h"
-#include "ui/base/window_open_disposition.h"
+#include "ui/base/mojom/window_open_disposition.mojom.h"
 
 #if defined(SUPPORT_PEDALS_VECTOR_ICONS)
 #include "brave/components/vector_icons/vector_icons.h"
@@ -27,7 +26,7 @@ OpenHereAction::OpenHereAction(GURL url)
 OpenHereAction::~OpenHereAction() = default;
 
 void OpenHereAction::Execute(ExecutionContext& context) const {
-  context.disposition_ = WindowOpenDisposition::CURRENT_TAB;
+  context.disposition_ = ui::mojom::WindowOpenDisposition::kCurrentTab;
   OpenURL(context, url_);
 }
 

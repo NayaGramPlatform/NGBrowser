@@ -7,8 +7,8 @@
 
 #include "base/files/file_path.h"
 #include "base/functional/callback_helpers.h"
-#include "base/run_loop.h"
-#include "base/test/bind.h"
+#include "base/test/test_future.h"
+#include "brave/components/brave_sync/test/test_sync_code.h"
 #include "brave/components/sync/service/brave_sync_service_impl.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/keep_alive/profile_keep_alive_waiter.h"
@@ -17,7 +17,6 @@
 #include "chrome/browser/profiles/profile_test_util.h"
 #include "chrome/browser/profiles/profiles_state.h"
 #include "chrome/browser/sync/sync_service_factory.h"
-#include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_window/public/create_browser_window.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "content/public/test/browser_test.h"
@@ -30,13 +29,6 @@ static_assert(!BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS));
 using testing::IsEmpty;
 using testing::Not;
 using testing::Optional;
-
-namespace {
-constexpr char kValidSyncCode[] =
-    "fringe digital begin feed equal output proof cheap "
-    "exotic ill sure question trial squirrel glove celery "
-    "awkward push jelly logic broccoli almost grocery drift";
-}
 
 // Inspired by src/chrome/browser/profiles/delete_profile_helper_browsertest.cc
 class DeleteProfileHelperBrowserTest : public InProcessBrowserTest {
@@ -69,20 +61,19 @@ IN_PROC_BROWSER_TEST_F(DeleteProfileHelperBrowserTest,
               &profile_to_delete));
 
   // Set the sync code to ensure it will be cleared on profile deletion
-  EXPECT_TRUE(brave_sync_service->SetSyncCode(kValidSyncCode));
+  EXPECT_TRUE(brave_sync_service->SetSyncCode(brave_sync::kValidSyncCode));
 
   auto seed = brave_sync_service->GetSeed();
   ASSERT_TRUE(seed.has_value());
   EXPECT_THAT(seed.value(), Not(IsEmpty()));
 
-  base::RunLoop loop;
+  base::test::TestFuture<Profile*> deleted_future;
   profile_manager->GetDeleteProfileHelper().MaybeScheduleProfileForDeletion(
-      profile_path_to_delete,
-      base::BindLambdaForTesting([&loop](Profile* profile) { loop.Quit(); }),
+      profile_path_to_delete, deleted_future.GetCallback(),
       ProfileMetrics::DELETE_PROFILE_PRIMARY_ACCOUNT_NOT_ALLOWED);
 
   keep_alive_added_waiter.Wait();
-  loop.Run();
+  ASSERT_TRUE(deleted_future.Wait());
 
   // Ensure that we've invoked BraveSyncServiceImpl::StopAndClear() from
   // DisableSyncForProfileDeletion at delete_profile_helper.cc, so

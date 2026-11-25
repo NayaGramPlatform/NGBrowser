@@ -1,0 +1,18 @@
+diff --git a/chrome/test/data/webui/signin/BUILD.gn b/chrome/test/data/webui/signin/BUILD.gn
+index 22cc003882ab27ff7fc8aa7773dcbc51e7360a58..4e6b99cbc3d4007155fbde715d1059688554c5a5 100644
+--- a/chrome/test/data/webui/signin/BUILD.gn
++++ b/chrome/test/data/webui/signin/BUILD.gn
+@@ -2,6 +2,7 @@
+ # Use of this source code is governed by a BSD-style license that can be
+ # found in the LICENSE file.
+ 
++import("//brave/ui/webui/custom_profile_image/buildflags/buildflags.gni")
+ import("//components/signin/features.gni")
+ import("../build_webui_tests.gni")
+ 
+@@ -89,4 +90,5 @@ build_webui_tests("build") {
+       "//chrome/browser/resources/signin/profile_picker:build_ts",
+     ]
+   }
++  preprocessor_defines = [ "enable_brave_custom_profile_image_webui=$enable_brave_custom_profile_image_webui" ]
+ }

@@ -12,7 +12,10 @@
 #include "base/check.h"
 #include "base/check_is_test.h"
 #include "base/i18n/rtl.h"
+#include "base/numerics/safe_conversions.h"
+#include "brave/browser/ui/views/brave_layout_provider.h"
 #include "brave/browser/ui/views/frame/brave_browser_view.h"
+#include "brave/browser/ui/views/infobars/brave_infobar_container_view.h"
 #include "brave/browser/ui/views/sidebar/sidebar_container_view.h"
 #include "build/build_config.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_features.h"
@@ -24,13 +27,19 @@
 #include "chrome/browser/ui/views/bookmarks/bookmark_bar_view.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/frame/custom_corners_background.h"
+#include "chrome/browser/ui/views/frame/custom_floating_corner.h"
 #include "chrome/browser/ui/views/frame/layout/browser_view_layout_delegate.h"
 #include "chrome/browser/ui/views/frame/multi_contents_view.h"
+#include "chrome/browser/ui/views/frame/vertical_tab_strip_region_view.h"
 #include "chrome/browser/ui/views/infobars/infobar_container_view.h"
 #include "chrome/browser/ui/views/side_panel/side_panel.h"
+#include "ui/gfx/geometry/outsets.h"
 #include "ui/views/border.h"
+#include "ui/views/controls/separator.h"
 #include "ui/views/layout/layout_provider.h"
+#include "ui/views/layout/proposed_layout.h"
 #include "ui/views/view_class_properties.h"
+#include "ui/views/view_utils.h"
 
 BraveBrowserViewTabbedLayoutImpl::BraveBrowserViewTabbedLayoutImpl(
     std::unique_ptr<BrowserViewLayoutDelegate> delegate,
@@ -44,6 +53,24 @@ void BraveBrowserViewTabbedLayoutImpl::ConfigureTopContainerBackground(
     CustomCornersBackground* background) {
   BrowserViewTabbedLayoutImpl::ConfigureTopContainerBackground(params,
                                                                background);
+
+  // The upstream vertical tab strip abuts the top container's trailing edge
+  // when it's placed on the trailing side, so only the leading corner is the
+  // window's corner, unless the strip is pushed down by the trailing caption
+  // buttons.
+  if (views().vertical_tab_strip_region_view &&
+      delegate().GetTabStripType() == TabStripType::kVertical &&
+      !IsVerticalTabStripLeading()) {
+    CustomCornersBackground::Corners corners;
+    corners[CornerOrientation::kTopLeading] =
+        background->GetWindowCorner(/*upper=*/true);
+    if (!params.trailing_exclusion.IsEmpty()) {
+      corners[CornerOrientation::kTopTrailing] =
+          background->GetWindowCorner(/*upper=*/true);
+    }
+    background->SetCorners(corners);
+  }
+
 #if BUILDFLAG(IS_LINUX)
   // Curve top container corners like window corner as it's top-most UI
   // in vertical tabs.
@@ -117,41 +144,17 @@ gfx::Rect BraveBrowserViewTabbedLayoutImpl::ComputeAdjustedPanelBounds(
 // static
 gfx::Rect BraveBrowserViewTabbedLayoutImpl::ComputeAdjustedInfobarBounds(
     const gfx::Rect& current_bounds,
-    int full_window_width,
+    const gfx::Rect& visual_client_area,
     std::optional<gfx::Insets> vtab_insets) {
   gfx::Rect bounds = current_bounds;
-  bounds.set_width(full_window_width);
+  // A leading side panel shifts |current_bounds.x()| right (not just narrows
+  // it), so width alone isn't enough to undo it.
+  bounds.set_x(visual_client_area.x());
+  bounds.set_width(visual_client_area.width());
   if (vtab_insets) {
     bounds.Inset(*vtab_insets);
   }
   return bounds;
-}
-
-int BraveBrowserViewTabbedLayoutImpl::GetIdealSideBarWidth() const {
-  if (!views().sidebar_container) {
-    return 0;
-  }
-
-  return GetIdealSideBarWidth(views().multi_contents_view->width() +
-                              GetContentsMargins().width() +
-                              views().sidebar_container->width());
-}
-
-int BraveBrowserViewTabbedLayoutImpl::GetIdealSideBarWidth(
-    int available_width) const {
-  if (!views().sidebar_container) {
-    return 0;
-  }
-
-  int sidebar_width = views().sidebar_container->GetPreferredSize().width();
-
-  // The sidebar can take up the entire space for fullscreen.
-  if (sidebar_width == std::numeric_limits<int>::max()) {
-    return available_width;
-  }
-
-  // The sidebar should take up no more than 80% of the content area.
-  return std::min<int>(available_width * 0.8, sidebar_width);
 }
 
 gfx::Size BraveBrowserViewTabbedLayoutImpl::GetMinimumSize(
@@ -176,6 +179,12 @@ BraveBrowserViewTabbedLayoutImpl::CalculateProposedLayout(
   // Get the base layout from parent class
   ProposedLayout layout =
       BrowserViewTabbedLayoutImpl::CalculateProposedLayout(params);
+
+  if (views().vertical_tab_strip_region_view &&
+      delegate().GetTabStripType() == TabStripType::kVertical &&
+      !views().vertical_tab_strip_region_view->IsVerticalTabStripLeading()) {
+    MoveUpstreamVerticalTabStripToTrailingSide(layout, params);
+  }
 
   if (IsParentedToAndVisible(views().focus_mode_title_bar,
                              views().browser_view)) {
@@ -238,6 +247,97 @@ BraveBrowserViewTabbedLayoutImpl::CalculateProposedLayout(
   return layout;
 }
 
+// Upstream always lays out the vertical tab strip, and everything that is
+// inset for it, as if the strip was on the leading side (the content insets are
+// handled by a small rewrite of the upstream layout). This moves the strip
+// itself to the trailing side.
+void BraveBrowserViewTabbedLayoutImpl::
+    MoveUpstreamVerticalTabStripToTrailingSide(
+        ProposedLayout& layout,
+        const BrowserLayoutParams& params) const {
+  VerticalTabStripRegionView* region_view =
+      views().vertical_tab_strip_region_view;
+
+  ProposedLayout* tab_strip_layout = layout.GetLayoutFor(region_view);
+  CHECK(tab_strip_layout);
+
+  gfx::Rect bounds = tab_strip_layout->bounds;
+  bounds.set_x(params.visual_client_area.right() - bounds.width());
+
+  // Upstream offsets the strip below the leading exclusion only while it's
+  // collapsed (the offset is animated and is 0 when expanded), so undo exactly
+  // the offset it applied. Other offsets (e.g. the separator inset in
+  // fullscreen) are kept. Then always place the strip below the trailing
+  // exclusion (e.g. the caption buttons on Windows/Linux), as the top container
+  // can't lay its buttons out around trailing caption buttons.
+  const int top_offset = bounds.y() - params.visual_client_area.y();
+  if (top_offset > 0 && !params.leading_exclusion.IsEmpty()) {
+    bounds.Outset(gfx::Outsets::TLBR(top_offset, 0, 0, 0));
+  }
+  bounds.Inset(gfx::Insets::TLBR(
+      base::ClampCeil(params.trailing_exclusion.ContentWithPadding().height()),
+      0, 0, 0));
+  tab_strip_layout->bounds = bounds;
+
+  // The strip is below the trailing caption buttons, so extend the top
+  // container's background to the trailing edge to fill the corner above the
+  // strip, so that the caption buttons look laid over it. This mirrors what
+  // upstream does for the leading caption buttons when the strip is collapsed.
+  // Only the container grows; its children keep their bounds.
+  if (!params.trailing_exclusion.IsEmpty()) {
+    if (auto* top_container_layout = layout.GetLayoutFor(views().top_container);
+        top_container_layout && !top_container_layout->bounds.IsEmpty()) {
+      top_container_layout->bounds.set_width(params.visual_client_area.right() -
+                                             top_container_layout->bounds.x());
+    }
+  }
+
+  // Upstream set these while the strip was still on the leading side, so
+  // recompute them for its final bounds:
+  //  * Caption button width: the leading caption buttons are now on the other
+  //    side of the window, so they no longer cover the top container.
+  //  * Toolbar height: measured from the strip's final top so the top
+  //    container's buttons align with the toolbar.
+  //  * Transition button opacity: upstream only fades the collapse/unfocus
+  //    buttons to avoid those caption buttons, so keep them opaque.
+  region_view->SetCaptionButtonWidthForLayout(0);
+  int toolbar_height = 0;
+  if (auto toolbar_bounds =
+          layout.GetBoundsFor(views().toolbar, views().browser_view)) {
+    toolbar_height = toolbar_bounds->bottom() - bounds.y();
+  }
+  region_view->SetToolbarHeightForLayout(std::max(0, toolbar_height));
+  region_view->SetTransitionButtonOpacity(1.0f);
+
+  if (auto* const backdrop_layout = layout.GetLayoutFor(
+          views().vertical_tab_strip_background_blur_backdrop)) {
+    backdrop_layout->bounds = bounds;
+  }
+
+  // Upstream lays the corners out next to the strip's trailing edge, i.e. as if
+  // the strip was on the leading side. Move them to the content-facing side.
+  auto update_corner = [&](CustomFloatingCorner* corner, bool top) {
+    if (!corner) {
+      return;
+    }
+    ProposedLayout* corner_layout = layout.GetLayoutFor(corner);
+    CHECK(corner_layout);
+
+    // outsets the bounds by the stroke thickness on the strip side.
+    const int corner_width =
+        corner_layout->bounds.width() - views::Separator::kThickness;
+    gfx::Rect bounds = corner_layout->bounds;
+    bounds.set_x(tab_strip_layout->bounds.x() - corner_width);
+    if (top) {
+      bounds.set_y(tab_strip_layout->bounds.y());
+    }
+    corner_layout->bounds = bounds;
+  };
+
+  update_corner(views().vertical_tab_strip_top_corner, /*top=*/true);
+  update_corner(views().vertical_tab_strip_bottom_corner, /*top=*/false);
+}
+
 void BraveBrowserViewTabbedLayoutImpl::AdjustInfobarLayout(
     ProposedLayout& layout,
     const BrowserLayoutParams params) const {
@@ -250,10 +350,23 @@ void BraveBrowserViewTabbedLayoutImpl::AdjustInfobarLayout(
   CHECK(infobar_layout);
 
   infobar_layout->bounds = ComputeAdjustedInfobarBounds(
-      infobar_layout->bounds, params.visual_client_area.width(),
+      infobar_layout->bounds, params.visual_client_area,
       views().vertical_tab_strip_host
           ? std::make_optional(GetInsetsConsideringVerticalTabHost())
           : std::nullopt);
+
+  infobar_layout->bounds.Inset(GetInfobarMargins());
+}
+
+gfx::RoundedCornersF
+BraveBrowserViewTabbedLayoutImpl::CalculateInfobarCornerRadii() const {
+  if (!delegate().ShouldUseBraveWebViewRoundedCornersForContents()) {
+    return {};
+  }
+
+  return gfx::RoundedCornersF(
+      views::LayoutProvider::Get()->GetCornerRadiusMetric(
+          ExtendedShapeContextTokens::kRoundedCornersBorderRadius));
 }
 
 gfx::Rect BraveBrowserViewTabbedLayoutImpl::CalculateTopContainerLayout(
@@ -305,7 +418,19 @@ void BraveBrowserViewTabbedLayoutImpl::DoPostLayoutVisualAdjustments(
     const BrowserLayoutParams& params) {
   BrowserViewTabbedLayoutImpl::DoPostLayoutVisualAdjustments(params);
   UpdateInsetsForVerticalTabStrip();
-  delegate().UpdateContentsCornerRadii(CalculateContentsCornerRadii());
+  delegate().UpdateContentsCornerRadii(CalculateContentsCornerRadii(),
+                                       CalculateWebPanelCornerRadii());
+
+  if (auto* infobar_container = views::AsViewClass<BraveInfoBarContainerView>(
+          views().infobar_container.get())) {
+    const bool rounded =
+        delegate().IsInfobarVisible() &&
+        delegate().ShouldUseBraveWebViewRoundedCornersForContents();
+    infobar_container->SetRoundedBorderEnabled(rounded,
+                                               CalculateInfobarCornerRadii());
+  }
+
+  UpdateVerticalTabStripCorners(params);
 
   if (delegate().GetTabStripType() == TabStripType::kVertical) {
     return;
@@ -315,25 +440,65 @@ void BraveBrowserViewTabbedLayoutImpl::DoPostLayoutVisualAdjustments(
       static_cast<CustomCornersBackground*>(views().toolbar->background());
   CustomCornersBackground::Corners toolbar_corners;
 
-#if BUILDFLAG(IS_LINUX)
+  // Without a horizontal tab strip or window title bar above it, the toolbar
+  // should not round its top corners with frame-colored cutouts.
   if (delegate().ShouldShowVerticalTabs() &&
       !delegate().ShouldShowWindowTitleForVerticalTabs()) {
-    // Curve toolbar corners like window corner as toolbar it's top-most UI in
-    // vertical tabs.
+#if BUILDFLAG(IS_LINUX)
+    // Curve the toolbar corners to match the window corners, since the toolbar
+    // is the topmost UI.
     toolbar_corners[CornerOrientation::kTopTrailing] =
         toolbar_background->GetWindowCorner(/*upper=*/true);
     toolbar_corners[CornerOrientation::kTopLeading] =
         toolbar_background->GetWindowCorner(/*upper=*/true);
+#endif  // BUILDFLAG(IS_LINUX)
     toolbar_background->SetCorners(toolbar_corners);
     return;
   }
-#endif  // BUILDFLAG(IS_LINUX)
 
   toolbar_corners[CornerOrientation::kTopTrailing].type =
       CustomCornersBackground::CornerType::kRoundedWithBackground;
   toolbar_corners[CornerOrientation::kTopLeading].type =
       CustomCornersBackground::CornerType::kRoundedWithBackground;
   toolbar_background->SetCorners(toolbar_corners);
+}
+
+void BraveBrowserViewTabbedLayoutImpl::UpdateVerticalTabStripCorners(
+    const BrowserLayoutParams& params) {
+  if (!views().vertical_tab_strip_region_view ||
+      delegate().GetTabStripType() != TabStripType::kVertical) {
+    return;
+  }
+
+  // Upstream only ever sets leading-side corner orientation/corners, so set
+  // them for the strip's actual side here, after upstream has applied its
+  // own.
+  const bool leading =
+      views().vertical_tab_strip_region_view->IsVerticalTabStripLeading();
+  if (views().vertical_tab_strip_top_corner) {
+    views().vertical_tab_strip_top_corner->SetOrientation(
+        leading ? CornerOrientation::kTopLeading
+                : CornerOrientation::kTopTrailing);
+  }
+  if (views().vertical_tab_strip_bottom_corner) {
+    views().vertical_tab_strip_bottom_corner->SetOrientation(
+        leading ? CornerOrientation::kBottomLeading
+                : CornerOrientation::kBottomTrailing);
+  }
+  if (!leading) {
+    auto* const vertical_tabs_background =
+        views()
+            .vertical_tab_strip_region_view->background()
+            ->AsA<CustomCornersBackground>();
+    CustomCornersBackground::Corners corners;
+    if (params.trailing_exclusion.IsEmpty()) {
+      corners[CornerOrientation::kTopTrailing] =
+          vertical_tabs_background->GetWindowCorner(/*upper=*/true);
+    }
+    corners[CornerOrientation::kBottomTrailing] =
+        vertical_tabs_background->GetWindowCorner(/*upper=*/false);
+    vertical_tabs_background->SetCorners(corners);
+  }
 }
 
 int BraveBrowserViewTabbedLayoutImpl::GetHorizontalTabStripLeadingMargin(
@@ -445,13 +610,22 @@ void BraveBrowserViewTabbedLayoutImpl::CalculateSideBarLayout(
   // lambda below.
 
   // Vertical tab is outermost when on the same side as the sidebar.
-  const bool vtab_on_same_side =
-      views().vertical_tab_strip_host && delegate().ShouldShowVerticalTabs() &&
-      (sidebar_leading == IsVerticalTabStripLeading());
-  const int vtab_width =
-      vtab_on_same_side
-          ? views().vertical_tab_strip_host->GetPreferredSize().width()
-          : 0;
+  const bool vtab_on_same_side_as_sidebar =
+      sidebar_leading == IsVerticalTabStripLeading();
+  int vtab_width = 0;
+  bool is_upstream_vtab = false;
+  if (vtab_on_same_side_as_sidebar) {
+    if (views().vertical_tab_strip_host &&
+        delegate().ShouldShowVerticalTabs()) {
+      vtab_width = views().vertical_tab_strip_host->GetPreferredSize().width();
+    } else {
+      // Upstream's vertical tab strip. Upstream's layout has already excluded
+      // it from the contents and the side panel's anchor, but the sidebar is
+      // positioned against the browser edges.
+      vtab_width = GetUpstreamVerticalTabStripWidth();
+      is_upstream_vtab = true;
+    }
+  }
 
   // Outer available edges, inset for any vertical tab on the same side.
   const gfx::Rect browser_bounds = views().browser_view->GetLocalBounds();
@@ -460,12 +634,8 @@ void BraveBrowserViewTabbedLayoutImpl::CalculateSideBarLayout(
   const int outer_right =
       browser_bounds.right() - (sidebar_leading ? 0 : vtab_width);
 
-  // Sidebar width capped at 80% of the space shared between contents and
-  // sidebar (contents_bounds.width()), i.e. the available width minus the vtab
-  // and the upstream side panel width. The sidebar control is narrow enough
-  // that the cap never fires.
-  const int sidebar_width = GetIdealSideBarWidth(contents_bounds.width());
-
+  const int sidebar_width =
+      views().sidebar_container->GetPreferredSize().width();
   const gfx::Rect sidebar_bounds = ComputeSidebarBounds(
       sidebar_leading, sidebar_width, outer_left, outer_right,
       contents_bounds.y(), contents_bounds.height());
@@ -480,9 +650,15 @@ void BraveBrowserViewTabbedLayoutImpl::CalculateSideBarLayout(
     if (!panel_layout) {
       return;
     }
+    // Upstream anchored the panel to the area excluding its vertical tab strip.
+    gfx::Rect anchor_area = params.visual_client_area;
+    if (is_upstream_vtab) {
+      anchor_area.Inset(sidebar_leading
+                            ? gfx::Insets::TLBR(0, vtab_width, 0, 0)
+                            : gfx::Insets::TLBR(0, 0, 0, vtab_width));
+    }
     panel_layout->bounds = ComputeAdjustedPanelBounds(
-        sidebar_leading, sidebar_bounds, panel_layout->bounds,
-        params.visual_client_area);
+        sidebar_leading, sidebar_bounds, panel_layout->bounds, anchor_area);
     // The upstream layout offsets the panel -1px above the contents to overlap
     // the toolbar separator. Brave doesn't need that overlap; align the panel's
     // vertical extent with the contents container instead.
@@ -534,56 +710,33 @@ void BraveBrowserViewTabbedLayoutImpl::InsetContentsContainerBounds(
     return;
   }
 
-  // In rounded corners mode, we need to include a little margin so we have
-  // somewhere to draw the shadow.
-  int contents_margin_for_rounded_corners =
-      delegate().ShouldUseBraveWebViewRoundedCornersForContents()
-          ? delegate().GetRoundedCornersWebViewMargin()
-          : 0;
-
-  // Due to vertical tab's padding(tabs::kMarginForVerticalTabContainers), we
-  // can see some space between vertical tab and contents. However, If we don't
-  // have margin from contents, vertical tab side contents shadow isn't visible.
-  // So, having half of margin from vertical tab and half from contents.
+  // The vertical tab strip and the sidebar already pad themselves from the
+  // contents, so a margin on the side they occupy would double the gap. Only
+  // window-facing sides keep one.
   if (delegate().ShouldShowVerticalTabs() &&
       (views().vertical_tab_strip_host &&
        views().vertical_tab_strip_host->GetPreferredSize().width() != 0) &&
       !delegate().IsFullscreenForBrowser()) {
-    const int margin_with_vertical_tab =
-        delegate().ShouldUseBraveWebViewRoundedCornersForContents()
-            ? (tabs::kMarginForVerticalTabContainers / 2)
-            : 0;
     if (IsVerticalTabStripLeading()) {
-      contents_margins.set_left(margin_with_vertical_tab);
+      contents_margins.set_left(0);
     } else {
-      contents_margins.set_right(margin_with_vertical_tab);
+      contents_margins.set_right(0);
     }
   }
 
-  // If side panel is shown, contents container should have margin
-  // because panel doesn't have margin.
-  if (delegate().IsContentTypeSidePanelVisible()) {
-    contents_container_bounds.Inset(contents_margins);
-    contents_layout->bounds = contents_container_bounds;
-    return;
+  // Likewise on the alignment side: whichever of the sidebar or the side panel
+  // abuts the contents there owns the gap. The panel reserves it as border
+  // insets so its resize strip has room (see SidePanel::UpdateBorder()).
+  if (views().sidebar_container &&
+      (views().sidebar_container->IsSidebarVisible() ||
+       delegate().IsContentTypeSidePanelVisible())) {
+    if (IsSidebarLeading()) {
+      contents_margins.set_left(0);
+    } else {
+      contents_margins.set_right(0);
+    }
   }
 
-  // If sidebar UI is not shown, contents container should have margin.
-  if (!views().sidebar_container ||
-      !views().sidebar_container->IsSidebarVisible()) {
-    contents_container_bounds.Inset(contents_margins);
-    contents_layout->bounds = contents_container_bounds;
-    return;
-  }
-
-  // If sidebar UI is only shown, contents container should have margin
-  // based on sidebar's position because sidebar UI itself has padding always.
-  // The contents container doesn't need the full margin on the sidebar side.
-  if (IsSidebarLeading()) {
-    contents_margins.set_left(contents_margin_for_rounded_corners);
-  } else {
-    contents_margins.set_right(contents_margin_for_rounded_corners);
-  }
   contents_container_bounds.Inset(contents_margins);
   contents_layout->bounds = contents_container_bounds;
 }
@@ -636,6 +789,27 @@ gfx::Insets BraveBrowserViewTabbedLayoutImpl::GetContentsMargins() const {
   return margins;
 }
 
+gfx::Insets BraveBrowserViewTabbedLayoutImpl::GetInfobarMargins() const {
+  if (!delegate().ShouldUseBraveWebViewRoundedCornersForContents()) {
+    return {};
+  }
+
+  // The infobar floats as its own card with the contents view's margin on every
+  // window-facing side. The sidebar and the side panel are laid out below the
+  // infobar, so only the vertical tab strip can abut it, and the strip already
+  // pads itself from its neighbours.
+  gfx::Insets margins(kRoundedCornersContentsViewMargin);
+  if (IsVerticalTabStripAtContentsEdge()) {
+    if (IsVerticalTabStripLeading()) {
+      margins.set_left(0);
+    } else {
+      margins.set_right(0);
+    }
+  }
+
+  return margins;
+}
+
 bool BraveBrowserViewTabbedLayoutImpl::IsContentsAtTopEdge() const {
   if (delegate().IsInfobarVisible()) {
     return false;
@@ -671,17 +845,81 @@ bool BraveBrowserViewTabbedLayoutImpl::IsVerticalTabStripAtContentsEdge()
   // A vertical tab strip that reports no width floats above the contents
   // instead of sitting beside it. This is the same test used to decide whether
   // the contents are inset for it.
-  return delegate().ShouldShowVerticalTabs() &&
-         views().vertical_tab_strip_host &&
-         views().vertical_tab_strip_host->GetPreferredSize().width() != 0;
+  return (delegate().ShouldShowVerticalTabs() &&
+          views().vertical_tab_strip_host &&
+          views().vertical_tab_strip_host->GetPreferredSize().width() != 0) ||
+         GetUpstreamVerticalTabStripWidth() != 0;
 }
 
-bool BraveBrowserViewTabbedLayoutImpl::IsSidebarAtContentsEdge() const {
-  // Checking the sidebar control view alone is not sufficient, because a panel
-  // can be visible while the control view is hidden.
-  return (views().sidebar_container &&
-          views().sidebar_container->IsSidebarVisible()) ||
-         (views().side_panel && views().side_panel->GetVisible());
+int BraveBrowserViewTabbedLayoutImpl::GetUpstreamVerticalTabStripWidth() const {
+  if (delegate().ShouldShowVerticalTabs() ||
+      delegate().GetTabStripType() != TabStripType::kVertical ||
+      !IsParentedTo(views().vertical_tab_strip_region_view,
+                    views().browser_view)) {
+    return 0;
+  }
+  return views().vertical_tab_strip_region_view->GetPreferredSize().width();
+}
+
+// Returns the radii for one hosted area, given which of its sides meet
+// neighbouring UI rather than the window. A side with UI beyond it is an
+// interior edge and takes the smaller border radius; a side that reaches the
+// window takes the window-corner radius at the bottom, where the window itself
+// is rounded.
+gfx::RoundedCornersF BraveBrowserViewTabbedLayoutImpl::AssembleCornerRadii(
+    AdjacentUi adjacent_ui) const {
+  auto* layout_provider = views::LayoutProvider::Get();
+  const float window_corner_radius = layout_provider->GetCornerRadiusMetric(
+      ExtendedShapeContextTokens::kRoundedCornersBorderRadiusAtWindowCorner);
+  const float border_corner_radius = layout_provider->GetCornerRadiusMetric(
+      ExtendedShapeContextTokens::kRoundedCornersBorderRadius);
+
+  const bool at_top_edge = IsContentsAtTopEdge();
+
+  gfx::RoundedCornersF corner_radii(window_corner_radius);
+  if (adjacent_ui.left || !at_top_edge) {
+    corner_radii.set_upper_left(border_corner_radius);
+  }
+  if (adjacent_ui.right || !at_top_edge) {
+    corner_radii.set_upper_right(border_corner_radius);
+  }
+  if (adjacent_ui.left) {
+    corner_radii.set_lower_left(border_corner_radius);
+  }
+  if (adjacent_ui.right) {
+    corner_radii.set_lower_right(border_corner_radius);
+  }
+
+  return corner_radii;
+}
+
+// Whether the vertical tab strip and the sidebar/side panel sit beside the
+// contents area, on the visual left and right. Shared by both corner radii
+// calculations, since neither UI is inside the contents area.
+BraveBrowserViewTabbedLayoutImpl::AdjacentUi
+BraveBrowserViewTabbedLayoutImpl::GetUiAtContentsEdges() const {
+  AdjacentUi adjacent_ui;
+
+  if (IsVerticalTabStripAtContentsEdge()) {
+    if (delegate().IsVerticalTabOnRight()) {
+      adjacent_ui.right = true;
+    } else {
+      adjacent_ui.left = true;
+    }
+  }
+
+  // The sidebar control view and the side panel are separate views sharing the
+  // contents' alignment edge. Either one alone puts UI there - in particular
+  // the panel can be visible while the control view is hidden.
+  if (delegate().IsSidebarControlVisible() || delegate().IsSidePanelVisible()) {
+    if (delegate().IsSidebarOnLeft()) {
+      adjacent_ui.left = true;
+    } else {
+      adjacent_ui.right = true;
+    }
+  }
+
+  return adjacent_ui;
 }
 
 gfx::RoundedCornersF
@@ -691,55 +929,43 @@ BraveBrowserViewTabbedLayoutImpl::CalculateContentsCornerRadii() const {
     return {};
   }
 
-  auto* layout_provider = views::LayoutProvider::Get();
-  const float window_corner_radius = layout_provider->GetCornerRadiusMetric(
-      views::ShapeContextTokensOverride::
-          kRoundedCornersBorderRadiusAtWindowCorner);
-  const float border_corner_radius = layout_provider->GetCornerRadiusMetric(
-      views::ShapeContextTokensOverride::kRoundedCornersBorderRadius);
+  AdjacentUi adjacent_ui = GetUiAtContentsEdges();
 
-  bool has_left_ui = false;
-  bool has_right_ui = false;
-
-  if (IsVerticalTabStripAtContentsEdge()) {
-    if (delegate().IsVerticalTabOnRight()) {
-      has_right_ui = true;
+  // An open web panel stands between the contents and whatever is beyond it on
+  // the panel's side, so that side is an interior edge for the contents.
+  if (delegate().IsWebPanelVisible()) {
+    if (delegate().IsWebPanelOnLeft()) {
+      adjacent_ui.left = true;
     } else {
-      has_left_ui = true;
+      adjacent_ui.right = true;
     }
   }
 
-  if (IsSidebarAtContentsEdge()) {
-    bool on_left = false;
-    if (views().sidebar_container) {
-      on_left = views().sidebar_container->sidebar_on_left();
-    } else if (views().side_panel) {
-      on_left = !views().side_panel->IsRightAligned();
-    }
-    if (on_left) {
-      has_left_ui = true;
-    } else {
-      has_right_ui = true;
-    }
+  return AssembleCornerRadii(adjacent_ui);
+}
+
+gfx::RoundedCornersF
+BraveBrowserViewTabbedLayoutImpl::CalculateWebPanelCornerRadii() const {
+  if (!delegate().ShouldUseBraveWebViewRoundedCornersForContents() ||
+      delegate().IsFullscreenForTab()) {
+    return {};
   }
 
-  const bool at_top_edge = IsContentsAtTopEdge();
+  // Deliberately not gated on the panel being visible: these describe the
+  // panel's own geometry, and BraveMultiContentsView::SetWebPanelContents()
+  // reads them as they stand when showing the panel, before the layout it
+  // invalidates can run.
+  AdjacentUi adjacent_ui = GetUiAtContentsEdges();
 
-  gfx::RoundedCornersF corner_radii(window_corner_radius);
-  if (has_left_ui || !at_top_edge) {
-    corner_radii.set_upper_left(border_corner_radius);
-  }
-  if (has_right_ui || !at_top_edge) {
-    corner_radii.set_upper_right(border_corner_radius);
-  }
-  if (has_left_ui) {
-    corner_radii.set_lower_left(border_corner_radius);
-  }
-  if (has_right_ui) {
-    corner_radii.set_lower_right(border_corner_radius);
+  // The panel's contents-facing side is the one opposite the side it sits on,
+  // and the contents are always there.
+  if (delegate().IsWebPanelOnLeft()) {
+    adjacent_ui.right = true;
+  } else {
+    adjacent_ui.left = true;
   }
 
-  return corner_radii;
+  return AssembleCornerRadii(adjacent_ui);
 }
 
 gfx::Insets BraveBrowserViewTabbedLayoutImpl::GetContentsMarginsForTesting()
@@ -747,10 +973,32 @@ gfx::Insets BraveBrowserViewTabbedLayoutImpl::GetContentsMarginsForTesting()
   return GetContentsMargins();
 }
 
+gfx::Insets BraveBrowserViewTabbedLayoutImpl::GetInfobarMarginsForTesting()
+    const {
+  return GetInfobarMargins();
+}
+
+int BraveBrowserViewTabbedLayoutImpl::
+    GetUpstreamVerticalTabStripWidthForTesting() const {
+  return GetUpstreamVerticalTabStripWidth();
+}
+
 gfx::RoundedCornersF
 BraveBrowserViewTabbedLayoutImpl::CalculateContentsCornerRadiiForTesting()
     const {
   return CalculateContentsCornerRadii();
+}
+
+gfx::RoundedCornersF
+BraveBrowserViewTabbedLayoutImpl::CalculateWebPanelCornerRadiiForTesting()
+    const {
+  return CalculateWebPanelCornerRadii();
+}
+
+gfx::RoundedCornersF
+BraveBrowserViewTabbedLayoutImpl::CalculateInfobarCornerRadiiForTesting()
+    const {
+  return CalculateInfobarCornerRadii();
 }
 
 bool BraveBrowserViewTabbedLayoutImpl::ShouldPushBookmarkBarForVerticalTabs()

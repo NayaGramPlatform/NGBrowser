@@ -8,13 +8,14 @@ import { render, screen, waitFor, act } from '@testing-library/react'
 import { ManagePageConnected } from '../email_aliases'
 import {
   Alias,
+  AliasesAccountUpdate,
   AliasesUpdate,
   EmailAliasesServiceInterface,
   EmailAliasesServiceObserverInterface,
-} from 'gen/brave/components/email_aliases/email_aliases.mojom.m'
+} from 'gen/brave/components/email_aliases/email_aliases.mojom-webui.js'
 
 // Mock the email aliases service
-class MockEmailAliasesService extends EmailAliasesServiceInterface {
+class MockEmailAliasesService implements EmailAliasesServiceInterface {
   private observer?: EmailAliasesServiceObserverInterface
 
   addObserver(observer: EmailAliasesServiceObserverInterface) {
@@ -26,6 +27,12 @@ class MockEmailAliasesService extends EmailAliasesServiceInterface {
 
   notifyObserverAliasesUpdated(aliases: Alias[]) {
     this.observer?.onAliasesUpdated({ aliases } as AliasesUpdate)
+  }
+
+  notifyObserverAliasesAccountUpdated(maxAliasesCount: number) {
+    this.observer?.onAliasesAccountUpdated({
+      maxAliasesCount,
+    } as AliasesAccountUpdate)
   }
 
   notifyObserverAliasesLoadError(message: string) {
@@ -66,12 +73,12 @@ const mockAliases = [
   {
     email: 'alias1@brave.com',
     note: 'Test Alias 1',
-    domains: undefined,
+    domains: null,
   },
   {
     email: 'alias2@brave.com',
     note: 'Test Alias 2',
-    domains: undefined,
+    domains: null,
   },
 ]
 
@@ -81,6 +88,15 @@ const updateAliases = async (
 ) => {
   await act(() => {
     service.notifyObserverAliasesUpdated(aliases)
+  })
+}
+
+const updateAliasLimit = async (
+  service: MockEmailAliasesService,
+  maxAliasesCount: number,
+) => {
+  await act(() => {
+    service.notifyObserverAliasesAccountUpdated(maxAliasesCount)
   })
 }
 
@@ -97,7 +113,7 @@ describe('ManagePageConnected', () => {
       {
         email: 'alias1@brave.com',
         note: 'Test Alias 1',
-        domains: undefined,
+        domains: null,
       },
     ])
 
@@ -112,17 +128,17 @@ describe('ManagePageConnected', () => {
       {
         email: 'alias1@brave.com',
         note: 'Test Alias 1',
-        domains: undefined,
+        domains: null,
       },
       {
         email: 'alias2@brave.com',
         note: 'Test Alias 2',
-        domains: undefined,
+        domains: null,
       },
       {
         email: 'alias3@brave.com',
         note: 'Test Alias 3',
-        domains: undefined,
+        domains: null,
       },
     ])
 
@@ -141,17 +157,17 @@ describe('ManagePageConnected', () => {
       {
         email: 'alias1@brave.com',
         note: 'Test Alias 1',
-        domains: undefined,
+        domains: null,
       },
       {
         email: 'alias2@brave.com',
         note: 'Test Alias 2',
-        domains: undefined,
+        domains: null,
       },
       {
         email: 'alias3@brave.com',
         note: 'Test Alias 3',
-        domains: undefined,
+        domains: null,
       },
     ])
 
@@ -166,7 +182,7 @@ describe('ManagePageConnected', () => {
       {
         email: 'alias2@brave.com',
         note: 'Test Alias 2',
-        domains: undefined,
+        domains: null,
       },
     ])
 
@@ -185,17 +201,17 @@ describe('ManagePageConnected', () => {
       {
         email: 'alias1@brave.com',
         note: 'Test Alias 1',
-        domains: undefined,
+        domains: null,
       },
       {
         email: 'alias2@brave.com',
         note: 'Test Alias 2',
-        domains: undefined,
+        domains: null,
       },
       {
         email: 'alias3@brave.com',
         note: 'Test Alias 3',
-        domains: undefined,
+        domains: null,
       },
     ])
 
@@ -210,17 +226,17 @@ describe('ManagePageConnected', () => {
       {
         email: 'alias3@brave.com',
         note: 'Test Alias 3',
-        domains: undefined,
+        domains: null,
       },
       {
         email: '2.alias@brave.com',
         note: 'Test Alias 2',
-        domains: undefined,
+        domains: null,
       },
       {
         email: 'alias1@brave.com',
         note: 'Test Alias 1',
-        domains: undefined,
+        domains: null,
       },
     ])
 
@@ -242,17 +258,17 @@ describe('ManagePageConnected', () => {
       {
         email: 'alias1@brave.com',
         note: 'Test Alias 1',
-        domains: undefined,
+        domains: null,
       },
       {
         email: 'alias2@brave.com',
         note: 'Test Alias 2',
-        domains: undefined,
+        domains: null,
       },
       {
         email: 'alias3@brave.com',
         note: 'Test Alias 3',
-        domains: undefined,
+        domains: null,
       },
     ])
 
@@ -269,6 +285,25 @@ describe('ManagePageConnected', () => {
       expect(screen.queryByText('alias1@brave.com')).not.toBeInTheDocument()
       expect(screen.queryByText('alias2@brave.com')).not.toBeInTheDocument()
       expect(screen.queryByText('alias3@brave.com')).not.toBeInTheDocument()
+    })
+  })
+
+  it('updates the create limit via account observer', async () => {
+    const service = await setupTest()
+    await updateAliases(service)
+
+    const createButton = screen.getByText(
+      S.SETTINGS_EMAIL_ALIASES_CREATE_ALIAS_LABEL,
+    )
+
+    await updateAliasLimit(service, mockAliases.length)
+    await waitFor(() => {
+      expect(createButton).toHaveAttribute('isdisabled', 'true')
+    })
+
+    await updateAliasLimit(service, mockAliases.length + 1)
+    await waitFor(() => {
+      expect(createButton).toHaveAttribute('isdisabled', 'false')
     })
   })
 })

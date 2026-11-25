@@ -1,0 +1,13 @@
+diff --git a/chrome/browser/download/download_offline_content_provider.cc b/chrome/browser/download/download_offline_content_provider.cc
+index bf6855c8b07bb5baa9eaeef359fbd91eab3d41d0..50726485d2e8ead81713e88336b54b6e67cc7743 100644
+--- a/chrome/browser/download/download_offline_content_provider.cc
++++ b/chrome/browser/download/download_offline_content_provider.cc
+@@ -491,7 +491,7 @@ void DownloadOfflineContentProvider::OnDownloadUpdated(DownloadItem* item) {
+     return;
+   }
+ 
+-#if BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
++#if BUILDFLAG(IS_ANDROID) && BUILDFLAG(ENABLE_EXTENSIONS_CORE)
+   // On desktop Android, the extensions chrome.download.setUiOptions() function
+   // can disable UI updates.
+   // TODO(crbug.com/459823225): Expand the IsDangerous() check to other

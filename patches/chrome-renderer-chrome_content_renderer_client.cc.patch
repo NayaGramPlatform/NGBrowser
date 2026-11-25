@@ -1,8 +1,16 @@
 diff --git a/chrome/renderer/chrome_content_renderer_client.cc b/chrome/renderer/chrome_content_renderer_client.cc
-index 6c42a31de51ac311b3a02a5f73e97b2e0505bc26..caba185a03e62b89f1ca1ad2fe402960841f6af4 100644
+index 52f120d73c45b9a7be1486e8c9c5de5cbf4e1a05..d03131140b5c2258fc58778259521131bd10e156 100644
 --- a/chrome/renderer/chrome_content_renderer_client.cc
 +++ b/chrome/renderer/chrome_content_renderer_client.cc
-@@ -398,7 +398,9 @@ ChromeContentRendererClient::ChromeContentRendererClient(
+@@ -30,6 +30,7 @@
+ #include "base/threading/thread_restrictions.h"
+ #include "base/time/time.h"
+ #include "base/values.h"
++#include "brave/components/content_settings/renderer/brave_content_settings_agent_impl.h"
+ #include "build/branding_buildflags.h"
+ #include "build/build_config.h"
+ #include "chrome/common/buildflags.h"
+@@ -403,7 +404,9 @@ ChromeContentRendererClient::ChromeContentRendererClient(
  #endif
  }
  
@@ -13,7 +21,7 @@ index 6c42a31de51ac311b3a02a5f73e97b2e0505bc26..caba185a03e62b89f1ca1ad2fe402960
  
  void ChromeContentRendererClient::RenderThreadStarted() {
    RenderThread* thread = RenderThread::Get();
-@@ -663,7 +665,7 @@ void ChromeContentRendererClient::RenderFrameCreated(
+@@ -665,7 +668,7 @@ void ChromeContentRendererClient::RenderFrameCreated(
        extensions::ExtensionsRendererClient::Get()->dispatcher());
  #endif
    content_settings::ContentSettingsAgentImpl* content_settings =
@@ -22,12 +30,12 @@ index 6c42a31de51ac311b3a02a5f73e97b2e0505bc26..caba185a03e62b89f1ca1ad2fe402960
            render_frame, std::move(content_settings_delegate));
    if (chrome_observer_.get()) {
      if (chrome_observer_->content_settings_manager()) {
-@@ -743,7 +745,7 @@ void ChromeContentRendererClient::RenderFrameCreated(
-   if (dom_distiller::ShouldStartDistillabilityService()) {
+@@ -745,7 +748,7 @@ void ChromeContentRendererClient::RenderFrameCreated(
+   if (web_distiller::ShouldStartDistillabilityService()) {
      // Create DistillabilityAgent to send distillability updates to
      // DistillabilityDriver in the browser process.
--    new dom_distiller::DistillabilityAgent(render_frame, DCHECK_IS_ON());
-+    new dom_distiller::DistillabilityAgent(render_frame, false);
+-    new web_distiller::DistillabilityAgent(render_frame, DCHECK_IS_ON());
++    new web_distiller::DistillabilityAgent(render_frame, false);
    }
  
    blink::AssociatedInterfaceRegistry* associated_interfaces =

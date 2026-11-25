@@ -15,6 +15,7 @@
 # only allow moving temp files.
 -All/FileSystemAccessFileHandleImplMoveWriteModeTest.RequestsCorrectPermissions/*
 -All/FileSystemAccessFileHandleImplRenameWriteModeTest.RequestsCorrectPermissions/*
+-FileSystemAccessDirectoryHandleImplRevokedMountTest.ChildOperations_ReturnNotFound
 -FileSystemAccessDirectoryHandleImplTest.MoveNoReadAccess
 -FileSystemAccessFileHandleImplMoveTest.NoReadAccess
 -FileSystemAccessFileHandleImplMoveTest.NoReadAccessWriteOnlyDest
@@ -76,6 +77,7 @@
 -FencedFrameReporterTest.SendFledgeReportsBeforeMapsReceivedWithErrors
 -FencedFrameReporterTest.SendFledgeReportsNoMapReceived
 -FileBackedBlobFactoryFrameImplTest.Register_FencedFrameWithScopedFileAccessDelegate
+-PictureInPictureServiceImplTest.Bind_BlockedForFencedFrame
 -RequestTest.DisconnectFromFencedFrame
 
 # Flaky upstream and on CI (passes locally)

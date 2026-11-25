@@ -6,6 +6,7 @@ import BraveWidgetsModels
 import Foundation
 import Preferences
 import Shared
+import Strings
 import UIKit
 import Web
 
@@ -15,21 +16,30 @@ enum TabBarVisibility: Int, CaseIterable {
   case landscapeOnly
 }
 
-enum BackgroundMediaType: Int, CaseIterable {
-  case defaultImages
-  case sponsoredImages
+/// Raw values are spelled out so that reordering, inserting or renaming a case cannot remap
+/// already stored preferences, which is what broke the integer backed predecessor.
+public enum TopSitesMode: String, CaseIterable, Identifiable {
+  case none = "none"
+  case mostVisited = "most-visited"
+  case favourite = "favourite"
 
-  public var isSponsored: Bool {
+  public var id: Self { self }
+
+  /// Whether or not top sites are shown at all.
+  ///
+  /// Enabling sets the mode to `favourite`.
+  public var isEnabled: Bool {
+    get { self != .none }
+    set { self = newValue ? .favourite : .none }
+  }
+
+  public var title: String {
     switch self {
-    case .sponsoredImages: return true
-    case .defaultImages: return false
+    case .none: return Strings.NTP.topsitesTypeNone
+    case .mostVisited: return Strings.NTP.topsitesTypeMostVisited
+    case .favourite: return Strings.NTP.topsitesTypeFavorites
     }
   }
-}
-
-public enum TopsitesMode: Int {
-  case mostVisited
-  case favourite
 }
 
 extension Preferences {
@@ -171,9 +181,12 @@ extension Preferences {
       key: "search.show-suggestions-opt-in",
       default: true
     )
-    /// A list of disabled search engines
+    /// A list of disabled search engines, by `shortName`. Superseded by `quickSearchDisabled`;
+    /// nothing writes it anymore, but `migrateQuickSearchIfNeeded` still reads it to carry an
+    /// upgrading user's choices over, so it must outlive that migration.
     static let disabledEngines = Option<[String]?>(key: "search.disabled-engines", default: nil)
-    /// A list of ordered search engines or nil if they have not been set up yet
+    /// Available search engines by `shortName`, default engine first, or nil if they have not
+    /// been set up yet. No longer orders the quick search row — see `quickSearchOrder`.
     static let orderedEngines = Option<[String]?>(key: "search.ordered-engines", default: nil)
     /// The default selected search engine in regular mode
     public static let defaultEngineName = Option<String?>(key: "search.default.name", default: nil)
@@ -225,6 +238,10 @@ extension Preferences {
       key: "search.user-picked-private-dse-name",
       default: nil
     )
+    /// Ordered quick search item IDs. `nil` until migrated from `orderedEngines`.
+    static let quickSearchOrder = Option<[String]?>(key: "quick-search.order", default: nil)
+    /// Quick search item IDs the user has turned off.
+    static let quickSearchDisabled = Option<[String]?>(key: "quick-search.disabled", default: nil)
   }
 
   final public class BraveSearch {
@@ -239,6 +256,12 @@ extension Preferences {
     public static let braveSearchPromotionCompletionState = Option<Int>(
       key: "brave-search.promo-completion-state",
       default: BraveSearchPromotionState.undetermined.rawValue
+    )
+    /// Whether this install is eligible for the Brave Search verticals. Captured once at first
+    /// launch; the feature ships to new installs only.
+    public static let braveSearchVerticalsEligible = Option<Bool>(
+      key: "brave-search.brave-search-verticals-eligible",
+      default: false
     )
   }
 
@@ -280,22 +303,6 @@ extension Preferences {
   final public class NewTabPage {
     /// Whether bookmark image are enabled / shown
     static let backgroundImages = Option<Bool>(key: "newtabpage.background-images", default: true)
-
-    /// Determines the type of sponsored media to include in the background image rotation
-    /// - Warning: You should not access this directly but  through ``backgroundMediaType``
-    static let backgroundMediaTypeRaw = Option<Int>(
-      key: "newtabpage.background-media-type",
-      default: BackgroundMediaType.sponsoredImages.rawValue
-    )
-
-    /// A  variable to access the ``backgroundMediaTypeRaw`` preference value
-    static var backgroundMediaType: BackgroundMediaType {
-      get {
-        BackgroundMediaType(rawValue: backgroundMediaTypeRaw.value)
-          ?? BackgroundMediaType.sponsoredImages
-      }
-      set { backgroundMediaTypeRaw.value = newValue.rawValue }
-    }
 
     /// The counter that indicates what background should be shown, this is used to determine when a new
     ///     sponsored image should be shown. (`1` means, first image in cycle N, should be shown).
@@ -342,14 +349,16 @@ extension Preferences {
       default: false
     )
 
-    /// Tells the app whether we should show Favourites in new tab page view controller
-    public static let showNewTabFavourites =
-      Option<Bool>(key: "newtabpage.show-newtab-favourites", default: true)
-
-    /// Mode to display NTP tiles in NTP
-    public static let topsitesMode = Option<TopsitesMode?>(
-      key: "newtabpage.topsites-mode",
-      default: nil
+    /// Mode to display top sites in the new tab page.
+    ///
+    /// The key intentionally does not match the name: 1.99.x burned
+    /// `newtabpage.topsites-mode` by reordering the integer raw values of the enum stored under
+    /// it while reusing the key, so values already on disk are ambiguous and are migrated here
+    /// exactly once rather than reinterpreted. String raw values mean editing the `TopSitesMode`
+    /// cases can never remap stored preferences again.
+    public static let topSitesMode = Option<TopSitesMode>(
+      key: "newtabpage.topsites-mode-v2",
+      default: .favourite
     )
   }
 

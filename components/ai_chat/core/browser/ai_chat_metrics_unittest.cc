@@ -10,26 +10,29 @@
 #include <limits>
 #include <string>
 #include <string_view>
-#include <type_traits>
 #include <utility>
 
-#include "base/numerics/clamped_math.h"
 #include "base/test/bind.h"
 #include "base/test/metrics/histogram_tester.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "base/time/time.h"
 #include "brave/components/ai_chat/core/common/pref_names.h"
-#include "components/grit/brave_components_strings.h"
+#include "brave/components/sidebar/common/features.h"
 #include "components/prefs/testing_pref_service.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "ui/base/l10n/l10n_util.h"
 
 namespace ai_chat {
 
 class AIChatMetricsUnitTest : public testing::Test {
  public:
   AIChatMetricsUnitTest()
-      : task_environment_(base::test::TaskEnvironment::TimeSource::MOCK_TIME) {}
+      : task_environment_(base::test::TaskEnvironment::TimeSource::MOCK_TIME) {
+    // The sidebar default mode selects which histograms are reported; pin it to
+    // kOff so the unsuffixed histograms are the ones that get samples.
+    scoped_feature_list_.InitAndDisableFeature(
+        sidebar::features::kSidebarShowAlwaysOnStable);
+  }
 
   void SetUp() override {
     auto* registry = local_state_.registry();
@@ -106,6 +109,7 @@ class AIChatMetricsUnitTest : public testing::Test {
 
   MockConversationHandler conversation_handler_;
   bool is_premium_ = false;
+  base::test::ScopedFeatureList scoped_feature_list_;
   base::test::TaskEnvironment task_environment_;
   TestingPrefServiceSimple local_state_;
   TestingPrefServiceSimple profile_prefs_;
@@ -212,7 +216,6 @@ TEST_F(AIChatMetricsUnitTest, UsageDailyWeeklyAndMonthly) {
   is_premium_ = false;
 
   ai_chat_metrics_->RecordEnabled(true, false, GetPremiumCallback());
-  task_environment_.RunUntilIdle();
   histogram_tester_.ExpectTotalCount(kUsageDailyHistogramName, 0);
   histogram_tester_.ExpectTotalCount(kUsageWeeklyHistogramName, 0);
   histogram_tester_.ExpectTotalCount(kUsageMonthlyHistogramName, 0);
@@ -683,6 +686,48 @@ TEST_F(AIChatMetricsUnitTest, RateLimitMetrics) {
 
   task_environment_.FastForwardBy(base::Days(7));
   histogram_tester_.ExpectTotalCount(kRateLimitStopsHistogramName, 8);
+}
+
+TEST_F(AIChatMetricsUnitTest, ConversationCount) {
+  // Do not report if last usage time is not known.
+  ai_chat_metrics_->ReportConversationCount(1);
+  histogram_tester_.ExpectTotalCount(kConversationCountHistogramName, 0);
+
+  ai_chat_metrics_->RecordEnabled(true, false, GetPremiumCallback());
+  RecordPrompts("chat1", 1);
+
+  ai_chat_metrics_->ReportConversationCount(0);
+  histogram_tester_.ExpectBucketCount(kConversationCountHistogramName, 0, 1);
+  ai_chat_metrics_->ReportConversationCount(1);
+  histogram_tester_.ExpectBucketCount(kConversationCountHistogramName, 1, 1);
+  ai_chat_metrics_->ReportConversationCount(2);
+  histogram_tester_.ExpectBucketCount(kConversationCountHistogramName, 2, 1);
+  ai_chat_metrics_->ReportConversationCount(10);
+  histogram_tester_.ExpectBucketCount(kConversationCountHistogramName, 2, 2);
+  ai_chat_metrics_->ReportConversationCount(11);
+  histogram_tester_.ExpectBucketCount(kConversationCountHistogramName, 3, 1);
+  ai_chat_metrics_->ReportConversationCount(20);
+  histogram_tester_.ExpectBucketCount(kConversationCountHistogramName, 3, 2);
+  ai_chat_metrics_->ReportConversationCount(21);
+  histogram_tester_.ExpectBucketCount(kConversationCountHistogramName, 4, 1);
+  ai_chat_metrics_->ReportConversationCount(30);
+  histogram_tester_.ExpectBucketCount(kConversationCountHistogramName, 4, 2);
+  ai_chat_metrics_->ReportConversationCount(31);
+  histogram_tester_.ExpectBucketCount(kConversationCountHistogramName, 5, 1);
+  ai_chat_metrics_->ReportConversationCount(40);
+  histogram_tester_.ExpectBucketCount(kConversationCountHistogramName, 5, 2);
+  ai_chat_metrics_->ReportConversationCount(41);
+  histogram_tester_.ExpectBucketCount(kConversationCountHistogramName, 6, 1);
+  ai_chat_metrics_->ReportConversationCount(50);
+  histogram_tester_.ExpectBucketCount(kConversationCountHistogramName, 6, 2);
+  ai_chat_metrics_->ReportConversationCount(51);
+  histogram_tester_.ExpectBucketCount(kConversationCountHistogramName, 7, 1);
+
+  // Do not report if last usage was a week ago or more.
+  task_environment_.FastForwardBy(base::Days(7));
+  ai_chat_metrics_->ReportConversationCount(1);
+  histogram_tester_.ExpectBucketCount(kConversationCountHistogramName, 1, 1);
+  histogram_tester_.ExpectTotalCount(kConversationCountHistogramName, 13);
 }
 
 }  // namespace ai_chat

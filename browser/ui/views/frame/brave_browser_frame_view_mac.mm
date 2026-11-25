@@ -10,9 +10,7 @@
 #include <algorithm>
 #include <memory>
 
-#include "base/check_deref.h"
 #include "base/functional/bind.h"
-#include "base/memory/raw_ref.h"
 #include "brave/browser/ui/focus_mode/focus_mode_controller.h"
 #include "brave/browser/ui/tabs/brave_tab_prefs.h"
 #include "brave/browser/ui/tabs/public/vertical_tab_controller.h"
@@ -22,8 +20,6 @@
 #include "brave/browser/ui/views/frame/focus_mode_top_overlay.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/browser.h"
-#include "chrome/browser/ui/browser_window/public/browser_window_features.h"
 #include "chrome/browser/ui/fullscreen_util_mac.h"
 #include "chrome/browser/ui/immersive/immersive_mode_controller.h"
 #include "chrome/browser/ui/layout_constants.h"
@@ -37,25 +33,6 @@
 #include "ui/gfx/scoped_canvas.h"
 #include "ui/views/window/non_client_view.h"
 
-class BraveBrowserFrameViewMac::ScopedFocusModeDisable {
- public:
-  explicit ScopedFocusModeDisable(FocusModeController* controller)
-      : controller_(CHECK_DEREF(controller)),
-        was_enabled_(controller->IsEnabled()) {
-    controller_->SetEnabled(false);
-  }
-
-  ~ScopedFocusModeDisable() {
-    if (was_enabled_) {
-      controller_->SetEnabled(true);
-    }
-  }
-
- private:
-  const raw_ref<FocusModeController> controller_;
-  bool was_enabled_;
-};
-
 BraveBrowserFrameViewMac::BraveBrowserFrameViewMac(
     BrowserWidget* browser_widget,
     BrowserView* browser_view)
@@ -64,8 +41,7 @@ BraveBrowserFrameViewMac::BraveBrowserFrameViewMac(
   frame_graphic_ =
       std::make_unique<BraveWindowFrameGraphic>(browser->GetProfile());
 
-  if (VerticalTabController::FromBrowser(browser)
-          ->SupportsBraveVerticalTabs()) {
+  if (VerticalTabController::From(browser)->SupportsBraveVerticalTabs()) {
     auto* prefs = browser->GetProfile()->GetOriginalProfile()->GetPrefs();
     show_vertical_tabs_.Init(
         brave_tabs::kVerticalTabsEnabled, prefs,
@@ -75,11 +51,11 @@ BraveBrowserFrameViewMac::BraveBrowserFrameViewMac(
     show_title_bar_on_vertical_tabs_.Init(
         brave_tabs::kVerticalTabsShowTitleOnWindow, prefs,
         base::BindRepeating(
-            &BraveBrowserFrameViewMac::UpdateWindowTitleVisibility,
+            &BraveBrowserFrameViewMac::UpdateWindowTitleAndControls,
             base::Unretained(this)));
   }
 
-  if (auto* controller = browser->GetFeatures().focus_mode_controller()) {
+  if (auto* controller = FocusModeController::From(browser)) {
     focus_mode_observation_.Observe(controller);
     if (auto* overlay =
             BraveBrowserView::From(browser_view)->focus_mode_top_overlay()) {
@@ -131,7 +107,7 @@ void BraveBrowserFrameViewMac::OnPaint(gfx::Canvas* canvas) {
 }
 
 int BraveBrowserFrameViewMac::GetTopInset(bool restored) const {
-  if (VerticalTabController::FromBrowser(GetBrowserView()->browser())
+  if (VerticalTabController::From(GetBrowserView()->browser())
           ->ShouldShowBraveVerticalTabs()) {
     if (ShouldShowWindowTitleForVerticalTabs()) {
       // Set minimum top inset to show caption buttons on frame.
@@ -164,7 +140,7 @@ BraveBrowserFrameViewMac::GetCaptionButtonBounds() const {
 }
 
 bool BraveBrowserFrameViewMac::ShouldShowWindowTitleForVerticalTabs() const {
-  auto* vtc = VerticalTabController::FromBrowser(GetBrowserView()->browser());
+  auto* vtc = VerticalTabController::From(GetBrowserView()->browser());
   return vtc->ShouldShowWindowTitleForVerticalTabs() &&
          !GetBrowserView()->IsFullscreen();
 }
@@ -214,9 +190,21 @@ void BraveBrowserFrameViewMac::UpdateWindowControlsOpacity() {
   const double alpha =
       std::clamp((reveal_fraction - kFadeStart) / (1.0 - kFadeStart), 0.0, 1.0);
 
+  // Hide the buttons via `setHidden:` instead of `alphaValue == 0.0` when fully
+  // invisible; AppKit reports zero-alpha standard window buttons as disabled,
+  // which breaks menu validation and keyboard shortcuts such as Cmd+M and
+  // Cmd+Shift+W.
+  const bool hidden = (alpha == 0.0);
   for (NSWindowButton kind :
        {NSWindowCloseButton, NSWindowMiniaturizeButton, NSWindowZoomButton}) {
-    [[window standardWindowButton:kind] setAlphaValue:alpha];
+    NSButton* button = [window standardWindowButton:kind];
+    if (hidden) {
+      [button setHidden:YES];
+      [button setAlphaValue:1.0];
+    } else {
+      [button setAlphaValue:alpha];
+      [button setHidden:NO];
+    }
   }
 }
 
@@ -226,6 +214,27 @@ void BraveBrowserFrameViewMac::OnTopOverlayRevealFractionChanged(
 }
 
 void BraveBrowserFrameViewMac::ResetWindowControlsPosition() {
+  auto* widget = GetWidget();
+  if (!widget || widget->IsClosed()) {
+    return;
+  }
+
+  // Call upstream's OnTabStripStateChanged() to force AppKit to refresh the
+  // titlebar height and traffic light layout after Brave's tab strip or
+  // titlebar prefs change. This runs asynchronously via
+  // UpdateWindowTitleAndControls() so tab strip reparenting completes before
+  // OnTabStripStateChanged() triggers a synchronous layout. Skip while in
+  // fullscreen so we don't fight AppKit or ImmersiveModeControllerCocoa's
+  // state, and only call if NSWindowStyleMaskFullSizeContentView is currently
+  // set.
+  if (!GetBrowserView()->IsFullscreen()) {
+    if (NSWindow* window = widget->GetNativeWindow().GetNativeNSWindow();
+        window && !(window.styleMask & NSWindowStyleMaskFullScreen) &&
+        (window.styleMask & NSWindowStyleMaskFullSizeContentView)) {
+      OnTabStripStateChanged();
+    }
+  }
+
   browser_widget()->ResetWindowControlsPosition();
   UpdateWindowControlsOpacity();
 }
@@ -246,7 +255,7 @@ int BraveBrowserFrameViewMac::NonClientHitTest(const gfx::Point& point) {
   auto* browser = browser_view->browser();
   if (!ImmersiveModeController::From(browser)->IsEnabled()) {
     auto* non_client_hit_test_helper =
-        browser->GetFeatures().brave_non_client_hit_test_helper();
+        BraveNonClientHitTestHelper::From(browser);
     if (auto res =
             non_client_hit_test_helper->NonClientHitTest(browser_view, point);
         res != HTNOWHERE) {
@@ -274,7 +283,7 @@ void BraveBrowserFrameViewMac::UpdateWindowTitleAndControls() {
 }
 
 gfx::Size BraveBrowserFrameViewMac::GetMinimumSize() const {
-  auto* vtc = VerticalTabController::FromBrowser(GetBrowserView()->browser());
+  auto* vtc = VerticalTabController::From(GetBrowserView()->browser());
   if (vtc->ShouldShowBraveVerticalTabs()) {
     // In order to ignore tab strip height, skip BrowserFrameViewMac's
     // implementation.
@@ -298,17 +307,16 @@ void BraveBrowserFrameViewMac::OnFullscreenStateChanged() {
   // after immersive mode has been disabled and the top container has been
   // returned to the browser view.
   if (GetBrowserView()->IsFullscreen()) {
-    if (!scoped_focus_mode_disable_) {
+    if (!focus_mode_suppression_) {
       auto* browser = GetBrowserView()->browser();
-      if (auto* controller = browser->GetFeatures().focus_mode_controller()) {
-        scoped_focus_mode_disable_ =
-            std::make_unique<ScopedFocusModeDisable>(controller);
+      if (auto* controller = FocusModeController::From(browser)) {
+        focus_mode_suppression_ = controller->Suppress();
       }
     }
     BrowserFrameViewMac::OnFullscreenStateChanged();
   } else {
     BrowserFrameViewMac::OnFullscreenStateChanged();
-    scoped_focus_mode_disable_.reset();
+    focus_mode_suppression_.RunAndReset();
   }
 }
 
@@ -325,7 +333,7 @@ bool BraveBrowserFrameViewMac::ShouldHideTopUIInFullscreen() const {
   // ObjC returns 0, which equals TOOLBAR_PRESENT, so the base implementation
   // incorrectly reports "don't hide" during tab (content) fullscreen. Intercept
   // that case explicitly.
-  if (VerticalTabController::FromBrowser(GetBrowserView()->browser())
+  if (VerticalTabController::From(GetBrowserView()->browser())
           ->ShouldShowBraveVerticalTabs() &&
       fullscreen_utils::IsInContentFullscreen(GetBrowserView()->browser())) {
     return true;

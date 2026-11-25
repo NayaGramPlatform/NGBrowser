@@ -7,12 +7,14 @@
 
 #include "base/numerics/safe_conversions.h"
 #include "brave/browser/ui/focus_mode/focus_mode_utils.h"
+#include "brave/browser/ui/views/frame/brave_browser_view.h"
 #include "build/build_config.h"
-#include "chrome/app/chrome_command_ids.h"
-#include "chrome/browser/ui/browser_command_controller.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/views/frame/browser_frame_view.h"
 #include "chrome/browser/ui/views/frame/browser_widget.h"
+#include "ui/base/base_window.h"
+#include "ui/gfx/geometry/point_f.h"
+#include "ui/gfx/geometry/rect_f.h"
 
 namespace tabs::utils {
 
@@ -38,14 +40,32 @@ std::pair<int, int> GetLeadingTrailingCaptionButtonWidth(
 
 bool IsVerticalTabToggleEnabled(BrowserWindowInterface* browser) {
 #if BUILDFLAG(IS_MAC)
-  if (!browser) {
-    return true;
-  }
-  return chrome::BrowserCommandController::From(browser)->IsCommandEnabled(
-      IDC_TOGGLE_VERTICAL_TABS);
+  // Vertical tabs can't be switched in place while the window is fullscreen.
+  // BraveBrowserCommandController defers IDC_TOGGLE_VERTICAL_TABS until the
+  // window leaves fullscreen.
+  return !browser || !browser->GetWindow() ||
+         !browser->GetWindow()->IsFullscreen();
 #else
   return true;
 #endif
 }
 
 }  // namespace tabs::utils
+
+// Hooks declared (but not defined) in chromium_src overrides so that those
+// overrides don't need to depend on Brave targets. Resolved at link time.
+bool BraveIsInVerticalTabHotCorner(const gfx::PointF& point_in_screen,
+                                   BrowserView* browser_view,
+                                   bool is_on_right) {
+  auto* brave_browser_view = BraveBrowserView::From(browser_view);
+  CHECK(brave_browser_view);
+
+  gfx::RectF hot_corner(
+      brave_browser_view->GetBoundingBoxInScreenForMouseOverHandling());
+  constexpr int kHotCornerWidth = 16;
+  if (is_on_right) {
+    hot_corner.set_x(hot_corner.right() - kHotCornerWidth);
+  }
+  hot_corner.set_width(kHotCornerWidth);
+  return hot_corner.Contains(point_in_screen);
+}

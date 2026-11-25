@@ -7,6 +7,8 @@
 #define BRAVE_BROWSER_UI_TABS_BRAVE_TAB_STRIP_MODEL_H_
 
 #include <cstdint>
+#include <optional>
+#include <utility>
 #include <vector>
 
 #include "base/callback_list.h"
@@ -19,6 +21,7 @@
 #include "components/prefs/pref_member.h"
 
 class TreeTabModel;
+class TreeTabSessionManager;
 
 class BraveTabStripModel : public TabStripModel {
  public:
@@ -31,9 +34,14 @@ class BraveTabStripModel : public TabStripModel {
   BraveTabStripModel(const BraveTabStripModel&) = delete;
   BraveTabStripModel operator=(const BraveTabStripModel&) = delete;
 
-  // Set the next tab when doing a MRU cycling with Ctrl-tab
-  void SelectMRUTab(
-      TabRelativeDirection direction,
+  // Walks the MRU order by one step. The first call snapshots the order and
+  // starts a cycling session; later calls rotate within that frozen snapshot
+  // until StopMRUCycling(). Callers are responsible for checking
+  // prefs::kCtrlTabMru first.
+  void CycleToNextMRUTab(
+      TabStripUserGestureDetails detail = TabStripUserGestureDetails(
+          TabStripUserGestureDetails::GestureType::kOther));
+  void CycleToPreviousMRUTab(
       TabStripUserGestureDetails detail = TabStripUserGestureDetails(
           TabStripUserGestureDetails::GestureType::kOther));
 
@@ -82,10 +90,14 @@ class BraveTabStripModel : public TabStripModel {
   // split tabs.
   bool IsOnlyActiveTabAndTreeDescendantsSelected();
 
-  // TabStripModel:
-  void SelectRelativeTab(TabRelativeDirection direction,
-                         TabStripUserGestureDetails detail) override;
+  // The tab whose subtree was selected by the mouse press that is being
+  // handled, so that the paired mouse release doesn't treat it as a second
+  // click. See tree_tab_view_utils::ActivateTabAndSelectTreeTabSubtree().
+  // TakeTreeTabSubtreeSelectedOnPress() returns the value and clears it.
+  void SetTreeTabSubtreeSelectedOnPress(tabs::TabHandle handle);
+  std::optional<tabs::TabHandle> TakeTreeTabSubtreeSelectedOnPress();
 
+  // TabStripModel:
   std::vector<std::variant<std::unique_ptr<DetachedTab>,
                            std::unique_ptr<DetachedTabCollection>>>
   DetachTabsAndCollectionsForInsertion(
@@ -93,6 +105,10 @@ class BraveTabStripModel : public TabStripModel {
 
  private:
   friend class TreeTabsBrowserTest;
+  friend class TreeTabSessionManager;
+
+  void SelectMRUTab(TabRelativeDirection direction,
+                    TabStripUserGestureDetails detail);
 
   void OnTreeTabRelatedPrefChanged();
   void BuildTreeTabs();
@@ -101,6 +117,7 @@ class BraveTabStripModel : public TabStripModel {
   void NotifyTreeTabNodeCreated(const tabs::TreeTabNode& node);
   void NotifyTreeTabNodeWillBeDestroyed(const tree_tab::TreeTabNodeId& id);
   void NotifyTreeTabNodeReparented(const tree_tab::TreeTabNodeId& id);
+  void NotifyTreeTabNodeChildrenChanged(const tree_tab::TreeTabNodeId& id);
 
   tabs::BraveTabStripCollection* contents_data() {
     return static_cast<tabs::BraveTabStripCollection*>(contents_data_.get());
@@ -113,8 +130,13 @@ class BraveTabStripModel : public TabStripModel {
   // List of tab indexes sorted by most recently used
   std::vector<int> mru_cycle_list_;
 
+  std::optional<tabs::TabHandle> tree_tab_subtree_selected_on_press_;
+
   BooleanPrefMember tree_tabs_enabled_;
-  BooleanPrefMember vertical_tabs_enabled_;
+
+  BooleanPrefMember brave_vertical_tabs_enabled_;
+  // Chromium's vertical tabs pref (prefs::kVerticalTabsEnabled).
+  BooleanPrefMember upstream_vertical_tabs_enabled_;
 
   // The model for tree tabs hosted within this TabStripModel. When the feature
   // flag is disabled or the feature is turned off via related preferences,
@@ -129,6 +151,8 @@ class BraveTabStripModel : public TabStripModel {
       tree_tab_node_will_be_destroyed_subscription_;
   std::unique_ptr<base::CallbackListSubscription>
       tree_tab_node_moved_subscription_;
+  std::unique_ptr<base::CallbackListSubscription>
+      tree_tab_node_children_changed_subscription_;
 };
 
 #endif  // BRAVE_BROWSER_UI_TABS_BRAVE_TAB_STRIP_MODEL_H_

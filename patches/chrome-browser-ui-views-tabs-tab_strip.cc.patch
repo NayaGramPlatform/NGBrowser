@@ -1,8 +1,20 @@
 diff --git a/chrome/browser/ui/views/tabs/tab_strip.cc b/chrome/browser/ui/views/tabs/tab_strip.cc
-index 24d1cf95624156d3b708afff5f531f87d7a60fcc..bdeb534e19fbc8cf519e012e136ef84bd86caebb 100644
+index 14badf5d9370bfae3fc608b7f5fbfe1d91f82731..cf0e49b224660cc48fcf146dc229f81d60d05c23 100644
 --- a/chrome/browser/ui/views/tabs/tab_strip.cc
 +++ b/chrome/browser/ui/views/tabs/tab_strip.cc
-@@ -335,7 +335,7 @@ class TabStrip::TabDragContextImpl : public TabDragContext,
+@@ -123,9 +123,9 @@ ui::mojom::DragEventSource EventSourceFromEvent(const ui::LocatedEvent& event) {
+ 
+ std::unique_ptr<TabContainer> MakeTabContainer(
+     TabStrip* tab_strip,
+-    TabHoverCardController* hover_card_controller,
++    BraveTabHoverCardController* hover_card_controller,
+     TabDragContext* drag_context) {
+-  return std::make_unique<TabContainer>(*tab_strip, hover_card_controller,
++  return std::make_unique<BraveTabContainer>(*tab_strip, hover_card_controller,
+                                         drag_context->GetPositioningDelegate(),
+                                         *tab_strip);
+ }
+@@ -337,7 +337,7 @@ class TabStrip::TabDragContextImpl : public TabDragContext,
             event.type() == ui::EventType::kGestureScrollBegin))
          << "Event type must be suitable for starting a drag.";
  
@@ -11,23 +23,51 @@ index 24d1cf95624156d3b708afff5f531f87d7a60fcc..bdeb534e19fbc8cf519e012e136ef84b
  
      // !!! Init may delete `drag_controller_` on some platforms. !!!
      // Init takes capture, which on some platforms may reenter Chrome, the
-@@ -597,6 +597,7 @@ class TabStrip::TabDragContextImpl : public TabDragContext,
+@@ -618,6 +618,10 @@ class TabStrip::TabDragContextImpl : public TabDragContext,
  
    std::vector<gfx::Rect> CalculateBoundsForDraggedViews(
-       const std::vector<TabSlotView*>& views) override {
-+    BRAVE_TAB_DRAG_CONTEXT_IMPL_CALCULATE_BOUNDS_FOR_DRAGGED_VIEWS
+       const std::vector<views::View*>& views) override {
++  if (auto bounds = tabs::MaybeCalculateBoundsForVerticalDraggedViews(
++          views, tab_strip_)) {
++    return *bounds;
++  }
      CHECK(!views.empty()) << "The views vector must not be empty.";
  
      std::vector<gfx::Rect> bounds;
-@@ -989,6 +990,7 @@ class TabStrip::TabDragContextImpl : public TabDragContext,
+@@ -1009,6 +1013,14 @@ class TabStrip::TabDragContextImpl : public TabDragContext,
          continue;
        }
  
-+      BRAVE_TAB_DRAG_CONTEXT_IMPL_CALCULATE_INSERTION_INDEX
++      if (tabs::MaybeUpdateInsertionIndexForVerticalTabs(
++              dragged_bounds, first_dragged_tab_index, num_dragged_tabs,
++              GetTabAt(first_dragged_tab_index)->group().has_value(),
++              candidate_index, tab_strip_->controller_.get(),
++              tab_strip_->tab_container_.get(), min_distance,
++              min_distance_index, tab_strip_)) {
++        continue;
++      }
        // If there's a group header here, and we're dragging a group, we might
        // end up on either side of that header. Check both cases to find the
        // best option.
-@@ -1543,7 +1545,7 @@ void TabStrip::SetSelection(const ui::ListSelectionModel& new_selection) {
+@@ -1178,7 +1190,7 @@ END_METADATA
+ 
+ TabStrip::TabStrip(
+     std::unique_ptr<TabStripController> controller,
+-    std::unique_ptr<TabHoverCardController> hover_card_controller)
++    std::unique_ptr<BraveTabHoverCardController> hover_card_controller)
+     : controller_(std::move(controller)),
+       hover_card_controller_(std::move(hover_card_controller)),
+       drag_context_(*AddChildView(std::make_unique<TabDragContextImpl>(this))),
+@@ -1334,7 +1346,7 @@ void TabStrip::AddTabsAt(const std::vector<AddTabData>& tabs_data) {
+     CHECK(IsValidModelIndex(tab_data.index))
+         << "Attempted to add a tab with an invalid model index.";
+     TabContainer::TabInsertionParams param(
+-        std::make_unique<Tab>(tab_data.handle, this), tab_data.index,
++        std::make_unique<BraveTab>(tab_data.handle, this), tab_data.index,
+         tab_data.is_pinned ? TabPinned::kPinned : TabPinned::kUnpinned);
+     tabs_params.push_back(std::move(param));
+   }
+@@ -1573,7 +1585,7 @@ void TabStrip::SetSelection(const ui::ListSelectionModel& new_selection) {
        const tab_groups::TabGroupId new_group = selected_tab->group().value();
        // If the tab that is about to be selected is in a collapsed group,
        // automatically expand the group.

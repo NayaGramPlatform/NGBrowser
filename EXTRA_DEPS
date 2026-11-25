@@ -24,31 +24,24 @@ extra_deps = {
         'condition': 'not rust_force_head_revision',
         'objects': [
             {
-                'object_name': 'linux-x64-rust-toolchain-1edd55dcfcd573872c727fa3e086369a71661ee0-1-llvmorg-24-init-7747-g62397f8b-1.tar.xz',
-                'sha256sum': '054e629e032f83e41cfa6188f513bbcf59cd659d3a492840bf5ba9f302057b0d',
-                'size_bytes': 44608688,
-                'overlayed_on': 'Linux_x64/rust-toolchain-1edd55dcfcd573872c727fa3e086369a71661ee0-1-llvmorg-24-init-7747-g62397f8b.tar.xz',
+                'object_name': 'linux-x64-rust-toolchain-96a18bf5ffa2b24f9cf3d1c731a9eb121c1acad9-4-llvmorg-24-init-17044-gc3223914-1.tar.xz',
+                'sha256sum': 'a0e7cc928bb3af0398afa57f6dad636a78f44d13a5c575e50acaeea4e2e311b7',
+                'size_bytes': 44976960,
+                'overlayed_on': 'Linux_x64/rust-toolchain-96a18bf5ffa2b24f9cf3d1c731a9eb121c1acad9-4-llvmorg-24-init-17044-gc3223914.tar.xz',
                 'condition': 'host_os == "linux"',
             },
             {
-                'object_name': 'mac-arm64-rust-toolchain-1edd55dcfcd573872c727fa3e086369a71661ee0-1-llvmorg-24-init-7747-g62397f8b-1.tar.xz',
-                'sha256sum': 'af82f0ae05f20e1f3da752b777af86e3948c314d198d8c11d73dbda3e4928aec',
-                'size_bytes': 41545640,
-                'overlayed_on': 'Mac_arm64/rust-toolchain-1edd55dcfcd573872c727fa3e086369a71661ee0-1-llvmorg-24-init-7747-g62397f8b.tar.xz',
+                'object_name': 'mac-arm64-rust-toolchain-96a18bf5ffa2b24f9cf3d1c731a9eb121c1acad9-4-llvmorg-24-init-17044-gc3223914-1.tar.xz',
+                'sha256sum': '17a9014dfd12f1104d9bd9b05b0367b1c8862926034d2e0ccd9fe68fa56fc862',
+                'size_bytes': 41299904,
+                'overlayed_on': 'Mac_arm64/rust-toolchain-96a18bf5ffa2b24f9cf3d1c731a9eb121c1acad9-4-llvmorg-24-init-17044-gc3223914.tar.xz',
                 'condition': 'host_os == "mac" and host_cpu == "arm64"',
             },
             {
-                'object_name': 'mac-rust-toolchain-1edd55dcfcd573872c727fa3e086369a71661ee0-1-llvmorg-24-init-7747-g62397f8b-1.tar.xz',
-                'sha256sum': '3fcc8f1d5581a257b86b0faf5c6353e0044b1b86c923beb79aa10cd839f3b491',
-                'size_bytes': 44380084,
-                'overlayed_on': 'Mac/rust-toolchain-1edd55dcfcd573872c727fa3e086369a71661ee0-1-llvmorg-24-init-7747-g62397f8b.tar.xz',
-                'condition': 'host_os == "mac" and host_cpu == "x64"',
-            },
-            {
-                'object_name': 'win-rust-toolchain-1edd55dcfcd573872c727fa3e086369a71661ee0-1-llvmorg-24-init-7747-g62397f8b-1.tar.xz',
-                'sha256sum': '90d8852b2aa4bc32205915cd76cb1909fd284131700cd4b2d914c2b3469db8e2',
-                'size_bytes': 45144004,
-                'overlayed_on': 'Win/rust-toolchain-1edd55dcfcd573872c727fa3e086369a71661ee0-1-llvmorg-24-init-7747-g62397f8b.tar.xz',
+                'object_name': 'win-rust-toolchain-96a18bf5ffa2b24f9cf3d1c731a9eb121c1acad9-4-llvmorg-24-init-17044-gc3223914-1.tar.xz',
+                'sha256sum': '3083f892677b8fbdcb08a07b086b0d081c7f38af975f2040634fbce758c10ad8',
+                'size_bytes': 45437660,
+                'overlayed_on': 'Win/rust-toolchain-96a18bf5ffa2b24f9cf3d1c731a9eb121c1acad9-4-llvmorg-24-init-17044-gc3223914.tar.xz',
                 'condition': 'host_os == "win"',
             },
         ],
@@ -58,9 +51,9 @@ extra_deps = {
         'condition': 'host_os == "linux"',
         'objects': [
             {
-                'object_name': 'node-v24.20.0-linux-x64.tar.gz',
-                'sha256sum': 'cd35e7faca55bf403f29e1b7fa96e634ba1b908e828ed21154132c6cd3b8d0ec',
-                'size_bytes': 58135797,
+                'object_name': 'node-v26.13.1-linux-x64.tar.gz',
+                'sha256sum': '42f574f701489d1d8b647fdbcd4a589dcab1f374dd9c225348b0429f60f76e17',
+                'size_bytes': 63035101,
             },
         ],
     },
@@ -69,9 +62,9 @@ extra_deps = {
         'condition': 'host_os == "mac" and host_cpu == "x64"',
         'objects': [
             {
-                'object_name': 'node-v24.20.0-mac-x64.tar.gz',
-                'sha256sum': '2b4ec53f641374e90deb699ac400e063cf8f7319d2e0294df1cdb3c8cfef632c',
-                'size_bytes': 54171472,
+                'object_name': 'node-v26.13.1-mac-x64.tar.gz',
+                'sha256sum': '78e314643e566bdc4dca780e3efa8d04e009755bc2710d2aac5627642eea7518',
+                'size_bytes': 59955837,
             },
         ],
     },
@@ -80,9 +73,9 @@ extra_deps = {
         'condition': 'host_os == "mac" and host_cpu == "arm64"',
         'objects': [
             {
-                'object_name': 'node-v24.20.0-mac-arm64.tar.gz',
-                'sha256sum': '5b859181ef071cda2140ae91a56909d0a3358813e07048231f5baf8dd946f25b',
-                'size_bytes': 52970441,
+                'object_name': 'node-v26.13.1-mac-arm64.tar.gz',
+                'sha256sum': 'f1c46d40e53b1e5f7bc7178b9723041197d66c8a9e887e57eeac6cef23349fbd',
+                'size_bytes': 58484843,
             },
         ],
     },
@@ -91,9 +84,9 @@ extra_deps = {
         'condition': 'host_os == "win"',
         'objects': [
             {
-                'object_name': 'node-v24.20.0-win-x64.tar.gz',
-                'sha256sum': 'f37203567e92d0d7ba6da5c060ec22802a8d7eaa84b96e312af23ad48c5268e2',
-                'size_bytes': 38037729,
+                'object_name': 'node-v26.13.1-win-x64.tar.gz',
+                'sha256sum': '660cbe239af559eb9546f9afca46d84801176acee85972f0e2f650d68d3b2c64',
+                'size_bytes': 41776820,
             },
         ],
     },
@@ -101,9 +94,9 @@ extra_deps = {
         'bucket': 'https://brave-build-deps-public.s3.brave.com/nodejs/',
         'objects': [
             {
-                'object_name': 'node_modules-42138ce.tar.gz',
-                'sha256sum': 'dbd8fd89b95bcf7d63418e575112a9a42c853a4fa0f1a2085c08d29269849169',
-                'size_bytes': 5041166,
+                'object_name': 'node_modules-3118333.tar.gz',
+                'sha256sum': '967a72e63945e75f0249dff1a9836da213020a43305b0030f87946fadcbe292e',
+                'size_bytes': 5565339,
             },
         ],
     },
@@ -168,6 +161,28 @@ extra_deps = {
                 'object_name': 'BraveUpdater-143.1.87.74.zip',
                 'sha256sum': 'ca3255dca4dd0e197a6f1a2d57456d0ce33ac4f62c95664a7c32671397fe00a6',
                 'size_bytes': 10989909,
+            },
+        ],
+    },
+    # Test builds of the above. updater_tests upgrade from them. They go next to
+    # upstream's Chromium equivalents, which come from CIPD.
+    'src/third_party/updater/chromium_mac_amd64/cipd/BraveUpdater_test.app': {
+        'bucket': 'https://brave-build-deps-public.s3.brave.com/omaha4/',
+        'objects': [
+            {
+                'object_name': 'BraveUpdater_test-143.1.87.74-mac-x64-7740576af934.zip',
+                'sha256sum': '7740576af9342e4dcc603d235473aeacaa12e0286bbe8c34b3828c970ba6379f',
+                'size_bytes': 6015107,
+            },
+        ],
+    },
+    'src/third_party/updater/chromium_mac_arm64/cipd/BraveUpdater_test.app': {
+        'bucket': 'https://brave-build-deps-public.s3.brave.com/omaha4/',
+        'objects': [
+            {
+                'object_name': 'BraveUpdater_test-143.1.87.74-mac-arm64-a348ed2e5f8d.zip',
+                'sha256sum': 'a348ed2e5f8d836c77897af019706f39f1eea2366cb81b2890cad9072c5363aa',
+                'size_bytes': 5304118,
             },
         ],
     },

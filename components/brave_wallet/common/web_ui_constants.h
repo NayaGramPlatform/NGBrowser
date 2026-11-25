@@ -33,5 +33,14 @@ inline constexpr char kUntrustedMarketURL[] =
 inline constexpr char kUntrustedTrezorHost[] = "trezor-bridge";
 inline constexpr char kUntrustedTrezorURL[] =
     "chrome-untrusted://trezor-bridge/";
+inline constexpr char kTrezorConnectHost[] = "connect.trezor.io";
+inline constexpr char kTrezorConnectURL[] = "https://connect.trezor.io/";
+inline constexpr char kUntrustedPolkadotHost[] = "polkadot-bridge";
+inline constexpr char kUntrustedPolkadotURL[] =
+    "chrome-untrusted://polkadot-bridge/";
+inline constexpr char kUntrustedSnapHost[] = "snap-host";
+inline constexpr char kUntrustedSnapURL[] = "chrome-untrusted://snap-host/";
+inline constexpr char kSnapsContainerHost[] = "snaps-container";
+inline constexpr char kBraveUISnapsContainerURL[] = "chrome://snaps-container/";
 
 #endif  // BRAVE_COMPONENTS_BRAVE_WALLET_COMMON_WEB_UI_CONSTANTS_H_

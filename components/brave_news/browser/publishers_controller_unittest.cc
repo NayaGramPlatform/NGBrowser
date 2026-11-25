@@ -9,14 +9,15 @@
 #include <vector>
 
 #include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/test/scoped_feature_list.h"
+#include "base/test/test_future.h"
 #include "base/values.h"
 #include "brave/components/api_request_helper/api_request_helper.h"
 #include "brave/components/brave_news/browser/brave_news_pref_manager.h"
 #include "brave/components/brave_news/browser/test/wait_for_callback.h"
 #include "brave/components/brave_news/browser/urls.h"
 #include "brave/components/brave_news/common/brave_news.mojom-forward.h"
-#include "brave/components/brave_news/common/locales_helper.h"
 #include "brave/components/brave_news/common/pref_names.h"
 #include "brave/components/brave_news/common/subscriptions_snapshot.h"
 #include "components/prefs/scoped_user_pref_update.h"
@@ -116,13 +117,11 @@ class BraveNewsPublishersControllerTest : public testing::Test {
   }
 
   const Publishers& GetPublishers() {
-    base::RunLoop run_loop;
+    base::test::TestFuture<void> future;
     publishers_controller_->GetOrFetchPublishers(
         pref_manager_->GetSubscriptions(),
-        base::BindLambdaForTesting(
-            [&run_loop](const Publishers& publishers) { run_loop.Quit(); }),
-        true);
-    run_loop.Run();
+        base::IgnoreArgs<const Publishers&>(future.GetCallback()), true);
+    EXPECT_TRUE(future.Wait());
     return publishers_controller_->last_publishers();
   }
 

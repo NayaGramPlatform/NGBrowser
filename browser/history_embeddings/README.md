@@ -1,6 +1,9 @@
 # browser/history_embeddings/
 
-Brave's local embedder for history embeddings (semantic history search).
+The browser side of Brave's semantic history search: the
+`HistoryEmbeddingsService` factory and tab helper for the fork in
+[`//brave/components/history_embeddings`](../../components/history_embeddings/README.md),
+the gates on the Semantic history search setting, and the local embedder.
 
 ## Overview
 
@@ -31,15 +34,23 @@ The upstream extraction pipeline is enabled by chromium_src overrides of
 and `PageContentExtractionServiceFactory` to check `kHistoryEmbeddings` instead
 of the upstream feature flags.
 
-## Enabling / the brave://history toggle
+## Enabling / the Semantic history search setting
 
-Two prefs gate the feature, via the `IsHistoryEmbeddings*` overrides in
-[`chromium_src/.../history_embeddings_utils.cc`](../../chromium_src/chrome/browser/history_embeddings/history_embeddings_utils.cc):
+Two prefs gate the feature, via `IsHistoryEmbeddingsFeatureEnabled()` and
+`IsHistoryEmbeddingsEnabledForProfile()` in
+[`history_embeddings_utils.cc`](history_embeddings_utils.cc), together with
+`kHistoryEmbeddings`:
 
 - **`kBraveLocalAIEnabled`** — local-state master switch (Brave Origin "Local
   AI"); gates `IsHistoryEmbeddingsFeatureEnabled()`.
-- **`kBraveHistoryEmbeddingsEnabled`** — per-profile brave://history toggle;
-  gates `IsHistoryEmbeddingsEnabledForProfile()`.
+- **`kBraveHistoryEmbeddingsEnabled`** — per-profile "Semantic history search"
+  toggle in brave://settings/privacy; gates
+  `IsHistoryEmbeddingsEnabledForProfile()`.
+
+Whenever either pref leaves the feature unavailable, the Tab Focus page-content
+opt-in (`kBraveAIChatTabOrganizationSendPageContent`) is cleared, so turning
+Semantic History Search back on needs a fresh opt-in rather than silently
+resuming on withdrawn consent.
 
 The embedder is built only when an embedding service feeds the controller. Both
 such services (`PageEmbeddingsService`, `HistoryEmbeddingsService`) refuse to
@@ -53,17 +64,25 @@ service creation, so changes take effect on restart.
 Because of that, the gate reads the setting through
 [`BraveHistoryEmbeddingsStatus`](brave_history_embeddings_status.h), which
 captures it as profile user data at profile setup — so the value the services
-were built with is available for the rest of the session.
-
-The browser reports the setting and whether it is waiting on a relaunch to
-take effect. A search runs only with the setting on and nothing pending, so
-turning the toggle on cannot start one against a service that was never built.
-
-Both arrive via `loadTimeData` (injected by `BraveHistoryUI`) on load and via
-the `OnEnabledChanged` Mojo push afterwards, so reloading brave://history does
-not clear the prompt.
+were built with is available for the rest of the session. The settings page
+shows its "Relaunch" button while the toggle differs from it. brave://history
+shows its results card, and the omnibox its `@history` matches, only when
+`HistoryEmbeddingsServiceFactory` built a service for the profile, so both
+appear only once there is an index behind them, and so do the `@history` scope's
+"describe what you're searching for" placeholder and spark icon.
 
 ## Model delivery + `EmbedderMetadataUpdated`
+
+The EmbeddingGemma component is shared by every profile, so it is registered for
+download only while at least one profile has Semantic history search on. Each
+loaded profile records its setting by base name in the local-state list
+`kHistoryEmbeddingsEnabledProfiles` (see `BraveHistoryEmbeddingsStatus`), so a
+profile that is not loaded still keeps the model. Turning the setting on or off
+updates the list right away, so the model is downloaded or removed without the
+relaunch the embedding services wait for. A profile deleted in an earlier
+session is dropped from the list at startup, when the component is registered.
+The component updater removes the model once the list is empty or Local AI is
+turned off.
 
 `SchedulingEmbedder` waits for `EmbedderMetadataUpdated` before it dispatches
 any work, and the base controller opens the model files the paths point at.
@@ -85,10 +104,23 @@ stored history rather than mix vector spaces. The file is generated in
 
 ## Key Files
 
+- **`history_embeddings_service_factory.{h,cc}`** — Builds the fork's
+  `HistoryEmbeddingsService` when the setting was on at startup and the passage
+  embedder observer exists, and never for kiosk or ephemeral profiles.
+
+- **`history_embeddings_tab_helper.{h,cc}`** — `BraveTabFeatures` tab feature
+  that hands each tab's history visit to the service, so extracted passages are
+  stored against it. Follows the tab across discards.
+
+- **`history_embeddings_utils.{h,cc}`** — `IsHistoryEmbeddingsFeatureEnabled()`
+  and `IsHistoryEmbeddingsEnabledForProfile()`.
+
 - **`brave_history_embeddings_status.{h,cc}`** — Profile user data holding the
-  Semantic History Search setting the embedding services were built with. The
-  passage embedder gate reads through it (see "Enabling / the brave://history
-  toggle" above).
+  Semantic history search setting the embedding services were built with. The
+  passage embedder gate reads through it, and the settings toggle compares
+  against it to tell whether the setting is waiting on a relaunch (see "Enabling
+  / the Semantic history search setting" above). Also clears the Tab Focus
+  page-content opt-in whenever the feature becomes unavailable.
 
 - **`brave_passage_embeddings_service_controller.{h,cc}`** — Singleton subclass
   of `PassageEmbeddingsServiceController`. Provides `LitertServiceLauncher`,
@@ -126,31 +158,32 @@ utility through the standard `LoadModels` mojo call.
 
 ## Related Files
 
-- **`components/history_embeddings/content/brave_history_embeddings_service.h`**
-  — Template wrapping `ChromeHistoryEmbeddingsService` that overrides
-  `OnPassageVisibilityCalculated` to synthesize passing visibility scores, since
-  Brave doesn't use `PageContentAnnotationsService` for content visibility
-  filtering.
+- **`../../components/history_embeddings/`** — the fork of upstream's
+  `components/history_embeddings`: `HistoryEmbeddingsService`, storage and
+  search.
+
+- **`../ui/webui/history_embeddings/`** and
+  **`../resources/history/history_embeddings/`** — the brave://history results
+  card and its mojo handler.
+
+- **`../../components/omnibox/browser/brave_history_embeddings_provider.{h,cc}`**
+  — `@history` omnibox matches.
+
+- **`../../components/omnibox/browser/semantic_history_scope.{h,cc}`** — Whether
+  a keyword is the `@history` scope with an index behind it. Plasters on
+  `OmniboxEditModel::SetKeywordInfo` and `SelectedKeywordView::GetKeywordIcon`
+  use it for the scope's placeholder and icon.
 
 - **`chromium_src/chrome/browser/passage_embeddings/passage_embedder_model_observer_factory.cc`**
-  — Gates the per-profile `PassageEmbedderModelObserver` on the brave://history
-  toggle so neither embedding service is built when it is off (see "Enabling /
-  the brave://history toggle" above).
-
-- **`chromium_src/chrome/browser/history_embeddings/history_embeddings_service_factory.cc`**
-  — Override to use `BravePassageEmbeddingsServiceController` and
-  `BraveHistoryEmbeddingsService`.
+  — Gates the per-profile `PassageEmbedderModelObserver` on the Semantic history
+  search toggle so neither embedding service is built when it is off (see
+  "Enabling / the Semantic history search setting" above).
 
 - **`chromium_src/services/passage_embeddings/passage_embedder_impl.cc`** —
   Injects the LiteRT runner at the top of
   `PassageEmbedderImpl::BuildExecutionTask` (via a
   `BRAVE_PASSAGE_EMBEDDER_IMPL_BUILD_EXECUTION_TASK` macro), so the sandboxed
   utility runs EmbeddingGemma on LiteRT instead of upstream's TFLite executor.
-
-- **`browser/ui/webui/history/brave_history_ui.{h,cc}`** — brave://history's
-  WebUI controller. Injects `braveHistoryEmbeddingsEnabled`,
-  `enableHistoryEmbeddings`, and `braveHistoryEmbeddingsNeedsRestart` into the
-  data source and owns the Mojo page handler backing the toggle.
 
 - **`chromium_src/chrome/browser/page_content_annotations/`** — Factory
   overrides for `PageContentAnnotationsService`, `PageContentExtractionService`,

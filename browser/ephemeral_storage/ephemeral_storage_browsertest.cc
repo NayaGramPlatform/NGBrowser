@@ -13,7 +13,7 @@
 #include "base/strings/escape.h"
 #include "base/strings/strcat.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/test/bind.h"
+#include "base/test/run_until.h"
 #include "base/test/test_future.h"
 #include "base/time/time.h"
 #include "brave/browser/brave_shields/brave_shields_settings_service_factory.h"
@@ -29,7 +29,6 @@
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/browser/history/history_service_factory.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/tabs/tab_enums.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/content_settings/core/browser/cookie_settings.h"
@@ -41,6 +40,7 @@
 #include "content/public/common/content_paths.h"
 #include "content/public/common/content_switches.h"
 #include "content/public/test/browser_test.h"
+#include "content/public/test/browser_test_utils.h"
 #include "content/public/test/test_navigation_observer.h"
 #include "net/base/features.h"
 #include "net/dns/mock_host_resolver.h"
@@ -49,6 +49,7 @@
 #include "net/test/embedded_test_server/request_handler_util.h"
 #include "services/network/public/cpp/network_switches.h"
 #include "third_party/abseil-cpp/absl/strings/str_format.h"
+#include "ui/base/mojom/window_open_disposition.mojom.h"
 
 using content::RenderFrameHost;
 using content::WebContents;
@@ -316,7 +317,7 @@ EphemeralStorageBrowserTest::GetValuesFromFrames(WebContents* web_contents) {
 WebContents* EphemeralStorageBrowserTest::LoadURLInNewTab(GURL url) {
   ui_test_utils::AllBrowserTabAddedWaiter add_tab;
   EXPECT_TRUE(ui_test_utils::NavigateToURLWithDisposition(
-      browser(), url, WindowOpenDisposition::NEW_FOREGROUND_TAB,
+      browser(), url, ui::mojom::WindowOpenDisposition::kNewForegroundTab,
       ui_test_utils::BROWSER_TEST_WAIT_FOR_LOAD_STOP));
   return add_tab.Wait();
 }
@@ -515,15 +516,9 @@ network::mojom::CookieManager* EphemeralStorageBrowserTest::CookieManager() {
 }
 
 std::vector<net::CanonicalCookie> EphemeralStorageBrowserTest::GetAllCookies() {
-  base::RunLoop run_loop;
-  std::vector<net::CanonicalCookie> cookies_out;
-  CookieManager()->GetAllCookies(base::BindLambdaForTesting(
-      [&](const std::vector<net::CanonicalCookie>& cookies) {
-        cookies_out = cookies;
-        run_loop.Quit();
-      }));
-  run_loop.Run();
-  return cookies_out;
+  base::test::TestFuture<const std::vector<net::CanonicalCookie>&> future;
+  CookieManager()->GetAllCookies(future.GetCallback());
+  return future.Take();
 }
 
 brave_shields::BraveShieldsSettingsService*
@@ -1063,7 +1058,7 @@ IN_PROC_BROWSER_TEST_F(EphemeralStorageBrowserTest,
   // Prepare test cases.
   struct TestCase {
     raw_ptr<RenderFrameHost> send = nullptr;
-    std::vector<RenderFrameHost*> expect_received;
+    std::vector<raw_ptr<RenderFrameHost>> expect_received;
   } const kTestCases[] = {
       {// Send from a.com main frame.
        .send = frames[site_a_tab1][0],
@@ -1101,7 +1096,7 @@ IN_PROC_BROWSER_TEST_F(EphemeralStorageBrowserTest,
     processed_rfhs.insert(test_case.send);
 
     // Expect broadcast message is received in these frames.
-    for (auto* rfh : test_case.expect_received) {
+    for (RenderFrameHost* rfh : test_case.expect_received) {
       SCOPED_TRACE(testing::Message()
                    << "WebContents URL: "
                    << content::WebContents::FromRenderFrameHost(rfh)
@@ -1479,6 +1474,35 @@ IN_PROC_BROWSER_TEST_F(FirstPartyStorageCleanupSiteDataBrowserTest,
   EXPECT_EQ("b.com", site_b_tab_values.main_frame.local_storage);
   EXPECT_EQ("b.com", site_b_tab_values.iframe_1.local_storage);
   EXPECT_EQ("b.com", site_b_tab_values.iframe_2.local_storage);
+}
+
+IN_PROC_BROWSER_TEST_F(FirstPartyStorageCleanupSiteDataBrowserTest,
+                       ShredClosesTabsWithoutRunningBeforeUnload) {
+  WebContents* site_a_tab = LoadURLInNewTab(a_site_ephemeral_storage_url_);
+  ASSERT_TRUE(site_a_tab);
+  ASSERT_TRUE(content::ExecJs(site_a_tab, R"(
+    window.addEventListener('beforeunload', (event) => {
+      event.preventDefault();
+      event.returnValue = '';
+    });
+  )"));
+  content::PrepContentsForBeforeUnloadTest(site_a_tab);
+
+  auto* profile = browser()->GetProfile();
+  EphemeralStorageServiceFactory::GetInstance()
+      ->GetForContext(profile)
+      ->CleanupTLDFirstPartyStorage(site_a_tab->GetLastCommittedURL(),
+                                    site_a_tab->GetSiteInstance()
+                                        ->GetSecurityPrincipal()
+                                        .GetStoragePartitionConfig(),
+                                    true);
+  WaitForCleanupAfterKeepAlive(profile);
+
+  // A beforeunload dialog would have kept the tab open.
+  EXPECT_TRUE(base::test::RunUntil([&]() {
+    return browser()->tab_strip_model()->GetIndexOfWebContents(site_a_tab) ==
+           TabStripModel::kNoTab;
+  }));
 }
 
 IN_PROC_BROWSER_TEST_F(FirstPartyStorageCleanupSiteDataBrowserTest,

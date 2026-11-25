@@ -159,6 +159,7 @@ extension FeedItemView {
       super.init(frame: frame)
       var configuration = UIButton.Configuration.plain()
       configuration.baseBackgroundColor = .clear
+      configuration.baseForegroundColor = .white
       configuration.contentInsets = NSDirectionalEdgeInsets(
         top: 8,
         leading: 12,
@@ -172,7 +173,6 @@ extension FeedItemView {
         return outgoing
       }
       self.configuration = configuration
-      setTitleColor(.white, for: .normal)
       layer.borderWidth = 1.0
       layer.borderColor = UIColor.white.withAlphaComponent(0.7).cgColor
       layer.masksToBounds = true

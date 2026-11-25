@@ -1,5 +1,5 @@
 diff --git a/chrome/browser/ui/views/tabs/common/horizontal_tab_style_views.cc b/chrome/browser/ui/views/tabs/common/horizontal_tab_style_views.cc
-index f9ace7f21c286d38b16630ef2b6e8bf24914b4d6..63e449f2b6232fd5f15299311ee2666738da1cee 100644
+index 3203af342d31777cc94b6340f88466c39c5ec92e..9defc51ff739b4465a31be0f62695f1cb855c7e3 100644
 --- a/chrome/browser/ui/views/tabs/common/horizontal_tab_style_views.cc
 +++ b/chrome/browser/ui/views/tabs/common/horizontal_tab_style_views.cc
 @@ -224,6 +224,7 @@ SkPath HorizontalTabStyleViews::GetPath(TabStyle::PathType path_type,

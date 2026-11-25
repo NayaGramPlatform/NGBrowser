@@ -5,17 +5,14 @@
 
 #include "brave/components/brave_shields/content/browser/domain_block_controller_client.h"
 
-#include "brave/components/brave_shields/content/browser/ad_block_custom_filters_provider.h"
 #include "brave/components/brave_shields/content/browser/domain_block_tab_storage.h"
+#include "brave/components/brave_shields/core/browser/ad_block_custom_filters_provider.h"
 #include "components/prefs/pref_service.h"
 #include "components/security_interstitials/content/settings_page_helper.h"
 #include "components/security_interstitials/core/metrics_helper.h"
 #include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/page_navigator.h"
 #include "content/public/browser/web_contents.h"
-#include "content/public/common/referrer.h"
-#include "ui/base/page_transition_types.h"
-#include "ui/base/window_open_disposition.h"
 
 namespace brave_shields {
 

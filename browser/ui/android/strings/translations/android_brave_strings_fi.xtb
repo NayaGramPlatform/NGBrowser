@@ -80,6 +80,7 @@
 <translation id="8982438328166986164">Näyttää verkkosivustoehdotuksia kirjanmerkkiesi ja selaushistoriasi perusteella.</translation>
 <translation id="924029461438529367">Näytä hakuehdotukset</translation>
 <translation id="9148058034647219655">Poistu</translation>
+<translation id="2139186145475833000">Lisää aloitusnäyttöön</translation>
 <translation id="7534079972563542000">Pysäyttämättömät verkkotunnukset</translation>
 <translation id="6486983549008741930">Sisällön suodatus</translation>
 <translation id="2398817776566547893">Ota käyttöön mukautetut suodattimet, jotka estävät alueelliset ja kielikohtaiset seuraimet ja häiriötekijät</translation>
@@ -193,9 +194,6 @@
 <translation id="5668852698659986622">Ota sponsoroidut mainokset käyttöön</translation>
 <translation id="431194936581466649">Auta tukemaan Braven tehtävää rakentaa itsenäinen, käyttäjää ensisijaisesti palveleva verkko sponsoroiduilla mainoksilla. Mittaamme mainosten tehokkuutta yksityisesti tunnistamatta sinua.</translation>
 <translation id="1939813747486101115">Lue lisää sponsoroiduista mainoksista</translation>
-<translation id="8347743943525229984">Salli Braven kyselyt</translation>
-<translation id="6022939994702081659">Sallii Braven näyttää linkkejä yksityisiin kyselyihin uudella välilehdellä. Kyselyt auttavat meitä rakentamaan parempia ominaisuuksia ja mittaamaan selainpohjaisten mainoskampanjoiden tehokkuutta.</translation>
-<translation id="7746496306508543965">Lue lisää Braven kyselyistä</translation>
 <translation id="410351446219883937">Automaattinen toisto</translation>
 <translation id="7445411102860286510">Salli sivustoille mykistettyjen videoiden automaattinen toisto (suositus)</translation>
 <translation id="7837721118676387834">Sallii tietylle sivustolle mykistettyjen videoiden automaattisen toiston.</translation>
@@ -292,7 +290,7 @@
 <translation id="2569646144216067185">Sanamäärä: <ph name="WORD_COUNT"/></translation>
 <translation id="7507533586185621084">Väärä synkronointikoodi</translation>
 <translation id="8284063834901328650">Väärä synkronointiruutukoodi</translation>
-<translation id="859506441384380749">Tämän koodin on luonut Braven vanhentunut versio. Päivitä ensin toinen laitteesi.</translation>
+<translation id="4002014583969312635">Vaikuttaa siltä, että tämä koodi luotiin vanhaa Brave-versiota käyttävällä laitteella. Päivitä Brave uusimpaan versioon toisella laitteella ja luo uusi synkronointikoodi.</translation>
 <translation id="3132642509209154999">Tämä koodi on vanhentunut. Luo uusi toisella laitteellasi ja yritä uudelleen.</translation>
 <translation id="2859229680945501779">Tämä koodi on virheellinen. Tarkista, että aika ja aikavyöhyke on määritetty oikein laitteessasi.</translation>
 <translation id="3149880132460839085">Brave-synkronointi</translation>
@@ -338,8 +336,6 @@
 <translation id="8185825081026121627">Ansaitse perustason huomiopoletti yksityisyyttä suojelevien Brave Rewards -mainosten katselulla.</translation>
 <translation id="5321518976657560663">Palautusvirhe</translation>
 <translation id="4114170343590425996">Brave Rewards -ohjelmaa nollattaessa ilmeni virhe. Käynnistä Brave uudelleen ja yritä uudestaan.</translation>
-<translation id="6417420737057016607">Brave-mainokset</translation>
-<translation id="5611966874859284786">Näytä ilmoitusmainoksia, kun Brave ei ole käytössä</translation>
 <translation id="5717636703619499822"><ph name="BEGIN_LINK1"/>Nollaa Brave-palkintotiedot…<ph name="END_LINK1"/></translation>
 <translation id="1830919318137227284"><ph name="BEGIN_LINK1"/>Poista Brave-mainostiedot…<ph name="END_LINK1"/></translation>
 <translation id="8293206222192510085">Lisää kirjanmerkki</translation>
@@ -398,6 +394,13 @@ Haluatko varmasti tehdä tämän?</translation>
 <translation id="8793108040181436796">Widgetit</translation>
 <translation id="8643377320501056697">Näytä kärkisivustot</translation>
 <translation id="7275773481201277457">Näytä Brave-tilastot</translation>
+<translation id="8516804522688861636">Näytä usein käydyt sivustot</translation>
+<translation id="4546260624932151782">Näytä suosikit</translation>
+<translation id="5313967007315987356">Lisää sivusto</translation>
+<translation id="1773147648972887693">Näytä usein käytetyt</translation>
+<translation id="7134741506051403308">Piilota pienoisohjelma</translation>
+<translation id="1247759249260562308">Muokkaa suosikkia</translation>
+<translation id="6387214885349500492">Kiinnitä tämä suosikki</translation>
 <translation id="7462178177755090262">Aloitusnäyttö</translation>
 <translation id="5365434987337264071">Viimeksi avattu välilehti</translation>
 <translation id="6019856124237323989">{HOURS, plural, =1 {Uusi välilehti <ph name="HOURS_ONE"/> tunnin toimettomuuden jälkeen} other {Uusi välilehti <ph name="HOURS_MANY"/> tunnin toimettomuuden jälkeen}}</translation>
@@ -972,6 +975,7 @@ Jos et hyväksy tätä pyyntöä, yhteyttä VPN:ään ei muodosta uudelleen ja I
 <translation id="6365389672683343144">Brave VPN -tilauksesi voi suojata enintään 5 laitetta Androidissa, iOSissa ja työpöydällä. Linkitä Google Play -tilauksesi Brave-tiliisi.</translation>
 <translation id="6610899852831463073">Selaussuojaa ei voi ottaa käyttöön</translation>
 <translation id="7954263306665462056">Selaussuoja on poistettu käytöstä laitteessasi. Jotta voit ottaa sen käyttöön varmista, että Google Play Palvelut on asennettu ja ajan tasalla.</translation>
+<translation id="6417420737057016607">Brave-mainokset</translation>
 <translation id="7748944510530490017">Ensisijaiset verkot</translation>
 <translation id="2781668117338732220">Toissijaiset verkot</translation>
 <translation id="282560918037172384">Testiverkot</translation>
@@ -998,6 +1002,13 @@ Jos et hyväksy tätä pyyntöä, yhteyttä VPN:ään ei muodosta uudelleen ja I
 <translation id="7530313002494358590">Brave-ominaisuuden käyttöön ottaminen tai poistaminen edellyttää selaimen uudelleenkäynnistystä muutosten soveltamiseksi. Napsauta <ph name="BEGIN_BOLD"/>Käynnistä uudelleen nyt<ph name="END_BOLD"/> sen jälkeen, kun Brave Origin on päivittänyt.</translation>
 <translation id="1028940738207645746">Haluatko varmasti nollata kaikki asetukset oletuksiksi?</translation>
 <translation id="5939518447894949180">Tyhjennä</translation>
+<translation id="3222790865318305905">Aktivointiraja saavutettu</translation>
+<translation id="3787857711016546034">Petosten estämiseksi Origin-aktivoinnit on rajoitettu. Voit kuitenkin aina pyytää lisää aktivointeja käyttääksesi Origin-lisenssiäsi useammilla laitteilla. Napsauta vain Pyydä lisää aktivointeja -vaihtoehtoa tai <ph name="CONTACT_SUPPORT"/> saadaksesi apua.</translation>
+<translation id="6760819753412779585">ota yhteyttä tukeen</translation>
+<translation id="571697836019670200">Pyydä lisää aktivointeja</translation>
+<translation id="9019545131475425538">Käsitellään…</translation>
+<translation id="7242700630179071243">Valmis aktivoitavaksi</translation>
+<translation id="5463918917265356202">Brave Origin on nyt aktiivinen tällä laitteella. Jotta voit aloittaa ominaisuuden käytön, sinun on käynnistettävä selain uudelleen. Haluatko käynnistää uudelleen nyt?</translation>
 <translation id="8554205386170195281">Osta</translation>
 <translation id="8613144770663526433">Kirjaudu sisään Brave-lompakon kautta</translation>
 <translation id="3696514931437952995">Olet kirjautumassa sisään kohteeseen <ph name="ORIGIN"/>. Brave-lompakko jakaa lompakkosi osoitteen kohteen <ph name="ORIGIN"/> kanssa.</translation>

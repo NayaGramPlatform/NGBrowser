@@ -1,8 +1,8 @@
 diff --git a/chrome/browser/ui/views/frame/layout/browser_view_tabbed_layout_impl.cc b/chrome/browser/ui/views/frame/layout/browser_view_tabbed_layout_impl.cc
-index 29dfbde914c55ad1453a1c70998c9299b49c1132..d6046c396cd1a89e0e81477c13bbfb697b9747c9 100644
+index 87b2cca2a37cf11275148f49e8cde0125aaeb566..102d140c8f2e956abd2e8268e34076f98b9a38c4 100644
 --- a/chrome/browser/ui/views/frame/layout/browser_view_tabbed_layout_impl.cc
 +++ b/chrome/browser/ui/views/frame/layout/browser_view_tabbed_layout_impl.cc
-@@ -739,7 +739,7 @@ BrowserViewTabbedLayoutImpl::CalculateProposedLayout(
+@@ -841,7 +841,7 @@ BrowserViewTabbedLayoutImpl::CalculateProposedLayout(
    }
  
    BrowserLayoutParams params = layout_data_->revised_params;
@@ -10,4 +10,32 @@ index 29dfbde914c55ad1453a1c70998c9299b49c1132..d6046c396cd1a89e0e81477c13bbfb69
 +  bool needs_exclusion = !delegate().ShouldShowVerticalTabs();
    const HorizontalLayout& horizontal_layout = layout_data_->horizontal_layout;
  
-   // Lay out horizontal tab strip region if present.
+   const int target_organizer_width =
+@@ -971,14 +971,16 @@ BrowserViewTabbedLayoutImpl::CalculateProposedLayout(
+ 
+       const int inset_amount = horizontal_layout.vertical_tab_strip_width -
+                                GetVerticalTabStripContentOverlap();
+-      params.InsetHorizontal(inset_amount, /*leading=*/true);
++      params.InsetHorizontal(
++          inset_amount,
++          views().vertical_tab_strip_region_view->IsVerticalTabStripLeading());
+ 
+       // Let the vertical tab strip animate out over the content.
+       if (vertical_tab_strip_animation.current_motion) {
+         clip_content_for_animation =
+             vertical_tab_strip_animation.is_expanding_or_collapsing();
+         unclipped_contents_region.Inset(
+-            gfx::Insets::TLBR(0, tabs::kVerticalTabStripCollapsedWidth, 0, 0));
++            gfx::Insets::TLBR(0, views().vertical_tab_strip_region_view->GetCollapsedWidth(), 0, 0));
+       } else {
+         unclipped_contents_region.Inset(gfx::Insets::TLBR(
+             0, horizontal_layout.vertical_tab_strip_width, 0, 0));
+@@ -986,7 +988,7 @@ BrowserViewTabbedLayoutImpl::CalculateProposedLayout(
+     }
+     layout.AddChild(views().vertical_tab_strip_region_view,
+                     vertical_tab_strip_bounds,
+-                    layout_data_->tab_strip_type == TabStripType::kVertical);
++                    layout_data_->tab_strip_type == TabStripType::kVertical && !vertical_tab_strip_bounds.IsEmpty());;
+   }
+ 
+   if (IsParentedTo(views().vertical_tab_strip_background_blur_backdrop,

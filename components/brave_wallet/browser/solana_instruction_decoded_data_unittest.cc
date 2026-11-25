@@ -11,7 +11,6 @@
 #include <utility>
 #include <vector>
 
-#include "base/test/gtest_util.h"
 #include "base/test/values_test_util.h"
 #include "brave/components/brave_wallet/browser/solana_instruction_data_decoder.h"
 #include "brave/components/brave_wallet/common/brave_wallet.mojom.h"
@@ -176,9 +175,9 @@ TEST(SolanaInstructionDecodedDataUnitTest, FromToValue) {
       "sys_ins_type": "2"
     }
   )");
-  EXPECT_EQ(expected_decoded_data, SolanaInstructionDecodedData::FromValue(
-                                       decoded_data_without_type_info.GetDict())
-                                       .value());
+  EXPECT_EQ(expected_decoded_data,
+            SolanaInstructionDecodedData::FromValue(
+                decoded_data_without_type_info.GetDict()));
 
   // Test invalid FromValue cases.
   std::vector<std::string> invalid_value_strings = {

@@ -22,7 +22,6 @@
 #include "base/metrics/histogram_functions_internal_overloads.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/time/time.h"
-#include "brave/components/ai_chat/core/common/mojom/ai_chat.mojom-shared.h"
 #include "brave/components/ai_chat/core/common/pref_names.h"
 #include "brave/components/p3a_utils/bucket.h"
 #include "brave/components/p3a_utils/feature_usage.h"
@@ -48,6 +47,7 @@ constexpr int kChatHistoryUsageBuckets[] = {0, 1, 4, 10, 25, 50, 75};
 constexpr int kMaxChatDurationBuckets[] = {1, 2, 5, 15, 30, 60};
 constexpr int kRateLimitsBuckets[] = {0, 1, 3, 5};
 constexpr int kContextLimitsBuckets[] = {0, 2, 5, 10};
+constexpr int kConversationCountBuckets[] = {0, 1, 10, 20, 30, 40, 50};
 
 constexpr base::TimeDelta kPremiumCheckInterval = base::Days(1);
 
@@ -417,6 +417,19 @@ void AIChatMetrics::RecordConversationsCleared() {
   MaybeReportFirstChatPrompts(false);
 }
 
+void AIChatMetrics::ReportConversationCount(size_t conversation_count) {
+  base::Time last_usage_time =
+      local_state_->GetTime(prefs::kBraveChatP3ALastUsageTime);
+  if (last_usage_time.is_null() ||
+      base::Time::Now() - last_usage_time >= base::Days(7)) {
+    // Do not report if AI chat was not used within the past week.
+    return;
+  }
+  p3a_utils::RecordToHistogramBucket(kConversationCountHistogramName,
+                                     kConversationCountBuckets,
+                                     static_cast<int>(conversation_count));
+}
+
 void AIChatMetrics::OnSendingPromptWithFullPage() {
   prompted_via_full_page_ = true;
 }
@@ -660,19 +673,21 @@ void AIChatMetrics::ReportOmniboxCounts() {
     return;
   }
 
-  base::Time today_midnight = base::Time::Now().LocalMidnight();
-  base::Time one_week_ago = today_midnight - base::Days(6);
-  base::Time two_weeks_ago = today_midnight - base::Days(13);
+  const base::Time now = base::Time::Now();
+  base::Time today_midnight = now.LocalMidnight();
+  base::Time one_week_ago = now.LocalMidnightWithOffset(-6);
+  base::Time two_weeks_ago = now.LocalMidnightWithOffset(-13);
+  base::Time last_week_end = now.LocalMidnightWithOffset(-7);
   uint64_t autocomplete_count_this_week =
       omnibox_autocomplete_storage_.GetPeriodSumInTimeRange(one_week_ago,
                                                             today_midnight);
   uint64_t autocomplete_count_last_week =
-      omnibox_autocomplete_storage_.GetPeriodSumInTimeRange(
-          two_weeks_ago, one_week_ago - base::Days(1));
+      omnibox_autocomplete_storage_.GetPeriodSumInTimeRange(two_weeks_ago,
+                                                            last_week_end);
   uint64_t open_count_this_week = omnibox_open_storage_.GetPeriodSumInTimeRange(
       one_week_ago, today_midnight);
   uint64_t open_count_last_week = omnibox_open_storage_.GetPeriodSumInTimeRange(
-      two_weeks_ago, one_week_ago - base::Days(1));
+      two_weeks_ago, last_week_end);
 
   double open_ratio_this_week =
       static_cast<double>(open_count_this_week) /

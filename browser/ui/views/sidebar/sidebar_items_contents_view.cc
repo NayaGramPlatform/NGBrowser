@@ -17,10 +17,7 @@
 #include "base/notreached.h"
 #include "base/strings/utf_string_conversions.h"
 #include "brave/app/vector_icons/vector_icons.h"
-#include "brave/browser/misc_metrics/profile_misc_metrics_service.h"
-#include "brave/browser/misc_metrics/profile_misc_metrics_service_factory.h"
 #include "brave/browser/profiles/profile_util.h"
-#include "brave/browser/ui/brave_browser.h"
 #include "brave/browser/ui/color/brave_color_id.h"
 #include "brave/browser/ui/color/color_palette.h"
 #include "brave/browser/ui/sidebar/sidebar_controller.h"
@@ -43,6 +40,7 @@
 #include "chrome/app/vector_icons/vector_icons.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_features.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface_iterator.h"
 #include "chrome/browser/ui/color/chrome_color_id.h"
 #include "chrome/browser/ui/views/event_utils.h"
@@ -50,6 +48,7 @@
 #include "ui/base/default_style.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/base/mojom/window_open_disposition.mojom.h"
 #include "ui/base/resource/resource_bundle.h"
 #include "ui/base/window_open_disposition_utils.h"
 #include "ui/compositor/compositor.h"
@@ -63,11 +62,6 @@
 #include "ui/views/controls/menu/menu_runner.h"
 #include "ui/views/controls/separator.h"
 #include "ui/views/layout/box_layout.h"
-
-#if BUILDFLAG(ENABLE_AI_CHAT)
-#include "brave/components/ai_chat/core/browser/ai_chat_metrics.h"
-#include "brave/components/ai_chat/core/common/features.h"
-#endif  // BUILDFLAG(ENABLE_AI_CHAT)
 
 namespace {
 
@@ -89,18 +83,18 @@ std::string GetFirstCharFromURL(const GURL& url) {
   return std::string(target);
 }
 
-sidebar::SidebarService* GetSidebarService(Browser* browser) {
+sidebar::SidebarService* GetSidebarService(BrowserWindowInterface* browser) {
   return sidebar::SidebarServiceFactory::GetForProfile(browser->GetProfile());
 }
 
 }  // namespace
 
 SidebarItemsContentsView::SidebarItemsContentsView(
-    BraveBrowser* browser,
+    BrowserWindowInterface* browser,
     views::DragController* drag_controller)
     : browser_(browser),
       drag_controller_(drag_controller),
-      sidebar_model_(browser->GetFeatures().sidebar_controller()->model()) {
+      sidebar_model_(sidebar::SidebarController::From(browser)->model()) {
   DCHECK(browser_);
   set_context_menu_controller(this);
   SetLayoutManager(std::make_unique<views::BoxLayout>(
@@ -117,6 +111,12 @@ gfx::Size SidebarItemsContentsView::CalculatePreferredSize(
   }
 
   return views::View::CalculatePreferredSize(available_size);
+}
+
+void SidebarItemsContentsView::AddedToWidget() {
+  View::AddedToWidget();
+
+  BuildItemViews();
 }
 
 void SidebarItemsContentsView::OnThemeChanged() {
@@ -144,10 +144,10 @@ void SidebarItemsContentsView::OnThemeChanged() {
 }
 
 void SidebarItemsContentsView::Update() {
-  UpdateAllBuiltInItemsViewState();
+  UpdateAllItemsViewState();
 }
 
-void SidebarItemsContentsView::UpdateAllBuiltInItemsViewState() {
+void SidebarItemsContentsView::UpdateAllItemsViewState() {
   const auto& items = sidebar_model_->GetAllSidebarItems();
   // It's not initialized yet if child view count and items size are different.
   if (children().size() != items.size()) {
@@ -158,24 +158,23 @@ void SidebarItemsContentsView::UpdateAllBuiltInItemsViewState() {
   const size_t items_num = items.size();
   for (size_t item_index = 0; item_index < items_num; ++item_index) {
     const auto item = items[item_index];
-    if (!item.is_built_in_type()) {
-      continue;
-    }
-
 #if BUILDFLAG(ENABLE_BRAVE_TALK)
-    // If browser window has tab that loads brave talk, brave talk panel icon
+    // If browser window has tab that loads brave talk, brave talk item icon
     // will use colored one for normal state also.
-    if (item.built_in_item_type ==
-        sidebar::SidebarItem::BuiltInItemType::kBraveTalk) {
+    if (!item.opens_in_panel() &&
+        item.built_in_item_type ==
+            sidebar::SidebarItem::BuiltInItemType::kBraveTalk) {
       UpdateItemViewStateAt(item_index,
-                            browser_->GetFeatures()
-                                .sidebar_controller()
+                            sidebar::SidebarController::From(browser_)
                                 ->DoesBrowserHaveOpenedTabForItem(item));
       continue;
     }
 #endif
 
-    UpdateItemViewStateAt(item_index, item_index == active_index);
+    // Items that opens in panel can have active state.
+    if (item.opens_in_panel()) {
+      UpdateItemViewStateAt(item_index, item_index == active_index);
+    }
   }
 }
 
@@ -200,6 +199,32 @@ void SidebarItemsContentsView::ShowContextMenuForViewImpl(
   context_menu_model_->AddItemWithIcon(
       kItemEdit, l10n_util::GetStringUTF16(IDS_SIDEBAR_ITEM_CONTEXT_MENU_EDIT),
       ui::ImageModel::FromVectorIcon(kSidebarEditIcon, icon_color, 14));
+
+  const auto& items = sidebar_model_->GetAllSidebarItems();
+  const auto index = GetIndexOf(source);
+  const bool currently_web_panel =
+      index && *index < items.size() &&
+      items[*index].panel_type == sidebar::SidebarItem::PanelType::kWebPanel;
+  context_menu_model_->AddItemWithIcon(
+      kItemToggleOpenInPanel,
+      l10n_util::GetStringUTF16(
+          currently_web_panel ? IDS_SIDEBAR_ITEM_CONTEXT_MENU_OPEN_IN_TAB
+                              : IDS_SIDEBAR_ITEM_CONTEXT_MENU_OPEN_IN_PANEL),
+      ui::ImageModel::FromVectorIcon(
+          currently_web_panel ? kLeoOpenInTabIcon : kLeoSidepanelOpenIcon,
+          icon_color, 14));
+
+  const bool currently_mobile =
+      index && *index < items.size() && items[*index].use_mobile_user_agent;
+  context_menu_model_->AddItemWithIcon(
+      kItemToggleMobileUserAgent,
+      l10n_util::GetStringUTF16(
+          currently_mobile ? IDS_SIDEBAR_ITEM_CONTEXT_MENU_SHOW_DESKTOP_VERSION
+                           : IDS_SIDEBAR_ITEM_CONTEXT_MENU_SHOW_MOBILE_VERSION),
+      ui::ImageModel::FromVectorIcon(
+          currently_mobile ? kLeoMonitorIcon : kLeoSmartphoneIcon, icon_color,
+          14));
+
   context_menu_model_->AddItemWithIcon(
       kItemRemove,
       l10n_util::GetStringUTF16(IDS_SIDEBAR_ITEM_CONTEXT_MENU_REMOVE),
@@ -236,6 +261,27 @@ void SidebarItemsContentsView::ExecuteCommand(int command_id, int event_flags) {
     LaunchEditItemDialog();
     return;
   }
+
+  if (command_id == kItemToggleOpenInPanel) {
+    const auto& items = sidebar_model_->GetAllSidebarItems();
+    const sidebar::SidebarItem old_item = items[*index];
+    sidebar::SidebarItem new_item = old_item;
+    new_item.panel_type =
+        old_item.panel_type == sidebar::SidebarItem::PanelType::kWebPanel
+            ? sidebar::SidebarItem::PanelType::kNone
+            : sidebar::SidebarItem::PanelType::kWebPanel;
+    GetSidebarService(browser_)->UpdateItem(old_item, new_item);
+    return;
+  }
+
+  if (command_id == kItemToggleMobileUserAgent) {
+    const auto& items = sidebar_model_->GetAllSidebarItems();
+    const sidebar::SidebarItem old_item = items[*index];
+    sidebar::SidebarItem new_item = old_item;
+    new_item.use_mobile_user_agent = !old_item.use_mobile_user_agent;
+    GetSidebarService(browser_)->UpdateItem(old_item, new_item);
+    return;
+  }
 }
 
 bool SidebarItemsContentsView::IsCommandIdVisible(int command_id) const {
@@ -251,6 +297,19 @@ bool SidebarItemsContentsView::IsCommandIdVisible(int command_id) const {
 
   if (command_id == kItemEdit) {
     return GetSidebarService(browser_)->IsEditableItemAt(*index);
+  }
+
+  if (command_id == kItemToggleOpenInPanel) {
+    // Toggles between tab and panel, so it applies to editable web items
+    // either way - not just ones that are already a panel.
+    return items[*index].is_web_type() && sidebar::IsWebPanelFeatureEnabled();
+  }
+
+  if (command_id == kItemToggleMobileUserAgent) {
+    // Only applies to editable web items that are currently a panel. Also
+    // require is_web_type(): a built-in item can be a panel too (e.g. Brave
+    // Talk), but built-in items aren't editable.
+    return items[*index].is_web_type() && items[*index].is_web_panel_type();
   }
 
   NOTREACHED() << "No more commands now.";
@@ -295,6 +354,20 @@ void SidebarItemsContentsView::OnItemMoved(const sidebar::SidebarItem& item,
                                            int to) {
   views::View* source_view = children()[from];
   ReorderChildView(source_view, to);
+}
+
+void SidebarItemsContentsView::BuildItemViews() {
+  CHECK(children().empty());
+
+  // Start with saved item list.
+  int index = 0;
+  for (const auto& item : sidebar_model_->GetAllSidebarItems()) {
+    AddItemView(item, index, /*user_gesture=*/false);
+    if (item.is_web_type()) {
+      sidebar_model_->FetchFavicon(item);
+    }
+    index++;
+  }
 }
 
 void SidebarItemsContentsView::AddItemView(const sidebar::SidebarItem& item,
@@ -355,6 +428,14 @@ void SidebarItemsContentsView::UpdateItem(
     }
     GetItemViewAt(update.index)->SetAccessibleName(title);
   }
+
+  // Re-sync highlight state against the model, as switching away from a
+  // panel-opening type should drop a stale highlight on an item that was
+  // active.
+  if (update.panel_type_updated) {
+    UpdateItemViewStateAt(update.index,
+                          update.index == sidebar_model_->active_index());
+  }
 }
 
 void SidebarItemsContentsView::ShowItemAddedFeedbackBubble(
@@ -390,11 +471,6 @@ void SidebarItemsContentsView::ShowItemAddedFeedbackBubble(
       anchor_view, this, browser_->GetProfile()->GetPrefs());
   observation_.Observe(bubble);
   bubble->Show();
-}
-
-bool SidebarItemsContentsView::IsBuiltInTypeItemView(views::View* view) const {
-  auto index = GetIndexOf(view);
-  return sidebar_model_->GetAllSidebarItems()[*index].is_built_in_type();
 }
 
 void SidebarItemsContentsView::SetImageForItem(const sidebar::SidebarItem& item,
@@ -506,9 +582,10 @@ void SidebarItemsContentsView::UpdateItemViewStateAt(size_t index,
   const auto& item = sidebar_model_->GetAllSidebarItems()[index];
   SidebarItemView* item_view = GetItemViewAt(index);
 
-  if (item.open_in_panel) {
-    item_view->SetActiveState(active);
-  }
+  // Only panel-opening items can be highlighted as active. Always set the
+  // state so an item whose type changed away from a panel drops any stale
+  // highlight.
+  item_view->SetActiveState(item.opens_in_panel() && active);
 
   if (item.is_built_in_type()) {
     for (const auto state : views::Button::kButtonStates) {
@@ -525,48 +602,16 @@ void SidebarItemsContentsView::UpdateItemViewStateAt(size_t index,
 
 void SidebarItemsContentsView::OnItemPressed(const views::View* item,
                                              const ui::Event& event) {
-  auto* controller = browser_->GetFeatures().sidebar_controller();
   auto index = GetIndexOf(item);
-  if (controller->IsActiveIndex(index)) {
-    controller->DeactivateCurrentPanel();
-    return;
-  }
+  CHECK(index);
 
-  const auto& item_model = controller->model()->GetAllSidebarItems()[*index];
-
-  // web panel is not a side panel that's handled by SidePanelCoordinator.
-  // It'll be loaded into another contents view in MultiContentsView.
-  if (sidebar::IsWebPanelFeatureEnabled() && item_model.is_web_panel_type()) {
-    controller->ActivateItemAt(index);
-    return;
-  }
-
-  if (!item_model.is_web_type() && item_model.open_in_panel) {
-#if BUILDFLAG(ENABLE_AI_CHAT)
-    if (item_model.built_in_item_type ==
-        sidebar::SidebarItem::BuiltInItemType::kChatUI) {
-      auto* profile_metrics =
-          misc_metrics::ProfileMiscMetricsServiceFactory::GetServiceForContext(
-              browser_->GetProfile());
-      if (profile_metrics) {
-        auto* ai_chat_metrics = profile_metrics->GetAIChatMetrics();
-        if (ai_chat_metrics) {
-          ai_chat_metrics->HandleOpenViaEntryPoint(
-              ai_chat::EntryPoint::kSidebar);
-        }
-      }
-    }
-#endif  // BUILDFLAG(ENABLE_AI_CHAT)
-    controller->ActivatePanelItem(item_model.built_in_item_type);
-    return;
-  }
-
-  WindowOpenDisposition open_disposition = WindowOpenDisposition::CURRENT_TAB;
+  auto open_disposition = ui::mojom::WindowOpenDisposition::kCurrentTab;
   if (event_utils::IsPossibleDispositionEvent(event)) {
     open_disposition = ui::DispositionFromEventFlags(event.flags());
   }
 
-  controller->ActivateItemAt(index, open_disposition);
+  sidebar::SidebarController::From(browser_)->OnItemPressed(*index,
+                                                            open_disposition);
 }
 
 ui::ImageModel SidebarItemsContentsView::GetImageForBuiltInItems(
@@ -582,8 +627,8 @@ ui::ImageModel SidebarItemsContentsView::GetImageForBuiltInItems(
     } else {
       color_id = kColorSidebarButtonBase;
     }
-    return ui::ImageModel::FromVectorIcon(icon, color_id,
-                                          SidebarButtonView::kDefaultIconSize);
+    return ui::ImageModel::FromVectorIcon(
+        icon, color_id, SidebarButtonView::GetDefaultIconSize());
   };
 
   switch (type) {
@@ -633,6 +678,22 @@ bool SidebarItemsContentsView::IsBubbleVisible() const {
   }
 
   return false;
+}
+
+bool SidebarItemsContentsView::IsMobileUserAgentMenuEntryVisibleForTesting(
+    views::View* item_view) {
+  view_for_context_menu_ = item_view;
+  const bool visible = IsCommandIdVisible(kItemToggleMobileUserAgent);
+  view_for_context_menu_ = nullptr;
+  return visible;
+}
+
+bool SidebarItemsContentsView::IsOpenInPanelMenuEntryVisibleForTesting(
+    views::View* item_view) {
+  view_for_context_menu_ = item_view;
+  const bool visible = IsCommandIdVisible(kItemToggleOpenInPanel);
+  view_for_context_menu_ = nullptr;
+  return visible;
 }
 
 BEGIN_METADATA(SidebarItemsContentsView)

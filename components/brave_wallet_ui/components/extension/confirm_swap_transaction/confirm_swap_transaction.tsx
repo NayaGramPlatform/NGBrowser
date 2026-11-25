@@ -5,23 +5,26 @@
 
 import * as React from 'react'
 import { skipToken } from '@reduxjs/toolkit/query/react'
-import Tooltip from '@brave/leo/react/tooltip'
-import Icon from '@brave/leo/react/icon'
+import Tooltip from '@brave/nala/react/tooltip'
+import Icon from '@brave/nala/react/icon'
 
 // Queries
-import {
-  useGetActiveOriginQuery,
-  useGetNetworkQuery,
-} from '../../../common/slices/api.slice'
+import { useGetNetworkQuery } from '../../../common/slices/api.slice'
 import { useAccountFromAddressQuery } from '../../../common/slices/api.slice.extra'
 
 // Utils
 import { getLocale } from '../../../../common/locale'
-import { isBridgeTransaction } from '../../../utils/tx-utils'
+import {
+  getTransactionBaseValue,
+  isBridgeTransaction,
+} from '../../../utils/tx-utils'
 import { reduceAddress } from '../../../utils/reduce-address'
 import { copyToClipboard } from '../../../utils/copy-to-clipboard'
+import { formatTokenBalance } from '../../../utils/asset-utils'
+import Amount from '../../../utils/amount'
 
 // Constants
+import { NATIVE_EVM_ASSET_CONTRACT_ADDRESS } from '../../../common/constants/magics'
 import { SwapProviderMetadata } from '../../../page/screens/swap/constants/metadata'
 import { BraveWallet, SwapProviderNameMapping } from '../../../constants/types'
 
@@ -89,10 +92,6 @@ export function ConfirmSwapTransaction() {
   const [isContractAddressCopied, setIsContractAddressCopied] =
     React.useState<boolean>(false)
 
-  // Queries
-  const { data: activeOrigin = { eTldPlusOne: '', originSpec: '' } } =
-    useGetActiveOriginQuery()
-
   // Hooks
   const {
     transactionDetails,
@@ -117,7 +116,6 @@ export function ConfirmSwapTransaction() {
   const onClickViewOnBlockExplorer = useExplorer(transactionsNetwork)
 
   // Computed
-  const originInfo = selectedPendingTransaction?.originInfo ?? activeOrigin
   const isBridgeTx = selectedPendingTransaction
     ? isBridgeTransaction(selectedPendingTransaction)
     : false
@@ -144,6 +142,23 @@ export function ConfirmSwapTransaction() {
     account: destinationAccount,
     isLoading: isLoadingDestinationAccount,
   } = useAccountFromAddressQuery(destinationAddress || skipToken)
+
+  // Swap info is decoded from calldata, so also show the native value the
+  // transaction sends unless it is already the displayed spend. For example,
+  // bridges can charge a native fee on top of a token spend.
+  const txValue = new Amount(
+    isEthereumTransaction && selectedPendingTransaction
+      ? getTransactionBaseValue(selectedPendingTransaction)
+      : '0',
+  )
+
+  const sourceTokenAddress =
+    selectedPendingTransaction?.swapInfo?.sourceTokenAddress ?? ''
+  const isNativeSourceToken =
+    sourceTokenAddress === ''
+    || sourceTokenAddress === NATIVE_EVM_ASSET_CONTRACT_ADDRESS
+  const showTxValue =
+    txValue.gt(0) && !(isNativeSourceToken && txValue.eq(sourceAmount))
 
   const contractAddressTitle = React.useMemo(() => {
     if (provider === BraveWallet.SwapProvider.kNearIntents) {
@@ -194,13 +209,13 @@ export function ConfirmSwapTransaction() {
           height='100%'
           justifyContent='flex-start'
         >
-          {originInfo && (
+          {selectedPendingTransaction.dappOriginInfo && (
             <Row
               justifyContent='flex-start'
               padding='0px 0px 14px 0px'
             >
               <OriginInfoCard
-                origin={originInfo}
+                origin={selectedPendingTransaction.dappOriginInfo}
                 noBackground={true}
               />
             </Row>
@@ -290,6 +305,26 @@ export function ConfirmSwapTransaction() {
                           {SwapProviderNameMapping[provider]}
                         </Text>
                       </Row>
+                    </Row>
+                    <VerticalDivider />
+                  </>
+                )}
+                {showTxValue && transactionsNetwork && (
+                  <>
+                    <Row justifyContent='space-between'>
+                      <ConfirmationInfoLabel textColor='secondary'>
+                        {getLocale(S.BRAVE_WALLET_VALUE)}
+                      </ConfirmationInfoLabel>
+                      <Text
+                        textSize='12px'
+                        isBold={true}
+                        textColor='primary'
+                      >
+                        {formatTokenBalance(
+                          txValue.toHex(),
+                          transactionsNetwork,
+                        )}
+                      </Text>
                     </Row>
                     <VerticalDivider />
                   </>

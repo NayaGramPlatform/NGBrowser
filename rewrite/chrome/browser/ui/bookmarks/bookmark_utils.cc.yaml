@@ -4,25 +4,6 @@
 # You can obtain one at https://mozilla.org/MPL/2.0/.
 
 substitutions:
-  - description: |-
-      Call Brave specific logic at the end of ToogleBookmarkBarWhenVisible()
-
-      This is needed to update the Brave specific pref as a result of visibility
-      change.
-    after_function_impl:
-      function_name: 'ToggleBookmarkBarWhenVisible'
-      code: 'BraveToggleBookmarkBarState(browser_context);'
-
-  - description: Always return false in IsAppsShortcutEnabled()
-    preempt_function_impl:
-      function_name: 'IsAppsShortcutEnabled'
-      code: 'if ((true)) return false;'
-
-  - description: Always return false in ShouldShowAppsShortcutInBookmarkBar()
-    preempt_function_impl:
-      function_name: 'ShouldShowAppsShortcutInBookmarkBar'
-      code: 'if ((true)) return false;'
-
   - description: |
       Return Brave version of bookmark folder icon in GetBookmarkFolderIcon()
 

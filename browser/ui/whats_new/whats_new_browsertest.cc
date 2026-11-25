@@ -12,7 +12,6 @@
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/chrome_version_service.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/test/base/in_process_browser_test.h"
@@ -36,7 +35,10 @@ class BraveWhatsNewBrowserTest : public InProcessBrowserTest {
     set_open_about_blank_on_browser_launch(false);
   }
 
-  ~BraveWhatsNewBrowserTest() override = default;
+  ~BraveWhatsNewBrowserTest() override {
+    // Clear the process-wide version override set in the constructor.
+    SetCurrentVersionForTesting(0);
+  }
 
   void SetUpDefaultCommandLine(base::CommandLine* command_line) override {
     InProcessBrowserTest::SetUpDefaultCommandLine(command_line);

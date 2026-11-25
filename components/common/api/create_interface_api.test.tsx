@@ -223,6 +223,36 @@ describe('createInterfaceApi', () => {
     })
   })
 
+  it('replaces Map and Set state on update rather than merging it', () => {
+    const api = createInterfaceApi({
+      actions: {},
+      endpoints: {
+        myMap: state(new Map([['a', 1]])),
+        mySet: state(new Set(['a'])),
+      },
+    })
+
+    const map = new Map([['b', 2]])
+    api.myMap.update(map)
+    expect(api.myMap.current()).toBe(map)
+
+    api.myMap.update((old) => {
+      const next = new Map(old)
+      next.set('c', 3)
+      return next
+    })
+    expect(api.myMap.current()).toEqual(
+      new Map([
+        ['b', 2],
+        ['c', 3],
+      ]),
+    )
+
+    const set = new Set(['b'])
+    api.mySet.update(set)
+    expect(api.mySet.current()).toBe(set)
+  })
+
   it('creates a hook that returns the query data', async () => {
     const mockedQuery = jest.fn((id: string) => {
       return Promise.resolve({ id })
@@ -333,6 +363,70 @@ describe('createInterfaceApi', () => {
     expect(api.getList.current()).toEqual([{ id: '1' }, { id: '2' }])
     await act(() => hookResult.rerender())
     expect(hookResult.result.current).toEqual([{ id: '1' }, { id: '2' }])
+  })
+
+  it('support null keys', async () => {
+    const api = createInterfaceApi({
+      actions: {},
+      endpoints: {
+        getData: {
+          query: (id: string | null) => {
+            console.log(id)
+            return Promise.resolve({ id: id ?? 'default' })
+          },
+        },
+      },
+    })
+    expect(api.useGetData).not.toBeUndefined()
+
+    // Fetch
+    expect(await api.getData.fetch(null)).toEqual({ id: 'default' })
+    expect(await api.getData.fetch('one')).toEqual({ id: 'one' })
+
+    // Current
+    expect(api.getData.current(null)).toEqual({ id: 'default' })
+    expect(api.getData.current('one')).toEqual({ id: 'one' })
+
+    // Update
+    api.getData.update(null, { id: 'default-updated' })
+    expect(api.getData.current(null)).toEqual({ id: 'default-updated' })
+    expect(api.getData.current('one')).toEqual({ id: 'one' })
+    api.getData.update('one', { id: 'one-updated' })
+    expect(api.getData.current('one')).toEqual({ id: 'one-updated' })
+    expect(api.getData.current(null)).toEqual({ id: 'default-updated' })
+
+    // hooks
+    function useTestQuery() {
+      const nullQuery = api.getData.useQuery(null)
+      const dataQuery = api.getData.useQuery('one')
+      return {
+        nullData: nullQuery.data,
+        data: dataQuery.data,
+      }
+    }
+
+    let hookResult = await act(async () => renderHook(useTestQuery))
+    expect(hookResult.result.current).toEqual({
+      nullData: { id: 'default-updated' },
+      data: { id: 'one-updated' },
+    })
+
+    // Invalidate
+    api.getData.invalidate(null)
+    await act(() => Promise.resolve())
+    await act(() => hookResult.rerender())
+    expect(hookResult.result.current).toEqual({
+      nullData: { id: 'default' },
+      data: { id: 'one-updated' },
+    })
+
+    api.getData.invalidate('one')
+    await act(() => Promise.resolve())
+    await act(() => hookResult.rerender())
+    expect(hookResult.result.current).toEqual({
+      nullData: { id: 'default' },
+      data: { id: 'one' },
+    })
   })
 
   it('can create mutations', async () => {
@@ -1062,5 +1156,47 @@ describe('createInterfaceApi', () => {
     > = await act(async () => renderHook(useMyEventData))
     expect(secondHookResult.result.current.data).toEqual(['5', 5])
     expect(secondHookResult.result.current.hasEmitted).toBe(true)
+  })
+
+  it('keeps event data with no subscribers past the default gcTime', () => {
+    jest.useFakeTimers()
+    try {
+      const api = createInterfaceApi({
+        actions: {},
+        endpoints: {},
+        events: {
+          myEvent: event<[], [string]>(() => {}),
+          myKeyedEvent: event<[id: string], [number]>(() => {}),
+        },
+      })
+
+      // Emitted with no observer.
+      api.emitEvent('myEvent', ['payload'])
+
+      // Observed by subscribeTo, then unsubscribed.
+      const unsubscribe = api.subscribeToMyKeyedEvent(() => {}, 'a')
+      api.emitEvent('myKeyedEvent', 'a', [1])
+      unsubscribe()
+
+      // Observed by useCurrent, then unmounted.
+      const mounted = renderHook(() => api.useCurrentMyKeyedEvent('b'))
+      api.emitEvent('myKeyedEvent', 'b', [2])
+      mounted.unmount()
+
+      // TanStack's default gcTime is 5 minutes.
+      jest.advanceTimersByTime(10 * 60 * 1000)
+
+      const current = renderHook(() => api.useCurrentMyEvent())
+      expect(current.result.current.hasEmitted).toBe(true)
+      expect(current.result.current.data).toEqual(['payload'])
+
+      const keyedA = renderHook(() => api.useCurrentMyKeyedEvent('a'))
+      expect(keyedA.result.current.data).toEqual([1])
+
+      const keyedB = renderHook(() => api.useCurrentMyKeyedEvent('b'))
+      expect(keyedB.result.current.data).toEqual([2])
+    } finally {
+      jest.useRealTimers()
+    }
   })
 })

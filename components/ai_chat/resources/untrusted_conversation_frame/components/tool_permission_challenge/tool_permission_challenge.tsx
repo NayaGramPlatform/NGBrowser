@@ -4,7 +4,7 @@
 // You can obtain one at https://mozilla.org/MPL/2.0/.
 
 import * as React from 'react'
-import Icon from '@brave/leo/react/icon'
+import Icon from '@brave/nala/react/icon'
 import { formatLocale, getLocale } from '$web-common/locale'
 import ConversationAreaButton from '../../../common/components/conversation_area_button'
 import * as Mojom from '../../../common/mojom'
@@ -116,7 +116,7 @@ export default function ToolPermissionChallenge(props: Props) {
     if (!props.isInteractive) {
       return
     }
-    conversationContext.conversationHandler?.processPermissionChallenge?.(
+    conversationContext.userActions?.processPermissionChallenge?.(
       props.toolUseEvent.id,
       decision,
     )
@@ -147,7 +147,8 @@ export default function ToolPermissionChallenge(props: Props) {
           className={styles.headerIcon}
         />
         <span className={styles.headerText}>
-          {getLocale(S.CHAT_UI_PERMISSION_CHALLENGE_HEADER)}
+          {permissionChallenge.title
+            ?? getLocale(S.CHAT_UI_PERMISSION_CHALLENGE_HEADER)}
         </span>
       </div>
 
@@ -163,7 +164,14 @@ export default function ToolPermissionChallenge(props: Props) {
           </>
         )}
 
-        {toolPermissionImplications && <p>{toolPermissionImplications}</p>}
+        {permissionChallenge.implications ? (
+          <MarkdownRenderer
+            text={permissionChallenge.implications}
+            shouldShowTextCursor={false}
+          />
+        ) : (
+          toolPermissionImplications && <p>{toolPermissionImplications}</p>
+        )}
         {permissionChallenge.plan && (
           <p className={styles.assessment}>{permissionChallenge.plan}</p>
         )}

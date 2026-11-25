@@ -42,8 +42,6 @@
 
 # These tests fail because in identity_test_utils.cc waiting for
 # identity_manager->AreRefreshTokensLoaded() times out.
--AvatarToolbarButtonPromoBrowserTest.*
--AvatarToolbarButtonPromoClickBrowserTest.*
 -AvatarToolbarButtonSignedOutPromoBrowserTest.SignedOutPromoTriggeredOnStartupAfterDelayExpired 
 
 # These tests fail because kPrerender2 feature is disabled.
@@ -81,7 +79,22 @@
 # 0.2% upstream flake rate over 30 days per LUCI Analysis. No Brave-specific code
 # affects this path.
 # https://github.com/brave/brave-browser/issues/53358
--DevToolsProcessPerSiteTest.PausedDebuggerFocus
+# https://github.com/brave/brave-browser/issues/59188
+# The test is parameterized (INSTANTIATE_TEST_SUITE_P prefix "All"), so its
+# full name is All/DevToolsProcessPerSiteTest.PausedDebuggerFocus/<Param>; the
+# previous unparameterized pattern never matched, leaving it enabled. Only the
+# LegacyInfobar instance has been reported failing.
+-All/DevToolsProcessPerSiteTest.PausedDebuggerFocus/LegacyInfobar
+
+# Chromium test, new in Chromium 157 (landed 2026-10-09). The Glic selection
+# prompt widget is never shown, so the test times out after 30s. Reported 22
+# times between 2026-10-29 and 2026-11-05 on Linux x64 builds with Chromium
+# 157 (master, beta and release), always with the same failure. It passes
+# upstream (0.08% over 30 days per LUCI Analysis). The cause in Brave is not
+# identified: the widget does not depend on the Glic extension Brave denies
+# and no Brave override on this path was found.
+# https://github.com/brave/brave-browser/issues/60298
+-GlicSelectionPromptContextMenuBrowserTest.ContextMenuDismissesSelectionWidget
 
 # These tests fail on Linux because kPromptForDownload defaults to true,
 # triggering the GTK file chooser dialog which causes g_malloc leaks
@@ -149,8 +162,8 @@
 # MLInstallabilityPromoter::StartPipeline() bail out before it starts any of
 # its tasks.
 #
-# tools/chromium_tests_analysis/check-upstream-flake.py reports "STABLE UPSTREAM" (0.8% over 60 days),
-# i.e. below the 1% bar, so this entry rests on the mechanism above and on
+# LUCI Analysis reports an aggregate flake rate of 0.8% over 60 days, i.e.
+# below the 1% bar, so this entry rests on the mechanism above and on
 # Brave being provably not at fault, not on the flake rate. The rate only
 # decides which file the entry belongs in: over that window linux-rel and
 # win-rel both sit at ~0.2%, the Linux ASAN/LSAN builders show no failures at
@@ -162,7 +175,7 @@
 # only ASAN would leave the non-sanitizer Linux builds exposed. And not the
 # all-platform browser_tests.filter: macOS shows no evidence of the failure, so
 # there is no reason to drop coverage there, and Windows is already covered in
-# browser_tests-windows.filter.
+# browser_tests-win.filter.
 #
 # Fixing this requires reordering the callback and the queue pop in upstream
 # test or production code. A previous attempt, brave/brave-core#34786, patched
@@ -239,9 +252,9 @@
 # tab in browser1 (browser2 is tracked too, but this test never gives it a
 # tab).
 #
-# script/check-upstream-flake.py reports "STABLE UPSTREAM" (0.2% over 30
-# days), below the 1% bar, so this entry rests on the mechanism above and on
-# Brave being ruled out rather than on the aggregate rate. That aggregate is
+# LUCI Analysis reports an aggregate flake rate of 0.2% over 30 days, below
+# the 1% bar, so this entry rests on the mechanism above and on Brave being
+# ruled out rather than on the aggregate rate. That aggregate is
 # diluted by two high-volume CQ trybots, linux-rel (~29k verdicts) and win-rel
 # (~28k), together ~66% of all verdicts, whose events are all "failed" and
 # none "flaky", i.e. attributable to the CL under test. Counting only flaky
@@ -260,6 +273,80 @@
 #
 # https://github.com/brave/brave-browser/issues/58475
 -TabSearchPageHandlerTest.TabsNotChanged
+
+# Upstream Chromium tests (chrome/browser/ui/views/payments/
+# payment_handler_web_flow_view_browsertest.cc). Four tests in that file
+# synthesize a mouse click into the payment handler web contents, but these
+# two are the only ones that have to hit a specific element: they use
+# content::SimulateMouseClickOrTapElementWithId(payment_handler_contents,
+# "reject-button"), whose listener posts 'reject' to the service worker, which
+# rejects the PaymentRequestEvent promise, and then they wait for the
+# resulting ERROR_MESSAGE_SHOWN / DIALOG_CLOSED. The other two,
+# UserInteractionRecorded and PaymentResponseDeferredUntilUserInteraction,
+# call content::SimulateMouseClick(), which only has to register user
+# activation somewhere on the page, and those sit at 0.1% upstream against
+# 0.6% and 0.4% for these two. That is suggestive rather than conclusive (the
+# stable pair also uses a different launcher and a different payment app), but
+# it is consistent with the click being delivered and not landing on the
+# button.
+#
+# Every failing log stops there. None of the console messages a successful run
+# emits after the click appear ("PaymentRequestEvent.respondWith() failed: the
+# promise passed to respondWith() was rejected." and "Uncaught (in promise)
+# Error: Rejected"), and the event waiter still has all of its expected events
+# pending when the 30s RunLoop timeout fires. Console output from both the
+# payment handler window and the service worker reaches browser_tests stderr
+# (content::LogConsoleMessage is on either path, and checked locally by
+# logging from that listener), so neither a rejection nor an exception thrown
+# inside the listener would go unlogged. Nothing is logged, so the listener
+# most likely never ran.
+#
+# Upstream has already had one round of flake fixes on this exact path:
+# crrev.com/c/8045781 ("[Payments] Fix user interaction flaky tests",
+# crbug.com/531590249, 530162399, 530434790) added the merchant /
+# service-worker / window-client readiness handshake these tests use, and both
+# already call SimulateEndOfPaintHoldingOnPrimaryMainFrame() before clicking.
+# Both mitigations are in our tree and neither closes this window.
+#
+# LUCI Analysis reports aggregate flake rates for both of 0.6% and 0.4% over
+# 30 days, 0.7% and 0.5% over 60 — i.e. below the 1% bar, so the flake rate
+# alone does not justify the entry. The TUF-002 checks come back
+# clean: no chromium_src override under chrome/browser/ui/views/payments/ or
+# components/payments/, no patch touching either tree, and no Brave override
+# of the payments::features::kPaymentRequestMandatoryPaymentAppUi default that
+# the two fixtures toggle. All Brave code matching "payments" is credit card
+# autofill (components/autofill/core/browser/payments/ and its iOS and rewrite
+# counterparts), a different subsystem. Locally both tests pass — 38 runs on
+# Linux across single-process and test-launcher configurations, 30 of them at
+# --test-launcher-jobs=12 — too few to prove much on their own. So no Brave
+# cause was found, but the gap between the failure rate on these builders and
+# upstream's remains unexplained.
+#
+# Linux-only filter: every occurrence since the first report on 2026-08-13 is
+# linux-x64, on both the browser and origin builders (58146 on nightly and
+# release, 58147 on nightly and beta). Brave files browser_tests failures for
+# macOS and Windows too and neither has reported these, so there is no reason
+# to drop coverage there. Per TUF-001 a filter is preferred over patching
+# upstream test code for an intermittent failure, and since no Brave override
+# or patch is responsible, there is nothing on our side to fix instead.
+#
+# Only the MandatoryUiEnabledTest half is filtered here: the
+# MandatoryUiDisabledTest one (issue 58146) was filtered separately by
+# brave/brave-core#40010, which lists it under "These tests pass locally but
+# fail on CI" at the top of this file. The analysis above still covers both,
+# since the two share the click path.
+#
+# https://github.com/brave/brave-browser/issues/58147
+-PaymentHandlerWebFlowViewMandatoryUiEnabledTest.DialogClosedOnErrorAfterUserInteraction
+
+# These tests fail under Xvfb without a window manager. In
+# HatsSurveyNotTriggeredOnBrowserClose, hiding the browser deactivates the
+# inactive bubble, which closes with kLostFocus and launches the survey. In
+# CaptionButtonsFitTopAreaAndUpdateOnThemeChange, GetCustomFramePrefDefault()
+# turns custom frames off with no known WM, so there are no caption buttons
+# whose exclusion the test measures; it passes with openbox running.
+-LinuxNativeBrowserFrameViewTest.CaptionButtonsFitTopAreaAndUpdateOnThemeChange
+-ScheduledRestartHatsBrowserTest.HatsSurveyNotTriggeredOnBrowserClose
 
 # Tests below this point have not been diagnosed or had issues created yet.
 -AccessCodeCastHandlerBrowserTest.*

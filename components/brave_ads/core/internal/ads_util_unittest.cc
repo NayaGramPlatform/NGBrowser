@@ -14,7 +14,7 @@
 #include "components/prefs/testing_pref_service.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-// npm run test -- brave_unit_tests --filter=BraveAds*
+// pnpm test brave_unit_tests --filter=BraveAds*
 
 namespace brave_ads {
 
@@ -24,6 +24,10 @@ class BraveAdsAdsUtilTest : public ::testing::Test {
         brave_rewards::prefs::kUseRewardsStagingServer, false);
 
     brave_rewards::RewardsFlags::SetForceParsingForTesting(true);
+  }
+
+  void TearDown() override {
+    brave_rewards::RewardsFlags::SetForceParsingForTesting(false);
   }
 
  protected:

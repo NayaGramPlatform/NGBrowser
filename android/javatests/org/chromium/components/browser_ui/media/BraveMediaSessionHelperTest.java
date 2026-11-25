@@ -20,6 +20,7 @@ import android.app.Activity;
 import androidx.test.filters.SmallTest;
 
 import org.junit.After;
+import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -57,12 +58,27 @@ public class BraveMediaSessionHelperTest {
 
     @Mock private WebContents mOtherWebContents;
     @Mock private WindowAndroid mWindowAndroid;
-    @Mock private Activity mActivity;
+    private PipActivity mActivity;
 
     private final BraveMediaSessionHelper mHelper = new BraveMediaSessionHelper();
 
+    private static class PipActivity extends Activity {
+        boolean mInPictureInPictureMode;
+
+        @Override
+        public boolean isInPictureInPictureMode() {
+            return mInPictureInPictureMode;
+        }
+    }
+
     private void mockUrl(String url) {
         when(mWebContents.getLastCommittedUrl()).thenReturn(new GURL(url));
+    }
+
+    @Before
+    public void setUp() {
+        // Activity's constructor creates a Handler, which needs a Looper.
+        mActivity = ThreadUtils.runOnUiThreadBlocking(() -> new PipActivity());
     }
 
     @After
@@ -120,7 +136,7 @@ public class BraveMediaSessionHelperTest {
     public void isYouTubePictureInPicture_returnsFalseWhenActivityInPipWithoutBraveSession() {
         when(mWebContents.getTopLevelNativeWindow()).thenReturn(mWindowAndroid);
         when(mWindowAndroid.getActivity()).thenReturn(new WeakReference<>(mActivity));
-        when(mActivity.isInPictureInPictureMode()).thenReturn(true);
+        mActivity.mInPictureInPictureMode = true;
 
         assertFalse(mHelper.isYouTubePictureInPicture(mWebContents));
     }
@@ -130,7 +146,7 @@ public class BraveMediaSessionHelperTest {
     public void isYouTubePictureInPicture_returnsTrueForBraveManagedSession() {
         when(mWebContents.getTopLevelNativeWindow()).thenReturn(mWindowAndroid);
         when(mWindowAndroid.getActivity()).thenReturn(new WeakReference<>(mActivity));
-        when(mActivity.isInPictureInPictureMode()).thenReturn(true);
+        mActivity.mInPictureInPictureMode = true;
         BraveMediaSessionHelper.setYouTubePictureInPictureWebContents(mWebContents);
 
         assertTrue(mHelper.isYouTubePictureInPicture(mWebContents));
@@ -141,7 +157,7 @@ public class BraveMediaSessionHelperTest {
     public void isYouTubePictureInPicture_returnsFalseWhenActivityNotInPip() {
         when(mWebContents.getTopLevelNativeWindow()).thenReturn(mWindowAndroid);
         when(mWindowAndroid.getActivity()).thenReturn(new WeakReference<>(mActivity));
-        when(mActivity.isInPictureInPictureMode()).thenReturn(false);
+        mActivity.mInPictureInPictureMode = false;
         BraveMediaSessionHelper.setYouTubePictureInPictureWebContents(mWebContents);
 
         assertFalse(mHelper.isYouTubePictureInPicture(mWebContents));
@@ -152,7 +168,7 @@ public class BraveMediaSessionHelperTest {
     public void isYouTubePictureInPicture_returnsFalseForDifferentBraveManagedSession() {
         when(mWebContents.getTopLevelNativeWindow()).thenReturn(mWindowAndroid);
         when(mWindowAndroid.getActivity()).thenReturn(new WeakReference<>(mActivity));
-        when(mActivity.isInPictureInPictureMode()).thenReturn(true);
+        mActivity.mInPictureInPictureMode = true;
         BraveMediaSessionHelper.setYouTubePictureInPictureWebContents(mOtherWebContents);
 
         assertFalse(mHelper.isYouTubePictureInPicture(mWebContents));
@@ -189,7 +205,7 @@ public class BraveMediaSessionHelperTest {
         mockUrl("https://m.youtube.com/watch?v=dQw4w9WgXcQ");
         when(mWebContents.getTopLevelNativeWindow()).thenReturn(mWindowAndroid);
         when(mWindowAndroid.getActivity()).thenReturn(new WeakReference<>(mActivity));
-        when(mActivity.isInPictureInPictureMode()).thenReturn(true);
+        mActivity.mInPictureInPictureMode = true;
         BraveMediaSessionHelper.setYouTubePictureInPictureWebContents(mWebContents);
 
         // The pause suppression still applies, so the media controls stay alive, but the real

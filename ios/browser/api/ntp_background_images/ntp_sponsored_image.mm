@@ -7,7 +7,7 @@
 
 #include "base/files/file_path.h"
 #include "base/strings/sys_string_conversions.h"
-#include "brave/components/ntp_background_images/browser/ntp_sponsored_images_data.h"
+#include "brave/components/ntp_background_images/browser/sponsored_content/new_tab_takeover/ntp_sponsored_content_data.h"
 #include "brave/ios/browser/api/ntp_background_images/ntp_sponsored_image+private.h"
 
 #if !defined(__has_feature) || !__has_feature(objc_arc)
@@ -29,7 +29,7 @@
 }
 
 - (instancetype)initWithData:
-    (const ntp_background_images::NTPSponsoredImagesData&)data {
+    (const ntp_background_images::NTPSponsoredContentData&)data {
   auto campaigns = [[NSMutableArray<NTPSponsoredImageCampaign*> alloc] init];
   for (const auto& campaign : data.campaigns) {
     [campaigns addObject:[[NTPSponsoredImageCampaign alloc]
@@ -60,7 +60,7 @@
 
 - (instancetype)initWithCampaign:
     (const ntp_background_images::Campaign&)campaign {
-  auto campaignId = base::SysUTF8ToNSString(campaign.campaign_id);
+  auto campaignId = base::SysUTF8ToNSString(campaign.id);
   auto backgrounds =
       [[NSMutableArray<NTPSponsoredImageBackground*> alloc] init];
   for (const auto& creative : campaign.creatives) {

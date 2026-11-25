@@ -31,7 +31,7 @@ export interface TestConditionMatcherFormState {
 // Keys match the literal column labels produced by `BuildAdsInternals` in
 // //brave/components/brave_ads/core/internal/ads_internals/ads_internals_util.cc
 export interface ConversionUrlPattern {
-  'Creative Set ID': string
+  'Campaign ID': string
   'Ad Type': string
   'URL Pattern': string
   'Expires At': number
@@ -123,6 +123,7 @@ export interface Campaign {
   'Priority': number
   'Pass Through Rate': number
   'Metric Type': string
+  'Type': string
   'Start At': number
   'End At': number
   'Geo Targets': string[]
@@ -174,6 +175,10 @@ export interface AppState {
   adHistoryRetentionPeriodDays: number
   diagnosticId: string
   isInitialized: boolean
+  // False until the first `loadDiagnostics()` response arrives, so the UI
+  // can show a loading indicator instead of treating the empty defaults
+  // below as a confirmed "not loaded"/"failed" result.
+  diagnosticsLoaded: boolean
   diagnosticEntries: DiagnosticEntry[]
   // Comes from the browser process's VariationsService, not
   // `DiagnosticManager`, so it is tracked separately from `diagnosticEntries`
@@ -245,6 +250,7 @@ export function defaultAppStore() {
     adHistoryRetentionPeriodDays: 30,
     diagnosticId: '',
     isInitialized: false,
+    diagnosticsLoaded: false,
     diagnosticEntries: [],
     variationsCountryCode: '',
     rewardsDiagnosticEntries: [],

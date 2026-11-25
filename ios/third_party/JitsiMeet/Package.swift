@@ -11,9 +11,8 @@ let package = Package(
   ],
   dependencies: [
     .package(
-      // webrtc 124.0.2
       url: "https://github.com/jitsi/webrtc",
-      revision: "M124"
+      from: "155.0.0"
     )
   ],
   targets: [
@@ -21,7 +20,7 @@ let package = Package(
       name: "JitsiMeet",
       dependencies: [.product(name: "WebRTC", package: "webrtc"), "hermes"]
     ),
-    .binaryTarget(name: "hermes", path: "hermes.xcframework"),
+    .binaryTarget(name: "hermes", path: "hermesvm.xcframework"),
     .binaryTarget(
       name: "JitsiMeetSDK",
       path: "JitsiMeetSDK.xcframework"

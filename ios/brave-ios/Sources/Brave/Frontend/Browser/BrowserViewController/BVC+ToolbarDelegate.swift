@@ -74,22 +74,20 @@ extension BrowserViewController: TopToolbarDelegate, SearchContainerViewControll
   }
 
   func topToolbarDidPressReload(_ topToolbar: TopToolbarView) {
-    if let url = topToolbar.currentURL {
-      if let decentralizedDNSHelper = decentralizedDNSHelperFor(url: topToolbar.currentURL) {
+    if let url = tabManager.selectedTab?.visibleURL {
+      if let decentralizedDNSHelper = decentralizedDNSHelperFor(url: url) {
         topToolbarDidPressReloadTask?.cancel()
         topToolbarDidPressReloadTask = Task { @MainActor in
-          topToolbar.locationView.loading = true
           let result = await decentralizedDNSHelper.lookup(
             domain: url.schemelessAbsoluteDisplayString
           )
-          topToolbar.locationView.loading = tabManager.selectedTab?.isLoading == true
           guard !Task.isCancelled else { return }  // user pressed stop, or typed new url
           switch result {
           case .loadInterstitial(let service):
             showWeb3ServiceInterstitialPage(service: service, originalURL: url)
           case .load(let resolvedURL):
             if resolvedURL.isIPFSScheme,
-              let resolvedIPFSURL = profileController.ipfsAPI.resolveGatewayUrl(for: resolvedURL)
+              let resolvedIPFSURL = IpfsAPI.resolveGatewayUrl(for: resolvedURL)
             {
               tabManager.selectedTab?.loadRequest(URLRequest(url: resolvedIPFSURL))
             } else {
@@ -154,9 +152,8 @@ extension BrowserViewController: TopToolbarDelegate, SearchContainerViewControll
 
   func topToolbarDidPressPlaylistButton(_ urlBar: TopToolbarView) {
     guard let tab = tabManager.selectedTab, let playlistItem = tab.playlistItem else { return }
-    let state = urlBar.locationView.playlistButton.buttonState
-    switch state {
-    case .addToPlaylist:
+    switch tab.playlistItemState ?? .none {
+    case .newItem:
       addToPlaylist(item: playlistItem) { [weak self] didAddItem in
         guard let self else { return }
 
@@ -169,7 +166,7 @@ extension BrowserViewController: TopToolbarDelegate, SearchContainerViewControll
           }
         }
       }
-    case .addedToPlaylist:
+    case .existingItem:
       // Shows its own menu
       break
     case .none:
@@ -205,6 +202,12 @@ extension BrowserViewController: TopToolbarDelegate, SearchContainerViewControll
   func topToolbarDisplayTextForURL(_ topToolbar: URL?) -> (String?, Bool) {
     // use the initial value for the URL so we can do proper pattern matching with search URLs
     let searchURL = self.tabManager.selectedTab?.currentInitialURL
+    if FeatureList.kUseChromiumSearchEngines.enabled {
+      if let searchURL, let query = templateURLSearchTerms(from: searchURL) {
+        return (query, true)
+      }
+      return (topToolbar?.absoluteString, false)
+    }
     if let query = profile.searchEngines.queryForSearchURL(
       searchURL as URL?,
       forType: privateBrowsingManager.isPrivateBrowsing ? .privateMode : .standard
@@ -295,12 +298,10 @@ extension BrowserViewController: TopToolbarDelegate, SearchContainerViewControll
     // check text is decentralized DNS supported domain
     if let decentralizedDNSHelper = self.decentralizedDNSHelperFor(url: fixupURL) {
       dismissSearchInput()
-      updateToolbarCurrentURL(fixupURL)
-      topToolbar.locationView.loading = true
+      updateScreenTimeUrl(fixupURL)
       let result = await decentralizedDNSHelper.lookup(
         domain: fixupURL.schemelessAbsoluteDisplayString
       )
-      topToolbar.locationView.loading = tabManager.selectedTab?.isLoading == true
       guard !Task.isCancelled else { return true }  // user pressed stop, or typed new url
       switch result {
       case .loadInterstitial(let service):
@@ -308,7 +309,7 @@ extension BrowserViewController: TopToolbarDelegate, SearchContainerViewControll
         return true
       case .load(let resolvedURL):
         if resolvedURL.isIPFSScheme,
-          let resolvedIPFSURL = profileController.ipfsAPI.resolveGatewayUrl(for: resolvedURL)
+          let resolvedIPFSURL = IpfsAPI.resolveGatewayUrl(for: resolvedURL)
         {
           finishEditingAndSubmit(resolvedIPFSURL)
         } else {
@@ -337,6 +338,7 @@ extension BrowserViewController: TopToolbarDelegate, SearchContainerViewControll
   ///   - initialText: The text to seed the input field with (the current URL or search query).
   ///   - pasted: Whether the `initialText` was pasted (avoids highlighting the whole entry).
   ///   - search: Whether `initialText` should be treated as a search query.
+  @MainActor
   func presentSearchInput(initialText: String?, pasted: Bool, search: Bool) {
     if let searchContainer {
       // Already editing - just seed the existing input (e.g. from a QR scan) and refocus.
@@ -346,11 +348,20 @@ extension BrowserViewController: TopToolbarDelegate, SearchContainerViewControll
     }
 
     let isPrivate = tabManager.selectedTab?.isPrivate ?? false
+    let tabProfile =
+      tabManager.selectedTab?.profile
+      ?? (isPrivate ? profileController.profile.offTheRecordProfile : profileController.profile)
     let container = SearchContainerViewController(
       tabManager: tabManager,
       bookmarkManager: bookmarkManager,
       historyAPI: profileController.historyAPI,
+      autocompleteClassifier: AutocompleteClassifierFactory.get(profile: tabProfile),
+      urlSanitizerService: URLSanitizerServiceFactory.get(profile: tabProfile),
       searchEngines: profile.searchEngines,
+      tileSource: TopSitesTileSource(
+        mostVisitedSites: privateBrowsingManager.isPrivateBrowsing ? nil : mostVisitedSites,
+        isPrivateBrowsing: privateBrowsingManager.isPrivateBrowsing
+      ),
       privateBrowsingManager: privateBrowsingManager,
       speechRecognizer: speechRecognizer,
       isAIChatAvailable: !isPrivate && Preferences.AIChat.leoInQuickSearchBarEnabled.value
@@ -358,8 +369,8 @@ extension BrowserViewController: TopToolbarDelegate, SearchContainerViewControll
       isPlaylistAvailable: profileController.profile.prefs.isPlaylistAvailable,
       searchDelegate: self,
       delegate: self,
-      bookmarkAction: { [weak self] bookmark, action in
-        self?.handleFavoriteAction(favorite: bookmark, action: action)
+      topSiteAction: { [weak self] action in
+        self?.handleTopSiteAction(action: action)
       },
       recentSearchAction: { [weak self] recentSearch, shouldSubmitSearch in
         self?.handleRecentSearch(recentSearch, shouldSubmitSearch: shouldSubmitSearch)
@@ -462,6 +473,7 @@ extension BrowserViewController: TopToolbarDelegate, SearchContainerViewControll
     }
 
     weak var weakShieldsPanelVC: UIViewController?
+    weak var weakShieldsPanelViewModel: ShieldsPanelViewModel?
     let shieldsPanelActionHandler: (ShieldsPanelAction) -> Void = {
       [weak self, weak selectedTab] action in
       guard let self, let selectedTab else { return }
@@ -480,6 +492,26 @@ extension BrowserViewController: TopToolbarDelegate, SearchContainerViewControll
         weakShieldsPanelVC?.dismiss(animated: true) {
           self.shredData(for: url, in: selectedTab)
         }
+      case .blockElement:
+        weakShieldsPanelVC?.dismiss(animated: true) {
+          selectedTab.elementPickerTabHelper?.showPicker()
+        }
+      case .clearBlockedElements:
+        Task {
+          weakShieldsPanelViewModel?.isClearingBlockedElements = true
+          defer {
+            weakShieldsPanelViewModel?.isClearingBlockedElements = false
+          }
+          let storage = CustomFilterListStorage.shared
+          do {
+            try await storage.clearBlockedElements(for: url)
+          } catch {
+            Logger.module.error("Failed to clear blocked elements: \(error.localizedDescription)")
+          }
+          weakShieldsPanelViewModel?.hasBlockedElements = await storage.hasBlockedElements(for: url)
+          weakShieldsPanelVC?.dismiss(animated: true)
+          selectedTab.reload()
+        }
       case .openURLInNewTab(let url):
         weakShieldsPanelVC?.dismiss(animated: true) {
           self.tabManager.addTabAndSelect(
@@ -491,16 +523,22 @@ extension BrowserViewController: TopToolbarDelegate, SearchContainerViewControll
       }
     }
     if FeatureList.kShowUpdatedShieldsPanel.enabled {
+      let viewModel = ShieldsPanelViewModel(
+        tab: selectedTab,
+        stats: selectedTab.contentBlocker?.$stats.eraseToAnyPublisher()
+          ?? Just(.init()).eraseToAnyPublisher(),
+        blockedRequests: selectedTab.contentBlocker?.$blockedRequests.map(Array.init)
+          .eraseToAnyPublisher() ?? Just([]).eraseToAnyPublisher(),
+        isShredEnabled: FeatureList.kBraveShredFeature.enabled
+      )
+      weakShieldsPanelViewModel = viewModel
+      Task { [weak viewModel] in
+        let hasBlockedElements = await CustomFilterListStorage.shared.hasBlockedElements(for: url)
+        viewModel?.hasBlockedElements = hasBlockedElements
+      }
       let shieldsPanelViewController = ShieldsPanelViewController(
         url: url,
-        viewModel: ShieldsPanelViewModel(
-          tab: selectedTab,
-          stats: selectedTab.contentBlocker?.$stats.eraseToAnyPublisher()
-            ?? Just(.init()).eraseToAnyPublisher(),
-          blockedRequests: selectedTab.contentBlocker?.$blockedRequests.map(Array.init)
-            .eraseToAnyPublisher() ?? Just([]).eraseToAnyPublisher(),
-          isShredEnabled: FeatureList.kBraveShredFeature.enabled
-        ),
+        viewModel: viewModel,
         action: shieldsPanelActionHandler
       )
       weakShieldsPanelVC = shieldsPanelViewController
@@ -524,7 +562,6 @@ extension BrowserViewController: TopToolbarDelegate, SearchContainerViewControll
           rootViewController: LegacyShieldsPanelViewController(
             url: url,
             tab: selectedTab,
-            domain: Domain.getOrCreate(forUrl: url, persistent: !selectedTab.isPrivate),
             callback: shieldsPanelActionHandler
           )
         ),
@@ -584,22 +621,24 @@ extension BrowserViewController: TopToolbarDelegate, SearchContainerViewControll
 
   private func showGlobalShieldsSettings() {
     weak var spinner: SpinnerView?
+    let profile = profileController.profile
     let controller = UIHostingController(
       rootView: AdvancedShieldsSettingsView(
         settings: AdvancedShieldsSettings(
-          profile: self.profile,
+          profile: profile,
           tabManager: self.tabManager,
           feedDataSource: self.feedDataSource,
-          debounceService: DebounceServiceFactory.get(privateMode: false),
-          braveShieldsSettings: BraveShieldsSettingsServiceFactory.get(
-            profile: profileController.profile
-          ),
-          braveCore: profileController,
+          debounceService: DebounceServiceFactory.get(profile: profile),
+          braveShieldsSettings: BraveShieldsSettingsServiceFactory.get(profile: profile),
+          httpsUpgradeService: HttpsUpgradeServiceFactory.get(profile: profile),
+          historyAPI: profileController.historyAPI,
+          serpMetrics: SerpMetricsServiceFactory.get(profile: profile),
+          prefs: profile.prefs,
           p3aUtils: braveCore.p3aUtils,
           localState: braveCore.localState,
           rewards: rewards,
           braveStats: profileController.braveStats,
-          webcompatReporterHandler: WebcompatReporter.ServiceFactory.get(privateMode: false),
+          webcompatReporterHandler: WebcompatReporter.ServiceFactory.get(profile: profile),
           clearDataCallback: { [weak self] isLoading, isHistoryCleared in
             guard let self else { return }
             guard let view = self.navigationController?.view, view.window != nil else {
@@ -642,6 +681,13 @@ extension BrowserViewController: TopToolbarDelegate, SearchContainerViewControll
     self.present(container, animated: true)
   }
 
+  func showCustomFilterListEditor() {
+    let controller = UIHostingController(rootView: CustomFilterListEditor())
+    controller.modalPresentationStyle =
+      UIDevice.current.userInterfaceIdiom == .phone ? .pageSheet : .formSheet
+    present(controller, animated: true)
+  }
+
   func shredData(for url: URL, in tab: some TabState) {
     LottieAnimationView.showShredAnimation(on: view) {
       self.tabManager.shredData(for: url, in: tab)
@@ -669,6 +715,7 @@ extension BrowserViewController: TopToolbarDelegate, SearchContainerViewControll
     )
 
     viewController.modalPresentationStyle = .popover
+    viewController.preferredContentSize = CGSize(width: 400, height: 600)
 
     if let popover = viewController.popoverPresentationController {
       popover.sourceView = topToolbar.shieldsButton
@@ -678,7 +725,6 @@ extension BrowserViewController: TopToolbarDelegate, SearchContainerViewControll
       sheet.largestUndimmedDetentIdentifier = .medium
       sheet.prefersEdgeAttachedInCompactHeight = true
       sheet.widthFollowsPreferredContentSizeWhenEdgeAttached = true
-      sheet.detents = [.medium(), .large()]
       sheet.prefersGrabberVisible = true
     }
     navigationController?.present(viewController, animated: true)
@@ -717,7 +763,7 @@ extension BrowserViewController: TopToolbarDelegate, SearchContainerViewControll
   }
 
   func topToolbarDidPressVoiceSearchButton(_ urlBar: TopToolbarView) {
-    Task { @MainActor in
+    Task { @MainActor [self] in
       onPendingRequestUpdatedCancellable = speechRecognizer.$finalizedRecognition.sink {
         [weak self] finalizedRecognition in
         guard let self else { return }
@@ -990,6 +1036,107 @@ extension BrowserViewController: ToolbarDelegate {
     topToolbar.tabLocationViewDidTapLocation(topToolbar.locationView)
   }
 
+  func tabToolbarDidSelectNewTab(_ tabToolbar: ToolbarProtocol, isPrivate: Bool) {
+    let openNewTab = { [weak self] in
+      self?.openBlankNewTab(
+        attemptLocationFieldFocus: Preferences.General.openKeyboardOnNTPSelection.value,
+        isPrivate: isPrivate
+      )
+    }
+    if isPrivate, !privateBrowsingManager.isPrivateBrowsing,
+      Preferences.Privacy.privateBrowsingLock.value
+    {
+      askForLocalAuthentication { success, error in
+        if success {
+          openNewTab()
+        }
+      }
+    } else {
+      openNewTab()
+    }
+  }
+
+  func tabToolbarDidSelectNewWindow(_ tabToolbar: ToolbarProtocol, isPrivate: Bool) {
+    openInNewWindow(url: nil, isPrivate: isPrivate)
+  }
+
+  func tabToolbarDidSelectBookmarkTab(_ tabToolbar: ToolbarProtocol) {
+    openAddBookmark()
+  }
+
+  func tabToolbarDidSelectBookmarkAllTabs(_ tabToolbar: ToolbarProtocol) {
+    let mode = BookmarkEditMode.addFolderUsingTabs(
+      title: Strings.savedTabsFolderTitle,
+      tabList: tabManager.tabsForCurrentMode
+    )
+    let addBookMarkController = AddEditBookmarkTableViewController(
+      bookmarkManager: bookmarkManager,
+      mode: mode,
+      isPrivateBrowsing: privateBrowsingManager.isPrivateBrowsing
+    )
+    presentSettingsNavigation(with: addBookMarkController, cancelEnabled: true)
+  }
+
+  func tabToolbarDidSelectDuplicateTab(_ tabToolbar: ToolbarProtocol) {
+    guard let selectedTab = tabManager.selectedTab, let url = selectedTab.visibleURL else {
+      return
+    }
+    tabManager.addTabAndSelect(
+      URLRequest(url: url),
+      afterTab: selectedTab,
+      isPrivate: selectedTab.isPrivate
+    )
+  }
+
+  func tabToolbarDidSelectViewRecentlyClosedTabs(_ tabToolbar: ToolbarProtocol) {
+    if privateBrowsingManager.isPrivateBrowsing {
+      return
+    }
+    var recentlyClosedTabsView = RecentlyClosedTabsView(tabManager: tabManager)
+    recentlyClosedTabsView.onRecentlyClosedSelected = { [weak self] recentlyClosed in
+      self?.tabManager.addAndSelectRecentlyClosed(recentlyClosed)
+
+      // After opening the Recently Closed in a new tab delete it from list
+      RecentlyClosed.remove(with: recentlyClosed.url)
+    }
+    present(UIHostingController(rootView: recentlyClosedTabsView), animated: true)
+  }
+
+  func tabToolbarDidSelectReopenRecentlyClosedTab(_ tabToolbar: ToolbarProtocol) {
+    if privateBrowsingManager.isPrivateBrowsing {
+      return
+    }
+    guard let recentlyClosedTab = RecentlyClosed.first() else { return }
+    tabManager.addAndSelectRecentlyClosed(recentlyClosedTab)
+    RecentlyClosed.remove(with: recentlyClosedTab.url)
+  }
+
+  func tabToolbarDidSelectCloseTab(_ tabToolbar: ToolbarProtocol) {
+    guard let tab = tabManager.selectedTab else { return }
+    if tab.readerMode?.state == .active {
+      hideReaderModeBar(animated: false)
+    }
+    // Add the tab information to recently closed before removing
+    tabManager.addTabToRecentlyClosed(tab)
+    tabManager.removeTab(tab)
+  }
+
+  func tabToolbarDidSelectShredSiteData(_ tabToolbar: ToolbarProtocol) {
+    guard let tab = tabManager.selectedTab, let url = tab.visibleURL else { return }
+    let alert = UIAlertController.shredDataAlert(url: url) { [weak self] _ in
+      self?.shredData(for: url, in: tab)
+    }
+    present(alert, animated: true)
+  }
+
+  func tabToolbarDidSelectCloseOtherTabs(_ tabToolbar: ToolbarProtocol) {
+    showCloseTabsWarning(isActiveTabIncluded: false, from: tabToolbar.tabsButton)
+  }
+
+  func tabToolbarDidSelectCloseAllTabs(_ tabToolbar: ToolbarProtocol) {
+    showCloseTabsWarning(isActiveTabIncluded: true, from: tabToolbar.tabsButton)
+  }
+
   func tabToolbarDidPressBack(_ tabToolbar: ToolbarProtocol, button: UIButton) {
     tabManager.selectedTab?.goBack()
     tabManager.selectedTab?.externalAppURLHelper?.reset()
@@ -1049,6 +1196,38 @@ extension BrowserViewController: ToolbarDelegate {
     popoverController.present(from: urlBar.locationView.secureContentStateButton, on: self)
   }
 
+  private func showCloseTabsWarning(isActiveTabIncluded: Bool, from sourceView: UIView) {
+    let alert = UIAlertController(
+      title: nil,
+      message: isActiveTabIncluded ? Strings.closeAllTabsPrompt : Strings.closeAllOtherTabsPrompt,
+      preferredStyle: .actionSheet
+    )
+    let cancelAction = UIAlertAction(title: Strings.CancelString, style: .cancel)
+    let closedTabsTitle =
+      isActiveTabIncluded
+      ? String(format: Strings.closeAllTabsTitle, tabManager.tabsForCurrentMode.count)
+      : Strings.closeAllOtherTabsTitle
+    let closeAllAction = UIAlertAction(title: closedTabsTitle, style: .destructive) {
+      [weak self] _ in
+      guard let self else { return }
+      if !self.privateBrowsingManager.isPrivateBrowsing {
+        // Add the tab information to recently closed before removing
+        self.tabManager.addAllTabsToRecentlyClosed(isActiveTabIncluded: isActiveTabIncluded)
+      }
+      self.tabManager.removeAllForCurrentMode(isActiveTabIncluded: isActiveTabIncluded)
+    }
+    alert.addAction(closeAllAction)
+    alert.addAction(cancelAction)
+
+    if let popoverPresentation = alert.popoverPresentationController {
+      popoverPresentation.sourceView = sourceView
+      popoverPresentation.sourceRect =
+        .init(x: sourceView.frame.width / 2, y: sourceView.frame.height, width: 1, height: 1)
+    }
+
+    present(alert, animated: true)
+  }
+
   func showBackForwardList() {
     if let backForwardList = tabManager.selectedTab?.backForwardList {
       let backForwardViewController = BackForwardListViewController(
@@ -1082,7 +1261,6 @@ extension BrowserViewController: ToolbarDelegate {
     tabManager.selectedTab?.stopLoading()
     processAddressBarTask?.cancel()
     topToolbarDidPressReloadTask?.cancel()
-    topToolbar.locationView.loading = tabManager.selectedTab?.isLoading == true
   }
 }
 
@@ -1154,26 +1332,30 @@ extension BrowserViewController: UIContextMenuInteractionDelegate {
   /// - Note: "Copy Clean Link" will be included even if no cleaning is done to the url.
   private func makeCopyMenu() -> UIMenu? {
     let tab = tabManager.selectedTab
-    guard let url = self.topToolbar.currentURL else { return nil }
+    guard let url = tab?.visibleURL?.displayURL else { return nil }
 
-    let children: [UIAction] = [
+    var children: [UIAction] = [
       UIAction(
         title: Strings.copyLinkActionTitle,
         image: UIImage(braveSystemNamed: "leo.copy"),
         handler: UIAction.deferredActionHandler { _ in
           UIPasteboard.general.url = url as URL
         }
-      ),
-      UIAction(
-        title: Strings.copyCleanLink,
-        image: UIImage(braveSystemNamed: "leo.copy.clean"),
-        handler: UIAction.deferredActionHandler { _ in
-          let service = URLSanitizerServiceFactory.get(privateMode: tab?.isPrivate ?? true)
-          let cleanedURL = service?.sanitize(url: url) ?? url
-          UIPasteboard.general.url = cleanedURL
-        }
-      ),
+      )
     ]
+
+    if let tab, let service = URLSanitizerServiceFactory.get(profile: tab.profile) {
+      children.append(
+        UIAction(
+          title: Strings.copyCleanLink,
+          image: UIImage(braveSystemNamed: "leo.copy.clean"),
+          handler: UIAction.deferredActionHandler { _ in
+            let cleanedURL = service.sanitize(url: url) ?? url
+            UIPasteboard.general.url = cleanedURL
+          }
+        )
+      )
+    }
 
     return UIMenu(options: .displayInline, children: children)
   }

@@ -8,6 +8,7 @@
 #import <WebKit/WebKit.h>
 
 #include <memory>
+#include <utility>
 
 #include "base/functional/bind.h"
 #include "base/memory/weak_ptr.h"
@@ -137,30 +138,23 @@ class BraveWalletServiceDelegateIos : public BraveWalletServiceDelegate {
 // static
 BraveWalletService* BraveWalletServiceFactory::GetServiceForState(
     ProfileIOS* profile) {
-  return GetInstance()->GetServiceForProfileAs<BraveWalletService>(profile,
-                                                                   true);
+  return GetForProfile(profile);
 }
 
-// static
-BraveWalletServiceFactory* BraveWalletServiceFactory::GetInstance() {
-  static base::NoDestructor<BraveWalletServiceFactory> instance;
-  return instance.get();
-}
-
-BraveWalletServiceFactory::BraveWalletServiceFactory()
-    : ProfileKeyedServiceFactoryIOS("BraveWalletService",
-                                    ProfileSelection::kNoInstanceInIncognito,
-                                    ServiceCreation::kCreateLazily,
-                                    TestingCreation::kNoServiceForTests) {}
-
-BraveWalletServiceFactory::~BraveWalletServiceFactory() = default;
+BraveWalletServiceFactory::BraveWalletServiceFactory(PassKey key)
+    : TypedProfileKeyedServiceFactoryIOS(
+          std::move(key),
+          "BraveWalletService",
+          ProfileSelection::kNoInstanceInIncognito,
+          ServiceCreation::kCreateLazily,
+          TestingCreation::kNoServiceForTests) {}
 
 std::unique_ptr<KeyedService>
-BraveWalletServiceFactory::BuildServiceInstanceFor(ProfileIOS* profile) const {
+BraveWalletServiceFactory::BuildServiceInstanceFor(ProfileIOS& profile) const {
   std::unique_ptr<BraveWalletService> service(new BraveWalletService(
-      profile->GetSharedURLLoaderFactory(),
-      std::make_unique<BraveWalletServiceDelegateIos>(profile),
-      profile->GetPrefs(), GetApplicationContext()->GetLocalState()));
+      profile.GetSharedURLLoaderFactory(),
+      std::make_unique<BraveWalletServiceDelegateIos>(&profile),
+      profile.GetPrefs(), GetApplicationContext()->GetLocalState()));
   return service;
 }
 

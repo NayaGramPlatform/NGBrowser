@@ -1,8 +1,8 @@
 diff --git a/components/omnibox/browser/BUILD.gn b/components/omnibox/browser/BUILD.gn
-index d193e3c7c08bfe1d5989f4ad49597faa9ccff976..0651dd0eb233c4fcf58c94964373d715f3a39e13 100644
+index e47e1694fda0eb961ddb64079aa2d98a12a85133..8e453a60660cb018e2e4496a4a358ab0d8474cbc 100644
 --- a/components/omnibox/browser/BUILD.gn
 +++ b/components/omnibox/browser/BUILD.gn
-@@ -376,6 +376,7 @@ static_library("browser") {
+@@ -382,6 +382,7 @@ static_library("browser") {
      "zero_suggest_verbatim_match_provider.cc",
      "zero_suggest_verbatim_match_provider.h",
    ]
@@ -10,7 +10,7 @@ index d193e3c7c08bfe1d5989f4ad49597faa9ccff976..0651dd0eb233c4fcf58c94964373d715
  
    public_deps = [
      ":aim_eligibility_service_features",
-@@ -403,6 +404,7 @@ static_library("browser") {
+@@ -409,6 +410,7 @@ static_library("browser") {
      "//third_party/tflite_support:tflite_support_proto",
      "//url",
    ]
@@ -18,27 +18,11 @@ index d193e3c7c08bfe1d5989f4ad49597faa9ccff976..0651dd0eb233c4fcf58c94964373d715
  
    deps = [
      "//build:android_buildflags",
-@@ -450,6 +452,7 @@ static_library("browser") {
+@@ -455,6 +457,7 @@ static_library("browser") {
      "//ui/base",
      "//ui/gfx",
    ]
 +  deps += brave_components_omnibox_browser_deps
  
-   configs += [ "//build/config/compiler:wexit_time_destructors" ]
- 
-@@ -1142,6 +1145,7 @@ mojom("mojo_bindings") {
-     sources += [ "searchbox.mojom" ]
-     public_deps += [ ":fusebox_action_mojo_bindings" ]
-   }
-+  generate_legacy_js_bindings = true
- }
- 
- if (!is_ios) {
-@@ -1162,6 +1166,7 @@ if (!is_ios) {
-         traits_deps = [ "//third_party/omnibox_proto" ]
-       },
-     ]
-+    generate_legacy_js_bindings = true
-   }
- 
-   source_set("fusebox_action_mojo_utils") {
+   if (is_android) {
+     deps += [ "//components/location/android:settings" ]

@@ -12,7 +12,6 @@
 #include <utility>
 
 #include "base/functional/callback.h"
-#include "base/memory/raw_ptr.h"
 #include "base/memory/raw_ref.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/numerics/safe_math.h"
@@ -27,14 +26,12 @@
 #include "brave/components/ai_chat/core/browser/model_validator.h"
 #include "brave/components/ai_chat/core/common/constants.h"
 #include "brave/components/ai_chat/core/common/features.h"
-#include "brave/components/ai_chat/core/common/mojom/ai_chat.mojom-shared.h"
 #include "brave/components/ai_chat/core/common/pref_names.h"
 #include "components/grit/brave_components_webui_strings.h"
 #include "components/os_crypt/async/browser/os_crypt_async.h"
 #include "components/os_crypt/async/browser/test_utils.h"
 #include "components/prefs/testing_pref_service.h"
 #include "services/network/public/cpp/network_context_getter.h"
-#include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "url/gurl.h"
@@ -131,7 +128,7 @@ mojom::ModelPtr MakeRemoteTestModel(const std::string& key) {
   model->display_name = key + " Display";
   model->is_suggested_model = false;
   model->is_near_model = false;
-  model->supported_capabilities = {mojom::ConversationCapability::CHAT};
+  model->supported_capabilities = {};
   model->options = mojom::ModelOptions::NewLeoModelOptions(std::move(leo_opts));
   return model;
 }
@@ -161,6 +158,10 @@ class ModelServiceTest : public ::testing::Test {
   void TearDown() override { observer_.reset(); }
 
  protected:
+  // MigrateProfilePrefs() only migrates when kAIChat is enabled, so pin it
+  // rather than rely on its default. Declared first so it is initialized
+  // before the other members and destroyed last.
+  base::test::ScopedFeatureList ai_chat_feature_list_{features::kAIChat};
   TestingPrefServiceSimple pref_service_;
   std::unique_ptr<os_crypt_async::OSCryptAsync> os_crypt_async_ =
       os_crypt_async::GetTestOSCryptAsyncForTesting(
@@ -225,13 +226,9 @@ TEST_F(ModelServiceTest, MigrateOldClaudeDefaultModelKey) {
   // new claude.
   ModelService::MigrateProfilePrefs(&pref_service_);
   // Verify uses non-premium version
-  EXPECT_EQ(GetService()->GetDefaultModelKey(), "chat-claude-haiku");
-  // Verify uses premium version
-  EXPECT_CALL(*observer_,
-              OnDefaultModelChanged("chat-claude-haiku", "chat-claude-sonnet"))
-      .Times(1);
+  EXPECT_EQ(GetService()->GetDefaultModelKey(), kChatAutomaticModelKey);
   GetService()->OnPremiumStatus(mojom::PremiumStatus::Active);
-  EXPECT_EQ(GetService()->GetDefaultModelKey(), "chat-claude-sonnet");
+  EXPECT_EQ(GetService()->GetDefaultModelKey(), kChatAutomaticModelKey);
 }
 
 TEST_F(ModelServiceTest, MigrateOldClaudeDefaultModelKey_OnlyOnce) {
@@ -243,13 +240,13 @@ TEST_F(ModelServiceTest, MigrateOldClaudeDefaultModelKey_OnlyOnce) {
   // new claude.
   ModelService::MigrateProfilePrefs(&pref_service_);
   // Verify uses non-premium version
-  EXPECT_EQ(GetService()->GetDefaultModelKey(), "chat-claude-haiku");
+  EXPECT_EQ(GetService()->GetDefaultModelKey(), kChatAutomaticModelKey);
   EXPECT_CALL(*observer_, OnDefaultModelChanged(_, _)).Times(0);
   // Verify keeps non-premium version
   GetService()->OnPremiumStatus(mojom::PremiumStatus::Inactive);
-  EXPECT_EQ(GetService()->GetDefaultModelKey(), "chat-claude-haiku");
+  EXPECT_EQ(GetService()->GetDefaultModelKey(), kChatAutomaticModelKey);
   GetService()->OnPremiumStatus(mojom::PremiumStatus::Active);
-  EXPECT_EQ(GetService()->GetDefaultModelKey(), "chat-claude-haiku");
+  EXPECT_EQ(GetService()->GetDefaultModelKey(), kChatAutomaticModelKey);
   testing::Mock::VerifyAndClearExpectations(observer_.get());
 }
 
@@ -268,13 +265,13 @@ TEST_F(ModelServiceTestWithDifferentPremiumModel,
        MigrateToPremiumDefaultModel_UserModified) {
   EXPECT_EQ(GetService()->GetDefaultModelKey(), kChatAutomaticModelKey);
   EXPECT_CALL(*observer_, OnDefaultModelChanged(kChatAutomaticModelKey,
-                                                "chat-claude-haiku"))
+                                                "chat-claude-sonnet"))
       .Times(1);
-  GetService()->SetDefaultModelKey("chat-claude-haiku");
+  GetService()->SetDefaultModelKey("chat-claude-sonnet");
   testing::Mock::VerifyAndClearExpectations(observer_.get());
   EXPECT_CALL(*observer_, OnDefaultModelChanged(_, _)).Times(0);
   GetService()->OnPremiumStatus(mojom::PremiumStatus::Active);
-  EXPECT_EQ(GetService()->GetDefaultModelKey(), "chat-claude-haiku");
+  EXPECT_EQ(GetService()->GetDefaultModelKey(), "chat-claude-sonnet");
   testing::Mock::VerifyAndClearExpectations(observer_.get());
 }
 
@@ -338,10 +335,10 @@ TEST_F(ModelServiceTest, ChangeDefaultModelKey_GoodKey) {
   GetService()->SetDefaultModelKey(kChatAutomaticModelKey);
   EXPECT_EQ(GetService()->GetDefaultModelKey(), kChatAutomaticModelKey);
   EXPECT_CALL(*observer_, OnDefaultModelChanged(kChatAutomaticModelKey,
-                                                "chat-claude-haiku"))
+                                                "chat-claude-sonnet"))
       .Times(1);
-  GetService()->SetDefaultModelKey("chat-claude-haiku");
-  EXPECT_EQ(GetService()->GetDefaultModelKey(), "chat-claude-haiku");
+  GetService()->SetDefaultModelKey("chat-claude-sonnet");
+  EXPECT_EQ(GetService()->GetDefaultModelKey(), "chat-claude-sonnet");
   testing::Mock::VerifyAndClearExpectations(observer_.get());
 }
 
@@ -488,20 +485,14 @@ TEST_F(ModelServiceTest, GetLeoModelKeyByName_And_GetLeoModelNameByKey) {
   EXPECT_FALSE(name.has_value());
 }
 
-TEST_F(ModelServiceTest,
-       GetEngineForModelFallsBackToConfiguredDefaultForUnknownKey) {
-  base::test::ScopedFeatureList feature_list;
-  feature_list.InitAndEnableFeatureWithParameters(
-      features::kAIChat,
-      {{features::kAIModelsDefaultKey.name, kClaudeHaikuModelKey}});
-
+TEST_F(ModelServiceTest, GetEngineForModelFallsBackToAutomaticForUnknownKey) {
   // APIRequestHelper posts to the thread pool at construction time.
   base::test::TaskEnvironment task_environment;
   auto engine = GetService()->GetEngineForModel("this-model-key-does-not-exist",
                                                 /*url_loader_factory=*/nullptr,
                                                 /*credential_manager=*/nullptr);
   ASSERT_TRUE(engine);
-  EXPECT_EQ(engine->GetModelName(), kClaudeHaikuModelName);
+  EXPECT_EQ(engine->GetModelName(), "automatic");
 }
 
 TEST_F(ModelServiceTest,
@@ -572,7 +563,7 @@ TEST_F(ModelServiceTest, DeleteCustomModelsByEndpoint) {
       }));
 
   auto custom_models = GetService()->GetCustomModels();
-  EXPECT_EQ(custom_models.size(), 1u);
+  ASSERT_EQ(custom_models.size(), 1u);
   EXPECT_EQ(custom_models[0]->display_name, "Model 3");
   EXPECT_EQ(custom_models[0]->options->get_custom_model_options()->endpoint,
             endpoint2);
@@ -624,7 +615,7 @@ TEST_F(ModelServiceTest, DeleteCustomModelByNameAndEndpoint) {
       }));
 
   auto custom_models = GetService()->GetCustomModels();
-  EXPECT_EQ(custom_models.size(), 1u);
+  ASSERT_EQ(custom_models.size(), 1u);
   EXPECT_EQ(custom_models[0]->display_name, "Model 2");
   EXPECT_EQ(
       custom_models[0]->options->get_custom_model_options()->model_request_name,
@@ -679,6 +670,24 @@ TEST_F(ModelServiceTest, DeleteCustomModelsByEndpoint_WithDefaultModel) {
   EXPECT_EQ(GetService()->GetDefaultModelKey(), expected_default);
 }
 
+TEST_F(ModelServiceTest, AutomaticModelSupportsVision) {
+  EXPECT_EQ(features::kAIModelsVisionDefaultKey.Get(), kChatAutomaticModelKey);
+  const mojom::Model* model =
+      ModelService::GetModelForTesting(kChatAutomaticModelKey);
+  ASSERT_TRUE(model);
+  EXPECT_TRUE(model->vision_support);
+}
+
+TEST_F(ModelServiceTest, LeoModelsHaveThreeSuggestedModels) {
+  size_t suggested_count = 0;
+  for (const auto& model : GetService()->GetModels()) {
+    if (model->is_suggested_model) {
+      ++suggested_count;
+    }
+  }
+  EXPECT_EQ(suggested_count, 3u);
+}
+
 TEST_F(ModelServiceTest, LeoModelsHaveWebUIStrings) {
   for (const auto& model : GetService()->GetModels()) {
     if (!model->options->is_leo_model_options()) {
@@ -718,7 +727,7 @@ TEST_F(ModelServiceTest, GetCustomModels) {
   // GetCustomModels should return only custom models
   {
     auto custom_models = GetService()->GetCustomModels();
-    EXPECT_EQ(custom_models.size(), 1u);
+    ASSERT_EQ(custom_models.size(), 1u);
     EXPECT_TRUE(custom_models[0]->options->is_custom_model_options());
   }
 

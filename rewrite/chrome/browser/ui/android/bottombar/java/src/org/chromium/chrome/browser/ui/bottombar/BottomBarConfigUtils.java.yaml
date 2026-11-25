@@ -1,0 +1,18 @@
+# Copyright (c) 2026 The Brave Authors. All rights reserved.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this file,
+# You can obtain one at https://mozilla.org/MPL/2.0/.
+
+substitutions:
+  - description: |-
+      Default the bottom bar setting to Brave's prior bottom toolbar choices.
+
+      Both the setting's fallback in isBottomBarUserEnabled() and the default
+      that maybePinDefaultUserEnabled() saves as a pin read it, so a pin never
+      overrides the user's earlier Brave choice with upstream's default.
+    count: 2
+    regex:
+      re_pattern: |-
+        (boolean defaultValue =\s*)(ChromeFeatureList\.sAndroidBottomBarDefaultUserEnabled\.getValue\(\))
+      replace: |-
+        \1BraveBottomBarUserPrefs.getDefaultUserEnabled(\2)

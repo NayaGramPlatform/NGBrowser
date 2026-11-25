@@ -1,5 +1,5 @@
 diff --git a/chrome/common/chrome_content_client.cc b/chrome/common/chrome_content_client.cc
-index a97283168c97cb479f4f229bf210205c2491605d..1d772e2f416c4fc2318f3aa82a05fda2a89b904a 100644
+index c845ef3303c75805ba067d3d63a770ae81e47ab4..75fae807696c651f343c05467d1f59bcf8b39421 100644
 --- a/chrome/common/chrome_content_client.cc
 +++ b/chrome/common/chrome_content_client.cc
 @@ -121,6 +121,7 @@ void ChromeContentClient::SetGpuInfo(const gpu::GPUInfo& gpu_info) {
@@ -10,7 +10,7 @@ index a97283168c97cb479f4f229bf210205c2491605d..1d772e2f416c4fc2318f3aa82a05fda2
  #if BUILDFLAG(ENABLE_PDF)
  #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
    static constexpr char16_t kPDFPluginName[] = u"Chrome PDF Plugin";
-@@ -143,6 +144,8 @@ void ChromeContentClient::AddPlugins(
+@@ -146,6 +147,8 @@ void ChromeContentClient::AddPlugins(
    pdf_info.type = content::WebPluginInfo::PLUGIN_TYPE_BROWSER_INTERNAL_PLUGIN;
    plugins->push_back(pdf_info);
  #endif  // BUILDFLAG(ENABLE_PDF)

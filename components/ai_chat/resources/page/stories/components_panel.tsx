@@ -8,7 +8,7 @@ import '../../common/strings'
 import * as React from 'react'
 import { useArgs } from '@storybook/preview-api'
 import { Meta, StoryObj } from '@storybook/react'
-import '@brave/leo/tokens/css/variables.css'
+import '@brave/nala/tokens/css/variables.css'
 import { getKeysForMojomEnum, jsDateToMojoTime } from '$web-common/mojomUtils'
 import { InferControlsFromArgs } from '$storybook/utils'
 import {
@@ -30,13 +30,24 @@ import {
   SelectedChatDetails,
 } from '../state/active_chat_context'
 
+const makeWorkspaceContent = (uuid: string): Mojom.AssociatedContent => ({
+  uuid,
+  contentType: Mojom.ContentType.Workspace,
+  title: 'Workspace',
+  contentId: 0,
+  url: { url: `workspace://${uuid}` },
+  contentUsedPercentage: 100,
+  conversationTurnUuid: 'turn-uuid',
+  toolsAttached: true,
+})
+
 const CONVERSATIONS: Mojom.Conversation[] = [
   {
     title: 'Star Trek Poem',
     uuid: '1',
     hasContent: true,
     updatedTime: { internalValue: BigInt('13278618001000000') },
-    associatedContent: [],
+    associatedContent: [makeWorkspaceContent('workspace-1')],
     modelKey: undefined,
     totalTokens: BigInt(0),
     trimmedTokens: BigInt(0),
@@ -48,7 +59,7 @@ const CONVERSATIONS: Mojom.Conversation[] = [
     uuid: '2',
     hasContent: true,
     updatedTime: { internalValue: BigInt('13278618001000001') },
-    associatedContent: [],
+    associatedContent: [makeWorkspaceContent('workspace-2')],
     modelKey: undefined,
     totalTokens: BigInt(0),
     trimmedTokens: BigInt(0),
@@ -75,7 +86,7 @@ const MODELS: Mojom.Model[] = [
     audioSupport: false,
     videoSupport: false,
     supportsTools: false,
-    supportedCapabilities: [Mojom.ConversationCapability.CHAT],
+    supportedCapabilities: [],
     isSuggestedModel: true,
     isNearModel: false,
     supportsPrivateInference: false,
@@ -99,10 +110,7 @@ const MODELS: Mojom.Model[] = [
     audioSupport: false,
     videoSupport: false,
     supportsTools: true,
-    supportedCapabilities: [
-      Mojom.ConversationCapability.CHAT,
-      Mojom.ConversationCapability.CONTENT_AGENT,
-    ],
+    supportedCapabilities: [Mojom.ConversationCapability.CONTENT_AGENT],
     isSuggestedModel: true,
     isNearModel: false,
     supportsPrivateInference: false,
@@ -126,7 +134,7 @@ const MODELS: Mojom.Model[] = [
     audioSupport: false,
     videoSupport: false,
     supportsTools: false,
-    supportedCapabilities: [Mojom.ConversationCapability.CHAT],
+    supportedCapabilities: [],
     isSuggestedModel: false,
     isNearModel: false,
     supportsPrivateInference: false,
@@ -150,7 +158,7 @@ const MODELS: Mojom.Model[] = [
     audioSupport: false,
     videoSupport: false,
     supportsTools: true,
-    supportedCapabilities: [Mojom.ConversationCapability.CHAT],
+    supportedCapabilities: [],
     isSuggestedModel: false,
     isNearModel: false,
     supportsPrivateInference: false,
@@ -240,7 +248,7 @@ const SAMPLE_SKILLS: Mojom.Skill[] = [
     id: 'translate-mode',
     shortcut: 'translate',
     prompt: 'Translate the following text to English',
-    model: 'claude-3-haiku',
+    model: 'automatic',
     createdTime: { internalValue: BigInt(Date.now() * 1000) },
     lastUsed: { internalValue: BigInt(Date.now() * 1000) },
   },
@@ -348,10 +356,14 @@ type CustomArgs = {
   currentErrorState: keyof typeof Mojom.APIError
   toolUseTaskState: keyof typeof Mojom.TaskState
   capabilitiesEnabled: Array<keyof typeof Mojom.ConversationCapability>
+  isContentAgentUserSelectable: boolean
+  isContentAgentChosen: boolean
   model: string
   inputText: Content
   editingConversationId: string | null
   deletingConversationId: string | null
+  generatingConversationId: string | null
+  completedNotViewedConversationId: string | null
   conversationListCount: number
   hasSuggestedQuestions: boolean
   hasAssociatedContent: boolean
@@ -367,6 +379,7 @@ type CustomArgs = {
   suggestionStatus: keyof typeof Mojom.SuggestionGenerationStatus
   isMobile: boolean
   isHistoryEnabled: boolean
+  isWorkspaceToolsEnabled: boolean
   isAIChatAgentProfileFeatureEnabled: boolean
   isAIChatAgentProfile: boolean
   isStandalone: boolean
@@ -383,6 +396,7 @@ type CustomArgs = {
   isNewConversation: boolean
   ratingTurnUuid: { isLiked: boolean; turnUuid: string } | undefined
   isTemporaryChat: boolean
+  isWaitingForVisionModelSwitch: boolean
   isDragActive: boolean
   isDragOver: boolean
   skillDialog: Mojom.Skill | null
@@ -396,13 +410,17 @@ const args: CustomArgs = {
   inputText: [
     `Write a Star Trek poem about Data's life on board the Enterprise`,
   ],
-  capabilitiesEnabled: ['CHAT'],
+  capabilitiesEnabled: [],
+  isContentAgentUserSelectable: false,
+  isContentAgentChosen: false,
   conversationListCount: CONVERSATIONS.length,
   hasSuggestedQuestions: true,
   hasAssociatedContent: true,
   hasAttachedTools: false,
   editingConversationId: null,
   deletingConversationId: null,
+  generatingConversationId: null,
+  completedNotViewedConversationId: null,
   isFeedbackFormVisible: false,
   isStorageNoticeDismissed: false,
   canShowPremiumPrompt: false,
@@ -418,6 +436,7 @@ const args: CustomArgs = {
   model: MODELS[0].key,
   isMobile: false,
   isHistoryEnabled: true,
+  isWorkspaceToolsEnabled: true,
   isAIChatAgentProfileFeatureEnabled: false,
   isAIChatAgentProfile: false,
   isStandalone: false,
@@ -434,11 +453,17 @@ const args: CustomArgs = {
   isNewConversation: false,
   ratingTurnUuid: undefined,
   isTemporaryChat: false,
+  isWaitingForVisionModelSwitch: false,
   isDragActive: false,
   isDragOver: false,
   skillDialog: null,
   selectedActionType: undefined,
   selectedSkill: undefined,
+}
+
+const CONVERSATION_ID_CONTROL = {
+  options: CONVERSATIONS.map((conversation) => conversation.uuid),
+  control: { type: 'select' as const },
 }
 
 const meta: Meta<CustomArgs> = {
@@ -475,10 +500,9 @@ const meta: Meta<CustomArgs> = {
     conversationListCount: {
       control: { type: 'number' },
     },
-    deletingConversationId: {
-      options: CONVERSATIONS.map((conversation) => conversation.uuid),
-      control: { type: 'select' },
-    },
+    deletingConversationId: CONVERSATION_ID_CONTROL,
+    generatingConversationId: CONVERSATION_ID_CONTROL,
+    completedNotViewedConversationId: CONVERSATION_ID_CONTROL,
     ratingTurnUuid: {
       options: [{ isLiked: true, turnUuid: 'turn-uuid' }],
       control: { type: 'select' },
@@ -551,6 +575,19 @@ async function getConversationContent(
   return []
 }
 
+function getGenerationStates(args: CustomArgs) {
+  const states: { [uuid: string]: Mojom.ConversationGenerationState } = {}
+  if (args.generatingConversationId) {
+    states[args.generatingConversationId] =
+      Mojom.ConversationGenerationState.kGenerating
+  }
+  if (args.completedNotViewedConversationId) {
+    states[args.completedNotViewedConversationId] =
+      Mojom.ConversationGenerationState.kCompletedNotViewed
+  }
+  return states
+}
+
 function StoryContext(
   props: React.PropsWithChildren<{
     args: CustomArgs
@@ -583,6 +620,7 @@ function StoryContext(
     selectedConversationId: CONVERSATIONS[0].uuid,
     updateSelectedConversationId: () => {},
     createNewConversation: () => {},
+    createNewConversationWithWorkspace: () => {},
     isMainConversation: argsRef.current.isDefaultConversation,
     openMainConversation: () => {},
   }
@@ -633,12 +671,14 @@ function StoryContext(
       initialState={React.useMemo(
         () => ({
           tabs: SAMPLE_TABS,
+          conversationGenerationState: getGenerationStates(args),
           isStandalone: args.isStandalone,
           serviceState: {
             hasAcceptedAgreement: args.hasAcceptedAgreement,
             isStoragePrefEnabled: args.isStoragePrefEnabled,
             isStorageNoticeDismissed: args.isStorageNoticeDismissed,
             canShowPremiumPrompt: args.canShowPremiumPrompt,
+            isContentAgentUserSelectable: args.isContentAgentUserSelectable,
           },
         }),
         [args],
@@ -654,15 +694,6 @@ function StoryContext(
               currentModelKey: currentModel.key,
               defaultModelKey: MODELS[0].key,
               allModels: MODELS,
-              suggestedQuestions: argsRef.current.hasSuggestedQuestions
-                ? SAMPLE_QUESTIONS
-                : argsRef.current.hasAssociatedContent
-                  ? [SAMPLE_QUESTIONS[0]]
-                  : [],
-              suggestionStatus:
-                Mojom.SuggestionGenerationStatus[
-                  argsRef.current.suggestionStatus
-                ],
               associatedContent: getAssociatedContent(),
               error: currentError,
               errorDetails: undefined,
@@ -672,6 +703,11 @@ function StoryContext(
               capabilitiesEnabled: argsRef.current.capabilitiesEnabled.map(
                 (value) => Mojom.ConversationCapability[value],
               ),
+              isContentAgentChosen: argsRef.current.isContentAgentChosen,
+              visionModelSwitchKey: argsRef.current
+                .isWaitingForVisionModelSwitch
+                ? MODELS.find((model) => model.visionSupport)?.key
+                : undefined,
             },
           })
         },
@@ -697,6 +733,7 @@ function StoryContext(
         isAIChatAgentProfile: args.isAIChatAgentProfile,
         isMobile: args.isMobile,
         isHistoryFeatureEnabled: args.isHistoryEnabled,
+        isWorkspaceToolsEnabled: args.isWorkspaceToolsEnabled,
         isConversationShareEnabled: true,
         isAIChatExportJSONEnabled: true,
         skillDialog: args.skillDialog,
@@ -743,11 +780,27 @@ function StoryContext(
               totalTokens: BigInt(args.totalTokens),
               trimmedTokens: BigInt(args.trimmedTokens),
               canSubmitUserEntries: currentError === Mojom.APIError.None,
+              suggestedQuestions: argsRef.current.hasSuggestedQuestions
+                ? SAMPLE_QUESTIONS
+                : argsRef.current.hasAssociatedContent
+                  ? [SAMPLE_QUESTIONS[0]]
+                  : [],
+              suggestionStatus:
+                Mojom.SuggestionGenerationStatus[
+                  argsRef.current.suggestionStatus
+                ],
               allModels: MODELS,
               currentModelKey: currentModel?.key ?? '',
               conversationCapabilities: args.capabilitiesEnabled.map(
                 (value) => Mojom.ConversationCapability[value],
               ),
+            },
+            serviceState: {
+              hasAcceptedAgreement: args.hasAcceptedAgreement,
+              isStoragePrefEnabled: args.isStoragePrefEnabled,
+              isStorageNoticeDismissed: args.isStorageNoticeDismissed,
+              canShowPremiumPrompt: args.canShowPremiumPrompt,
+              isContentAgentUserSelectable: args.isContentAgentUserSelectable,
             },
           }}
           overrides={{
@@ -788,6 +841,11 @@ export const _Panel = GetPanelStory({
 export const _WithAttachedTools = GetPanelStory({
   conversation_content: 'ALL',
   hasAttachedTools: true,
+})
+
+export const _WithVisionModelSwitch = GetPanelStory({
+  conversation_content: 'ALL',
+  isWaitingForVisionModelSwitch: true,
 })
 
 export const _WithSearch = GetPanelStory({
@@ -832,6 +890,15 @@ export const _FullPage = {
         <FullPage />
       </div>
     )
+  },
+}
+
+export const _FullPageWithGenerationStatus = {
+  ..._FullPage,
+  args: {
+    ..._FullPage.args,
+    generatingConversationId: CONVERSATIONS[0].uuid,
+    completedNotViewedConversationId: CONVERSATIONS[2].uuid,
   },
 }
 

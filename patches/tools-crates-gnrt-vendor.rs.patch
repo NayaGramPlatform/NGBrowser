@@ -1,5 +1,5 @@
 diff --git a/tools/crates/gnrt/vendor.rs b/tools/crates/gnrt/vendor.rs
-index 7cb56088a72f3f9013ca88b4e8746cca6b6f7963..02fbad5c92e3f982e4be43b996782cc24a8d1843 100644
+index 1587a835d138928a77009aa2d704be9119c80976..66f92aae81339cc4040b2377ad26b93828bde025 100644
 --- a/tools/crates/gnrt/vendor.rs
 +++ b/tools/crates/gnrt/vendor.rs
 @@ -141,7 +141,7 @@ fn download_crates(args: &VendorCommandArgs, paths: &paths::ChromiumPaths) -> Re

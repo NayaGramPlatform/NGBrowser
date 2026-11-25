@@ -1,5 +1,5 @@
 diff --git a/components/search/ntp_features.cc b/components/search/ntp_features.cc
-index 0f87f2cc8845c3b428f65545f4efe1bfeb524471..8ddbf8e2f58654dffa8301e46cf6b0d72fd724da 100644
+index 94f68bf99641c3e59809661f3c0f6afe8761983f..2a2dfa919f3105df80a2ad0926225e50ef69f7b6 100644
 --- a/components/search/ntp_features.cc
 +++ b/components/search/ntp_features.cc
 @@ -18,17 +18,13 @@ namespace ntp_features {
@@ -23,7 +23,7 @@ index 0f87f2cc8845c3b428f65545f4efe1bfeb524471..8ddbf8e2f58654dffa8301e46cf6b0d7
  
  // If enabled, shows entry point on Customize Chrome Side Panel's Appearance
  // page for Wallpaper Search.";
-@@ -68,28 +64,20 @@ BASE_FEATURE(kRealboxCr23Theming,
+@@ -73,28 +69,20 @@ BASE_FEATURE(kRealboxVirtualFocusNavigation, base::FEATURE_DISABLED_BY_DEFAULT);
  
  // If enabled, alpha NTP backgrounds will show in Customize Chrome.
  // This is a development switch. Keep indefinitely.
@@ -56,9 +56,9 @@ index 0f87f2cc8845c3b428f65545f4efe1bfeb524471..8ddbf8e2f58654dffa8301e46cf6b0d7
 +BASE_OVERRIDDEN_FEATURE(kNtpChromeCartModule,
 +                        base::FEATURE_DISABLED_BY_DEFAULT);
  
- // If enabled, customization of Chrome will be promoted on the NTP.
- BASE_FEATURE(kNtpCustomizeChromeAutoOpen, base::FEATURE_ENABLED_BY_DEFAULT);
-@@ -111,19 +99,15 @@ BASE_FEATURE(kNtpDummyModules, base::FEATURE_DISABLED_BY_DEFAULT);
+ // If enabled, loads the experimental NTP component extension, which overrides
+ // chrome://newtab.
+@@ -122,19 +110,15 @@ BASE_FEATURE(kNtpDummyModules, base::FEATURE_DISABLED_BY_DEFAULT);
  
  // If enabled, Google Drive module will be shown.
  // This is a kill switch. Keep indefinitely.
@@ -76,12 +76,12 @@ index 0f87f2cc8845c3b428f65545f4efe1bfeb524471..8ddbf8e2f58654dffa8301e46cf6b0d7
               base::FEATURE_ENABLED_BY_DEFAULT);
  
  // If enabled, the NTP Drive Module will link to the Drive page.
--BASE_FEATURE(kNtpDriveModuleLink, base::FEATURE_DISABLED_BY_DEFAULT);
+-BASE_FEATURE(kNtpDriveModuleLink, base::FEATURE_ENABLED_BY_DEFAULT);
 +BASE_OVERRIDDEN_FEATURE(kNtpDriveModuleLink, base::FEATURE_DISABLED_BY_DEFAULT);
  
  // If enabled, segmentation data will be collected to decide whether or not to
  // show the Drive module.
-@@ -151,7 +135,7 @@ BASE_FEATURE(kNtpModulesOrder, base::FEATURE_DISABLED_BY_DEFAULT);
+@@ -162,7 +146,7 @@ BASE_FEATURE(kNtpModulesOrder, base::FEATURE_DISABLED_BY_DEFAULT);
  
  // Dummy feature to set param "NtpModulesMaxColumnCountParam".
  // This is used for an emergency Finch param. Keep indefinitely.
@@ -90,3 +90,12 @@ index 0f87f2cc8845c3b428f65545f4efe1bfeb524471..8ddbf8e2f58654dffa8301e46cf6b0d7
  
  // Dummy feature to set param "NtpModulesLoadedWithOtherModulesMaxInstanceCount"
  // This is used for an emergency Finch param. Keep indefinitely.
+@@ -334,7 +318,7 @@ BASE_FEATURE(kNtpShortcutsRedesign, base::FEATURE_DISABLED_BY_DEFAULT);
+ 
+ // If enabled, the bookmark bar may be auto-removed on the NTP and new
+ // visibility settings are added.
+-BASE_FEATURE(kNtpSimplificationBookmarkBar, base::FEATURE_ENABLED_BY_DEFAULT);
++BASE_OVERRIDDEN_FEATURE(kNtpSimplificationBookmarkBar, base::FEATURE_ENABLED_BY_DEFAULT);
+ 
+ // If enabled, the bookmark bar time interval and number of times it's shown on
+ // the NTP before auto-hiding is decreased for testing.

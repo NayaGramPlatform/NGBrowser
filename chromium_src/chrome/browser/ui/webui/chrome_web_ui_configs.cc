@@ -5,6 +5,7 @@
 
 #include "chrome/browser/ui/webui/chrome_web_ui_configs.h"
 
+#include "base/strings/strcat.h"
 #include "brave/components/ai_chat/core/common/buildflags/buildflags.h"
 #include "brave/components/brave_account/features.h"
 #include "brave/components/brave_ads/buildflags/buildflags.h"
@@ -15,22 +16,25 @@
 #include "brave/components/email_aliases/buildflags/buildflags.h"
 #include "brave/components/psst/buildflags/buildflags.h"
 #include "brave/components/speedreader/common/buildflags/buildflags.h"
+#include "chrome/common/webui_url_constants.h"
 #include "content/public/browser/webui_config_map.h"
+#include "content/public/common/url_constants.h"
+#include "url/gurl.h"
+#include "url/url_constants.h"
 
 #if BUILDFLAG(ENABLE_AI_CHAT)
 #include "brave/browser/ui/webui/ai_chat/ai_chat_ui.h"
 #include "brave/components/ai_chat/core/common/features.h"
 #endif
 
-#define RegisterChromeWebUIConfigs RegisterChromeWebUIConfigs_ChromiumImpl
-
-#include <chrome/browser/ui/webui/chrome_web_ui_configs.cc>
-#undef RegisterChromeWebUIConfigs
-
 #if BUILDFLAG(ENABLE_BRAVE_WALLET)
 #include "brave/browser/ui/webui/brave_wallet/wallet_page/wallet_page_ui.h"
 #if !BUILDFLAG(IS_ANDROID)
 #include "brave/browser/ui/webui/brave_wallet/wallet_panel/wallet_panel_ui.h"
+#endif
+#if BUILDFLAG(ENABLE_SNAP)
+#include "brave/browser/ui/webui/brave_wallet/snaps_container/snaps_container_ui.h"
+#include "brave/components/brave_wallet/common/common_utils.h"
 #endif
 #endif
 
@@ -39,10 +43,10 @@
 #if BUILDFLAG(ENABLE_BRAVE_REWARDS)
 #include "brave/browser/ui/webui/brave_rewards/rewards_page_top_ui.h"
 #endif
+#include "brave/browser/ui/webui/brave_recap/brave_recap_ui.h"
 #include "brave/browser/ui/webui/brave_settings_ui.h"
 #include "brave/browser/ui/webui/brave_shields/shields_panel_ui.h"
 #include "brave/browser/ui/webui/brave_welcome_page/brave_welcome_page_ui.h"
-#include "brave/browser/ui/webui/history/brave_history_ui.h"
 #include "brave/browser/ui/webui/private_new_tab_page/brave_private_new_tab_ui.h"
 #include "brave/browser/ui/webui/webcompat_reporter/webcompat_reporter_ui.h"
 
@@ -78,10 +82,16 @@
 
 #if BUILDFLAG(ENABLE_PSST)
 #include "brave/browser/ui/webui/psst/brave_psst_dialog_ui.h"
+#include "brave/browser/ui/webui/psst/psst_internals_ui.h"
+#include "brave/components/psst/core/common/features.h"
 #endif
 
 namespace {
 
+// Remove configs for Chromium WebUIs that we replace with our own WebUIs.
+// The map doesn't allow for multiple entries for the same origin, so the
+// upstream configs must be removed before we can add our own configs. This is
+// called from RegisterChromeWebUIConfigs() via the rewrite/ plaster.
 #if !BUILDFLAG(IS_ANDROID)
 const GURL GetWebUIConfigURL(const char* scheme, const char* host) {
   return GURL(base::StrCat({scheme, url::kStandardSchemeSeparator, host}));
@@ -103,27 +113,24 @@ void RemoveOverridenWebUIs(content::WebUIConfigMap& map) {
   // Remove SettingsUIConfig. It will be replaced with BraveSettingsUIConfig.
   map.RemoveConfig(GetWebUIConfigURL(content::kChromeUIScheme,
                                      chrome::kChromeUISettingsHost));
-  // Remove HistoryUIConfig. It will be replaced with BraveHistoryUIConfig.
-  map.RemoveConfig(GetWebUIConfigURL(content::kChromeUIScheme,
-                                     chrome::kChromeUIHistoryHost));
 #endif  // !BUILDFLAG(IS_ANDROID)
 }
 
-}  // namespace
-
-void RegisterChromeWebUIConfigs() {
-  RegisterChromeWebUIConfigs_ChromiumImpl();
-
+// Called at the end of RegisterChromeWebUIConfigs() via the rewrite/ plaster.
+void RegisterBraveWebUIConfigs() {
   auto& map = content::WebUIConfigMap::GetInstance();
-  // Remove configs for Chromium WebUIs that we replace with our own WebUIs.
-  // The map doesn't allow for multiple entries for the same origin, so the
-  // upstream configs must be removed before we can add our own configs.
   RemoveOverridenWebUIs(map);
 
 #if BUILDFLAG(ENABLE_BRAVE_WALLET)
   map.AddWebUIConfig(std::make_unique<brave_wallet::WalletPageUIConfig>());
 #if !BUILDFLAG(IS_ANDROID)
   map.AddWebUIConfig(std::make_unique<WalletPanelUIConfig>());
+#endif
+#if BUILDFLAG(ENABLE_SNAP)
+  if (brave_wallet::IsSnapFeatureEnabled()) {
+    map.AddWebUIConfig(
+        std::make_unique<brave_wallet::SnapsContainerUIConfig>());
+  }
 #endif
 #endif
 
@@ -133,8 +140,8 @@ void RegisterChromeWebUIConfigs() {
 #endif
   map.AddWebUIConfig(std::make_unique<BravePrivateNewTabUIConfig>());
   map.AddWebUIConfig(std::make_unique<BraveSettingsUIConfig>());
-  map.AddWebUIConfig(std::make_unique<BraveHistoryUIConfig>());
   map.AddWebUIConfig(std::make_unique<BraveWelcomePageUIConfig>());
+  map.AddWebUIConfig(std::make_unique<BraveRecapUIConfig>());
   map.AddWebUIConfig(std::make_unique<ShieldsPanelUIConfig>());
 #if BUILDFLAG(ENABLE_SPEEDREADER)
   map.AddWebUIConfig(std::make_unique<SpeedreaderToolbarUIConfig>());
@@ -178,6 +185,13 @@ void RegisterChromeWebUIConfigs() {
 #endif
 
 #if BUILDFLAG(ENABLE_PSST)
-  map.AddWebUIConfig(std::make_unique<psst::BravePsstDialogUIConfig>());
+  if (psst::features::IsPsstEnabled()) {
+    map.AddWebUIConfig(std::make_unique<psst::BravePsstDialogUIConfig>());
+    map.AddWebUIConfig(std::make_unique<psst::PsstInternalsUIConfig>());
+  }
 #endif
 }
+
+}  // namespace
+
+#include <chrome/browser/ui/webui/chrome_web_ui_configs.cc>

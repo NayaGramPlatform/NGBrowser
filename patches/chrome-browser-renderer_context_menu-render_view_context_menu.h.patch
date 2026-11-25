@@ -1,12 +1,77 @@
 diff --git a/chrome/browser/renderer_context_menu/render_view_context_menu.h b/chrome/browser/renderer_context_menu/render_view_context_menu.h
-index cbf156d81cc6a9974ca84455008244982cc676db..28a4a9341e33e54e9ba6d1e3870ee2ce3e87551f 100644
+index c306d7d723e800e320eb4ba6f44ebaab8150fef0..354a01be59a6317986090df5ab1a6deca98c8918 100644
 --- a/chrome/browser/renderer_context_menu/render_view_context_menu.h
 +++ b/chrome/browser/renderer_context_menu/render_view_context_menu.h
-@@ -229,6 +229,7 @@ class RenderViewContextMenu
-   // Returns true if keyboard lock is active and requires the user to press and
-   // hold escape to exit exclusive access mode.
-   bool IsPressAndHoldEscRequiredToExitFullscreen() const;
-+  BRAVE_RENDER_VIEW_CONTEXT_MENU_H_
+@@ -116,7 +116,7 @@ enum class SplitTabLayout;
+ }
+ #endif
  
- #if BUILDFLAG(IS_CHROMEOS)
-   virtual const policy::DlpRulesManager* GetDlpRulesManager() const;
+-class RenderViewContextMenu
++class RenderViewContextMenu_Chromium
+     : public RenderViewContextMenuBase,
+       public custom_handlers::ProtocolHandlerRegistry::Observer {
+  public:
+@@ -138,15 +138,15 @@ class RenderViewContextMenu
+       base::OnceCallback<void(content::RenderFrameHost*,
+                               blink::mojom::PluginActionType)>;
+ 
+-  RenderViewContextMenu(content::RenderFrameHost& render_frame_host,
++  RenderViewContextMenu_Chromium(content::RenderFrameHost& render_frame_host,
+                         const content::ContextMenuParams& params,
+                         bool is_paste_enabled,
+                         bool is_paste_and_match_style_enabled);
+ 
+-  RenderViewContextMenu(const RenderViewContextMenu&) = delete;
+-  RenderViewContextMenu& operator=(const RenderViewContextMenu&) = delete;
++  RenderViewContextMenu_Chromium(const RenderViewContextMenu_Chromium&) = delete;
++  RenderViewContextMenu_Chromium& operator=(const RenderViewContextMenu_Chromium&) = delete;
+ 
+-  ~RenderViewContextMenu() override;
++  ~RenderViewContextMenu_Chromium() override;
+ 
+   void MenuClosed(ui::SimpleMenuModel* source) override;
+ 
+@@ -168,7 +168,7 @@ class RenderViewContextMenu
+   // Registers a one-time callback that will be called the next time a context
+   // menu is shown.
+   static void RegisterMenuShownCallbackForTesting(
+-      base::OnceCallback<void(RenderViewContextMenu*)> cb);
++      base::OnceCallback<void(RenderViewContextMenu_Chromium*)> cb);
+ 
+   // Register a one-time callback that will be called the next time a plugin
+   // action is executed from a given render frame.
+@@ -274,6 +274,7 @@ class RenderViewContextMenu
+           navigation_handle_callback) override;
+ 
+  private:
++  friend class ::RenderViewContextMenu;
+   std::u16string GetElidedSelectionText(size_t max_length,
+                                         gfx::BreakType break_type);
+ 
+@@ -336,7 +337,7 @@ class RenderViewContextMenu
+   bool IsInProgressiveWebApp() const;
+   bool IsLinkToIsolatedWebApp() const;
+ 
+-  void AppendDeveloperItems();
++  virtual void AppendDeveloperItems();
+   void AppendDevtoolsForUnpackedExtensions();
+   void AppendLinkItems();
+   void AppendCopyLinkLocationItem();
+@@ -360,7 +361,7 @@ class RenderViewContextMenu
+   void AppendTranslateItem();
+   void AppendTranslateOrPartialTranslateItem();
+   void AppendMediaRouterItem();
+-  void AppendReadAnythingItem();
++  virtual void AppendReadAnythingItem();
+   void AppendSaveToMemoryBanksItem();
+   void AppendBrowseMemoryBanksItem();
+   bool CanSaveImageToMemoryBanks() const;
+@@ -679,7 +680,7 @@ class RenderViewContextMenu
+   // out if the tab navigated while the menu was open.
+   const content::WeakDocumentPtr source_document_at_menu_open_;
+ 
+-  base::WeakPtrFactory<RenderViewContextMenu> weak_pointer_factory_{this};
++  base::WeakPtrFactory<RenderViewContextMenu_Chromium> weak_pointer_factory_{this};
+ };
+ 
+ #endif  // CHROME_BROWSER_RENDERER_CONTEXT_MENU_RENDER_VIEW_CONTEXT_MENU_H_

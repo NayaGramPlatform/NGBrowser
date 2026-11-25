@@ -33,7 +33,6 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/search_engines/template_url_service_factory.h"
 #include "chrome/browser/themes/theme_syncable_service.h"
-#include "chrome/browser/ui/browser_window/public/browser_window_features.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/select_file_policy/chrome_select_file_policy.h"
 #include "chrome/common/pref_names.h"
@@ -48,8 +47,8 @@
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/mojom/window_open_disposition.mojom.h"
 #include "ui/base/page_transition_types.h"
-#include "ui/base/window_open_disposition.h"
 #include "ui/base/window_open_disposition_utils.h"
 #include "ui/shell_dialogs/selected_file_info.h"
 #include "url/gurl.h"
@@ -223,9 +222,10 @@ void BraveNewTabPageHandler::UseBraveBackground(
 void BraveNewTabPageHandler::TryBraveSearchPromotion(const std::string& input,
                                                      bool open_new_tab) {
   const GURL promo_url = brave_search_conversion::GetPromoURL(input);
-  auto window_open_disposition = WindowOpenDisposition::CURRENT_TAB;
+  auto window_open_disposition = ui::mojom::WindowOpenDisposition::kCurrentTab;
   if (open_new_tab) {
-    window_open_disposition = WindowOpenDisposition::NEW_BACKGROUND_TAB;
+    window_open_disposition =
+        ui::mojom::WindowOpenDisposition::kNewBackgroundTab;
   }
 
   web_contents_->OpenURL(
@@ -327,7 +327,7 @@ void BraveNewTabPageHandler::SearchWhatYouTyped(const std::string& host,
   GURL search_url = template_url->GenerateSearchURL(
       service->search_terms_data(), base::UTF8ToUTF16(query));
 
-  const WindowOpenDisposition disposition =
+  const ui::mojom::WindowOpenDisposition disposition =
       ui::DispositionFromClick(false, alt_key, ctrl_key, meta_key, shift_key);
   content::OpenURLParams params(search_url, content::Referrer(), disposition,
                                 ui::PAGE_TRANSITION_FROM_ADDRESS_BAR, false);
@@ -344,9 +344,7 @@ void BraveNewTabPageHandler::RefreshVPNState() {
 void BraveNewTabPageHandler::LaunchVPNPanel() {
   auto* tab = tabs::TabInterface::GetFromContents(web_contents_);
   CHECK(tab);
-  tab->GetBrowserWindowInterface()
-      ->GetFeatures()
-      .brave_vpn_controller()
+  BraveVPNController::From(tab->GetBrowserWindowInterface())
       ->ShowBraveVPNBubble(/* show_select */ true);
 }
 
@@ -354,9 +352,7 @@ void BraveNewTabPageHandler::OpenVPNAccountPage(
     brave_vpn::mojom::ManageURLType type) {
   auto* tab = tabs::TabInterface::GetFromContents(web_contents_);
   CHECK(tab);
-  tab->GetBrowserWindowInterface()
-      ->GetFeatures()
-      .brave_vpn_controller()
+  BraveVPNController::From(tab->GetBrowserWindowInterface())
       ->OpenVPNAccountPage(type);
 }
 

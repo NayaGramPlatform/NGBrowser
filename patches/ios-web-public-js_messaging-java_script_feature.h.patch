@@ -1,0 +1,25 @@
+diff --git a/ios/web/public/js_messaging/java_script_feature.h b/ios/web/public/js_messaging/java_script_feature.h
+index 632f353364c8a7322b3d9239170dca628bfff830..115911d568b47ac0dfb7d13cf414c917d66b7eab 100644
+--- a/ios/web/public/js_messaging/java_script_feature.h
++++ b/ios/web/public/js_messaging/java_script_feature.h
+@@ -203,6 +203,12 @@ class JavaScriptFeature {
+ 
+   JavaScriptFeature(const JavaScriptFeature&) = delete;
+ 
++  // Returns whether the feature replies to `window.prompt()`
++  // communications. Defaults to false. Features returning true must
++  // implement `ScriptMessageReceivedWithReply` and call its completion
++  // handler synchronously.
++  virtual bool GetFeatureRepliesToPrompts() const;
++
+  protected:
+   explicit JavaScriptFeature(ContentWorld supported_world);
+ 
+@@ -294,6 +300,7 @@ class JavaScriptFeature {
+       ScriptMessageReplyCallback callback);
+ 
+  private:
++  friend class PromptFacade;
+   // Whether this feature can call into a frame with `origin`. Always returns
+   // `YES` for `kPublic` features.
+   bool ShouldAllowCallingFunctionInOrigin(const url::Origin& origin);

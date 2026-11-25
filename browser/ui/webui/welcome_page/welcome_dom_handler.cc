@@ -23,7 +23,6 @@
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/metrics/metrics_reporting_state.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/browser_window/public/global_browser_collection.h"
 #include "chrome/browser/ui/browser_window/public/profile_browser_collection.h"
@@ -32,7 +31,9 @@
 #include "chrome/grit/branded_strings.h"
 #include "components/prefs/pref_service.h"
 #include "extensions/buildflags/buildflags.h"
+#include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/mojom/window_open_disposition.mojom.h"
 
 #if BUILDFLAG(ENABLE_BRAVE_EDUCATION)
 #include "brave/components/brave_education/education_urls.h"
@@ -185,7 +186,7 @@ void WelcomeDOMHandler::HandleOpenSettingsPage(const base::ListValue& args) {
   if (browser) {
     content::OpenURLParams open_params(
         GURL("brave://settings/privacy"), content::Referrer(),
-        WindowOpenDisposition::NEW_BACKGROUND_TAB,
+        ui::mojom::WindowOpenDisposition::kNewBackgroundTab,
         ui::PAGE_TRANSITION_AUTO_TOPLEVEL, false);
     browser->OpenURL(open_params, /*navigation_handle_callback=*/{});
   }

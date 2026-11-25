@@ -14,12 +14,14 @@ instantiates each _recipe module_, and runs the recipe's `RunSteps`.
 
 ```sh
 vpython3 tools/recipes/engine.py toolchains/rust/package_rust \
-    --properties '{ "brave_subrevision": 2, "chromium_ref": "151.0.7917.1" }'
+    --properties '{ "brave_subrevision": 2, "chromium_ref": "refs/tags/151.0.7917.1" }'
 ```
 
 The recipe name is a `/`-separated path under `recipes/`. `--properties` is a
 JSON object decoded into the recipe's `PROPERTIES` message (see
-[Properties](#properties)).
+[Properties](#properties)); `--properties-file` reads the same object from a
+file, or from stdin given `-`. `--output` and `--output-result-json` write what
+the recipe produced (see [Results and output properties](#results)).
 
 To run straight from a pipeline without a checkout, `engine_bootstrap.py`
 shallow-clones the engine from brave-core and forwards to `engine.py`:
@@ -27,11 +29,55 @@ shallow-clones the engine from brave-core and forwards to `engine.py`:
 ```sh
 curl -sL https://raw.githubusercontent.com/brave/brave-core/refs/heads/master/tools/recipes/engine_bootstrap.py \
     | python3 - toolchains/rust/package_rust \
-        --properties '{ "brave_subrevision": 2, "chromium_ref": "151.0.7917.1" }'
+        --properties '{ "brave_subrevision": 2, "chromium_ref": "refs/tags/151.0.7917.1" }'
 ```
 
-The engine requires `vpython3` and the bootsrap will take care of these
-requirements.
+The engine comes from `master` unless `--revision` names another brave-core
+revision. A pipeline running several recipes resolves one commit hash and passes
+it to every bootstrap: a checkout already at that commit is reused as is, like
+recipes-py's `recipes.py`, so later stages run the same engine without fetching.
+
+## DEPS
+
+A recipe declares the modules it uses as a `@dataclass` named `DEPS` that
+inherits from `RecipeScriptApi`, with one field per module, annotated with that
+module's `API`. It may also declare a `@dataclass` named `TEST_DEPS` that
+inherits from `RecipeTestApi`, naming the module `TEST_API`s its `GenTests` uses
+(without it, `GenTests` gets every module in `DEPS`). This is ordinary Python,
+so IDEs and type checkers see what `api` holds:
+
+```python
+from dataclasses import dataclass
+
+from recipe_api import RecipeScriptApi
+from recipe_modules import path, platform, step
+from recipe_test_api import RecipeTestApi
+
+
+@dataclass
+class DEPS(RecipeScriptApi):
+    path: path.API
+    platform: platform.API
+    step: step.API
+
+
+@dataclass
+class TEST_DEPS(RecipeTestApi):
+    platform: platform.TEST_API
+
+
+def RunSteps(api: DEPS):
+    api.step('hello', ['echo', 'world'])
+
+
+def GenTests(api: TEST_DEPS):
+    yield api.test('mac', api.platform.name('mac'))
+```
+
+The module a field names is taken from its annotation, so the field name is the
+local name `api` uses and may differ from the module's. The classes only
+describe `api`: the engine instantiates them, so they may not define methods. A
+recipe module declares its own `DEPS` in its `__init__.py` the same way.
 
 ## Properties
 
@@ -87,10 +133,10 @@ def RunSteps(api, env_properties):               # ENV_PROPERTIES only
 ```
 
 `PROPERTIES` is populated by taking the input property JSON object (from
-`--properties`), removing all keys beginning with `$`, and decoding the rest as
-JSONPB into the `PROPERTIES` message. Keys beginning with `$` are reserved: a
-`$<module>` key carries that module's own properties (see
-[Per-module properties](#per-module-properties)).
+`--properties` or `--properties-file`), removing all keys beginning with `$`,
+and decoding the rest as JSONPB into the `PROPERTIES` message. Keys beginning
+with `$` are reserved: a `$<module>` key carries that module's own properties
+(see [Per-module properties](#per-module-properties)).
 
 `ENV_PROPERTIES` is populated by taking the current environment variables,
 capitalizing all keys (`key.upper()`), and decoding that into the
@@ -102,14 +148,14 @@ Properties are set in tests via the same messages (see [Testing](#testing)):
 def GenTests(api):
     yield api.test(
         'example',
-        api.properties(InputProperties(chromium_ref='151.0.7917.1',
+        api.properties(InputProperties(chromium_ref='refs/tags/151.0.7917.1',
                                        brave_subrevision=1)),
         api.properties.environ(GIT_CACHE_PATH='/b/cache'),
     )
 ```
 
 `api.properties` also accepts top-level keyword arguments as a shorthand, e.g.
-`api.properties(chromium_ref='151.0.7917.1', brave_subrevision=1)`.
+`api.properties(chromium_ref='refs/tags/151.0.7917.1', brave_subrevision=1)`.
 
 ### Per-module properties
 
@@ -136,7 +182,11 @@ Assign the message as `PROPERTIES` in the module's `__init__.py` (next to
 # recipe_modules/hello/__init__.py
 from PB.recipe_modules.brave.hello.properties import InputProperties
 
-DEPS = ['path', 'step']
+@dataclass
+class DEPS(RecipeScriptApi):
+    path: path.API
+    step: step.API
+
 PROPERTIES = InputProperties
 ```
 
@@ -310,9 +360,11 @@ A recipe (or another module) selects a config with `set_config`:
 
 ```python
 # recipe_modules/hello/examples/simple.py
-DEPS = ['hello']
+@dataclass
+class DEPS(RecipeScriptApi):
+    hello: hello.API
 
-def RunSteps(api):
+def RunSteps(api: DEPS):
     api.hello.set_config('default_tool')
     api.hello.greet()  # Greets 'Bob' with echo.
 ```
@@ -359,9 +411,11 @@ example/test recipes. A config item that raises `BadConf` surfaces as an
 # recipe_modules/hello/tests/badconf.py
 from post_process import DropExpectation, StatusException
 
-DEPS = ['hello']
+@dataclass
+class DEPS(RecipeScriptApi):
+    hello: hello.API
 
-def RunSteps(api):
+def RunSteps(api: DEPS):
     api.hello.set_config('super_tool', TARGET='Not Charlie')  # raises BadConf
 
 def GenTests(api):
@@ -381,9 +435,12 @@ Consider this recipe:
 # recipes/shake.py
 import post_process
 
-DEPS = ['path', 'step']
+@dataclass
+class DEPS(RecipeScriptApi):
+    path: path.API
+    step: step.API
 
-def RunSteps(api):
+def RunSteps(api: DEPS):
     result = api.step('determine blue moon',
                       [api.path.workspace / 'is_blue_moon.sh'],
                       check=False)
@@ -409,8 +466,7 @@ def GenTests(api):
 ```
 
 The `check=False` is what makes reacting to a retcode possible at all: by
-default any non-zero exit raises `subprocess.CalledProcessError` and the recipe
-is over.
+default any non-zero exit raises `api.step.StepFailure` and the recipe is over.
 
 See how `result` carries the outcome of the step that just ran? What you get
 back is a `step_data.StepData`, and these members are always there:
@@ -419,6 +475,8 @@ back is a `step_data.StepData`, and these members are always there:
 - **`retcode`** -- pretty much what you think.
 - **`stdout`** / **`stderr`** -- the result of the step's `stdout`/`stderr`
   placeholder, or `None` when the step didn't redirect that handle (see below).
+- **`presentation`** -- where the step exports output properties (see
+  [Results and output properties](#results)).
 
 This is pretty neat... but it turns out retcodes are a miserable way to
 communicate anything more than "did it work". `api.json.output()` to the rescue:
@@ -427,9 +485,13 @@ communicate anything more than "did it work". `api.json.output()` to the rescue:
 # recipes/war.py
 import post_process
 
-DEPS = ['json', 'path', 'step']
+@dataclass
+class DEPS(RecipeScriptApi):
+    json: json.API
+    path: path.API
+    step: step.API
 
-def RunSteps(api):
+def RunSteps(api: DEPS):
     result = api.step(
         'run tests',
         [api.path.workspace / 'do_test_things.sh', api.json.output()])
@@ -654,6 +716,103 @@ placeholder. The `file` module is a worked example of using them: reading a file
 is a step that copies it _into_ an output placeholder, and writing one is a step
 that copies _from_ an input placeholder.
 
+## <a name="results"></a>Results and output properties
+
+A recipe produces two things for whatever runs it: a _result_, saying how it
+went, and _output properties_, the structured data it exports. Together they
+make up the final build.
+
+### The result
+
+`RunSteps` returning `None` is a `SUCCESS`. To set the status and summary
+itself, a recipe returns a `RawResult`:
+
+```python
+from PB.recipe_engine import result as result_pb
+
+def RunSteps(api: DEPS) -> result_pb.RawResult:
+    ...
+    return result_pb.RawResult(
+        status=result_pb.FAILURE,
+        summary_markdown=f'{failed} of {total} tests failed',
+    )
+```
+
+A `StepFailure` escaping `RunSteps`, whether raised by a failing step or by the
+recipe itself (`raise api.step.StepFailure('reason')`), is a `FAILURE` with its
+reason as the summary. Any other exception is an `INFRA_FAILURE`. The summary is
+limited to 4000 bytes.
+
+### Output properties
+
+A step exports output properties through its presentation. Each key is a
+top-level key of the build's output properties, and the step finalised last wins
+a key; a step is finalised when the next step in its greenlet starts, or when
+the nest or greenlet it ran in ends. They are write-only: once finalised,
+changes are ignored, and a recipe cannot read back what it exported.
+
+A value is anything JSON-serialisable, or a protobuf message, exported in its
+JSONPB form. A message keeps the property typed end to end: a recipe that
+declares a field of the same message type in its `PROPERTIES` reads the value
+back as that message.
+
+```proto
+// recipe_modules/artefacts/artefacts.proto
+syntax = "proto3";
+package recipe_modules.brave.artefacts;
+
+message Artefact {
+  string url = 1;
+  string sha256 = 2;
+}
+```
+
+```python
+# recipes/build.py, the producer
+def RunSteps(api: DEPS) -> None:
+    result = api.step('upload', [...])
+    result.presentation.properties['got_revision'] = revision
+    result.presentation.properties['artefact'] = Artefact(url=url, sha256=digest)
+```
+
+```proto
+// recipes/test.proto, the consumer
+syntax = "proto3";
+package recipes.brave.test;
+
+import "recipe_modules/brave/artefacts/artefacts.proto";
+
+message InputProperties {
+  string got_revision = 1;
+  recipe_modules.brave.artefacts.Artefact artefact = 2;
+}
+```
+
+Keep output properties small; large outputs belong in storage, with only their
+URL or digest exported.
+
+### Handing over between pipeline stages
+
+`--output <path>` writes the final build: its status, summary and output
+properties. The extension picks the encoding (`.json`, `.pb` or `.textpb`).
+`--output-result-json <path>` writes the legacy result instead. The exit code is
+0 only when the recipe succeeded.
+
+One stage's output properties become the next stage's input, so in a Jenkins
+pipeline running a different recipe in each stage:
+
+```sh
+# Stage 1
+vpython3 tools/recipes/engine.py build --output build.json
+jq .output.properties build.json > build_properties.json
+
+# Stage 2
+vpython3 tools/recipes/engine.py test --properties-file build_properties.json
+```
+
+Here the second recipe's `PROPERTIES` receives `got_revision` and `artefact`
+from the first.
+
 ## Testing
 
 Recipes and recipe modules are tested by _simulation_: a recipe declares
@@ -689,8 +848,8 @@ def GenTests(api):
     yield api.test(
         'linux',
         api.chromium_checkout.with_git_cache(),                 # seed preconditions
-        api.brave_core_checkout.deployed('tools/cr/toolchains'),
-        api.properties(brave_subrevision=1, chromium_ref='151.0.7917.1'),
+        api.brave_core_checkout.deployed('tools/cr'),
+        api.properties(brave_subrevision=1, chromium_ref='refs/tags/151.0.7917.1'),
         api.post_process(post_process.MustRun, 'fetch chromium'),
         api.post_process(post_process.StatusSuccess),
     )
@@ -724,21 +883,28 @@ values of its sub-expressions (AST-introspected), and fails the test. A check
 may also return a filtered `steps` mapping to narrow the written expectation.
 The available checks:
 
-| Check                 | Arguments             | Passes when                                                                        |
-| --------------------- | --------------------- | ---------------------------------------------------------------------------------- |
-| `MustRun`             | `step_name...`        | every named step ran                                                               |
-| `DoesNotRun`          | `step_name...`        | none of the named steps ran                                                        |
-| `MustRunRE`           | `pattern`             | some step name matches the regex                                                   |
-| `DoesNotRunRE`        | `pattern...`          | no step name matches any regex                                                     |
-| `StepCommandContains` | `step_name, args`     | the step ran and its command contains `args` as an in-order subsequence            |
-| `StepCommandRE`       | `step_name, patterns` | the step ran, each `patterns[i]` fully matches `cmd[i]`, with no surplus of either |
-| `StepSuccess`         | `step_name`           | the step ran with retcode `0`                                                      |
-| `StepFailure`         | `step_name`           | the step ran with a non-zero retcode                                               |
-| `StatusSuccess`       | _(none)_              | the run succeeded (`$result` has no `failure`)                                     |
-| `StatusFailure`       | _(none)_              | the run had a non-infra failure (a checked step failed)                            |
-| `StatusException`     | _(none)_              | the run had an infra failure (the recipe raised)                                   |
-| `StatusAnyFailure`    | _(none)_              | the run failed, infra or non-infra                                                 |
-| `DropExpectation`     | _(none)_              | always; suppresses writing this test's expectation file                            |
+| Check                     | Arguments             | Passes when                                                                        |
+| ------------------------- | --------------------- | ---------------------------------------------------------------------------------- |
+| `MustRun`                 | `step_name...`        | every named step ran                                                               |
+| `DoesNotRun`              | `step_name...`        | none of the named steps ran                                                        |
+| `MustRunRE`               | `pattern`             | some step name matches the regex                                                   |
+| `DoesNotRunRE`            | `pattern...`          | no step name matches any regex                                                     |
+| `StepCommandContains`     | `step_name, args`     | the step ran and its command contains `args` as an in-order subsequence            |
+| `StepCommandRE`           | `step_name, patterns` | the step ran, each `patterns[i]` fully matches `cmd[i]`, with no surplus of either |
+| `StepSuccess`             | `step_name`           | the step ran with retcode `0`                                                      |
+| `StepFailure`             | `step_name`           | the step ran with a non-zero retcode                                               |
+| `StatusSuccess`           | _(none)_              | the run succeeded (`$result` has no `failure`)                                     |
+| `StatusFailure`           | _(none)_              | the run had a non-infra failure (a `StepFailure` or a `FAILURE` result)            |
+| `StatusException`         | _(none)_              | the run had an infra failure (any other exception, or an `INFRA_FAILURE` result)   |
+| `StatusAnyFailure`        | _(none)_              | the run failed, infra or non-infra                                                 |
+| `SummaryMarkdown`         | `summary`             | the run's summary (or failure reason) equals `summary`                             |
+| `SummaryMarkdownRE`       | `pattern`             | the run's summary (or failure reason) matches the regex                            |
+| `PropertyEquals`          | `key, value`          | the output property `key` equals `value`                                           |
+| `PropertyMatchesRE`       | `key, pattern`        | the output property `key` is a string matching the regex                           |
+| `PropertyMatchesCallable` | `key, matcher`        | `matcher(check, value)` passes for the output property `key`                       |
+| `PropertiesContain`       | `key`                 | the run exported the output property `key`                                         |
+| `PropertiesDoNotContain`  | `key`                 | the run did not export the output property `key`                                   |
+| `DropExpectation`         | _(none)_              | always; suppresses writing this test's expectation file                            |
 
 `DropExpectation` is filter-only (it writes/keeps no golden), and should be
 considered for cases where there are too many permutations.

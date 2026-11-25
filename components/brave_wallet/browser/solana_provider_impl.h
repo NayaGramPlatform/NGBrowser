@@ -46,18 +46,20 @@ class SolanaProviderImpl final : public mojom::SolanaProvider,
   SolanaProviderImpl(HostContentSettingsMap& host_content_settings_map,
                      BraveWalletService* brave_wallet_service,
                      std::unique_ptr<BraveWalletProviderDelegate> delegate,
-                     const url::Origin& origin);
+                     const url::Origin& dapp_origin);
   ~SolanaProviderImpl() override;
   SolanaProviderImpl(const SolanaProviderImpl&) = delete;
   SolanaProviderImpl& operator=(const SolanaProviderImpl&) = delete;
+
+  void FlushKeyringObserverForTesting() {
+    keyring_observer_receiver_.FlushForTesting();
+  }
 
   void Init(mojo::PendingRemote<mojom::SolanaEventsListener> events_listener)
       override;
   void Connect(std::optional<base::DictValue> arg,
                ConnectCallback callback) override;
   void Disconnect() override;
-  void IsConnected(IsConnectedCallback callback) override;
-  void GetPublicKey(GetPublicKeyCallback callback) override;
   void SignTransaction(mojom::SolanaSignTransactionParamPtr param,
                        SignTransactionCallback callback) override;
   void SignAllTransactions(
@@ -72,11 +74,14 @@ class SolanaProviderImpl final : public mojom::SolanaProvider,
   void Request(base::DictValue arg, RequestCallback callback) override;
 
  private:
+  friend class SolanaProviderImplUnitTest;
   FRIEND_TEST_ALL_PREFIXES(SolanaProviderImplUnitTest, GetDeserializedMessage);
-  FRIEND_TEST_ALL_PREFIXES(SolanaProviderImplUnitTest,
-                           ConnectWithNoSolanaAccount);
 
-  bool IsAccountConnected(const mojom::AccountInfo& account);
+  std::string GetCurrentChainId();
+
+  void SetConnectedAccount(mojom::AccountInfoPtr account);
+  mojom::AccountInfoPtr GetAndVerifyConnectedAccount();
+
   void OnConnect(
       const std::vector<mojom::AccountInfoPtr>& requested_accounts,
       ConnectCallback callback,
@@ -162,6 +167,8 @@ class SolanaProviderImpl final : public mojom::SolanaProvider,
                                const ContentSettingsPattern& secondary_pattern,
                                ContentSettingsType content_type) override;
 
+  mojom::AccountInfoPtr connected_account_;
+
   base::flat_map<std::string, SignAndSendTransactionCallback>
       sign_and_send_tx_callbacks_;
   // Pending callback and arg are for waiting user unlock before connect
@@ -181,7 +188,7 @@ class SolanaProviderImpl final : public mojom::SolanaProvider,
   base::ScopedObservation<HostContentSettingsMap, content_settings::Observer>
       host_content_settings_map_observation_{this};
   std::unique_ptr<BraveWalletProviderDelegate> delegate_;
-  const url::Origin origin_;
+  const url::Origin dapp_origin_;
   base::WeakPtrFactory<SolanaProviderImpl> weak_factory_;
 };
 

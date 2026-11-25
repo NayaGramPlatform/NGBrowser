@@ -9,7 +9,6 @@
 #include <string>
 #include <vector>
 
-#include "brave/components/brave_wallet/browser/brave_wallet_utils.h"
 #include "brave/components/brave_wallet/common/eth_abi_utils.h"
 #include "brave/components/brave_wallet/common/hex_utils.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -326,8 +325,8 @@ TEST(EthABIDecoderTest, ABIDecodeArray) {
       data);
   ASSERT_NE(decoded, std::nullopt);
   ASSERT_EQ(decoded->size(), 1UL);
-  EXPECT_TRUE(decoded->back().is_list());
-  EXPECT_EQ(decoded->back().GetList().size(), 2UL);
+  ASSERT_TRUE(decoded->back().is_list());
+  ASSERT_EQ(decoded->back().GetList().size(), 2UL);
   EXPECT_EQ(decoded->back().GetList()[0],
             base::Value("0x00000000000000000000000000000000000000ff"));
   EXPECT_EQ(decoded->back().GetList()[1],
@@ -347,7 +346,7 @@ TEST(EthABIDecoderTest, ABIDecodeArray) {
       data);
   ASSERT_NE(decoded, std::nullopt);
   ASSERT_EQ(decoded->size(), 1UL);
-  EXPECT_TRUE(decoded->back().is_list());
+  ASSERT_TRUE(decoded->back().is_list());
   EXPECT_EQ(decoded->back().GetList().size(), 0UL);
 
   // OK: valid address[] with extra tail calldata
@@ -367,8 +366,8 @@ TEST(EthABIDecoderTest, ABIDecodeArray) {
       data);
   ASSERT_NE(decoded, std::nullopt);
   ASSERT_EQ(decoded->size(), 1UL);
-  EXPECT_TRUE(decoded->back().is_list());
-  EXPECT_EQ(decoded->back().GetList().size(), 2UL);
+  ASSERT_TRUE(decoded->back().is_list());
+  ASSERT_EQ(decoded->back().GetList().size(), 2UL);
   EXPECT_EQ(decoded->back().GetList()[0],
             base::Value("0x00000000000000000000000000000000000000ff"));
   EXPECT_EQ(decoded->back().GetList()[1],
@@ -454,8 +453,8 @@ TEST(EthABIDecoderTest, ABIDecodeArray) {
       data);
   ASSERT_NE(decoded, std::nullopt);
   ASSERT_EQ(decoded->size(), 1UL);
-  EXPECT_TRUE(decoded->back().is_list());
-  EXPECT_EQ(decoded->back().GetList().size(), 2UL);
+  ASSERT_TRUE(decoded->back().is_list());
+  ASSERT_EQ(decoded->back().GetList().size(), 2UL);
   EXPECT_EQ(decoded->back().GetList()[0], base::Value("0x1"));
   EXPECT_EQ(decoded->back().GetList()[1], base::Value("0x3"));
 
@@ -472,8 +471,8 @@ TEST(EthABIDecoderTest, ABIDecodeArray) {
       data);
   ASSERT_NE(decoded, std::nullopt);
   ASSERT_EQ(decoded->size(), 1UL);
-  EXPECT_TRUE(decoded->back().is_list());
-  EXPECT_EQ(decoded->back().GetList().size(), 2UL);
+  ASSERT_TRUE(decoded->back().is_list());
+  ASSERT_EQ(decoded->back().GetList().size(), 2UL);
   EXPECT_EQ(decoded->back().GetList()[0], base::Value("0x1"));
   EXPECT_EQ(decoded->back().GetList()[1], base::Value("0x3"));
 
@@ -496,8 +495,8 @@ TEST(EthABIDecoderTest, ABIDecodeArray) {
       data);
   ASSERT_NE(decoded, std::nullopt);
   ASSERT_EQ(decoded->size(), 1UL);
-  EXPECT_TRUE(decoded->back().is_list());
-  EXPECT_EQ(decoded->back().GetList().size(), 2UL);
+  ASSERT_TRUE(decoded->back().is_list());
+  ASSERT_EQ(decoded->back().GetList().size(), 2UL);
   EXPECT_EQ(decoded->back().GetList()[0], base::Value("hello"));
   EXPECT_EQ(decoded->back().GetList()[1], base::Value("web3"));
 
@@ -521,8 +520,8 @@ TEST(EthABIDecoderTest, ABIDecodeArray) {
       data);
   ASSERT_NE(decoded, std::nullopt);
   ASSERT_EQ(decoded->size(), 1UL);
-  EXPECT_TRUE(decoded->back().is_list());
-  EXPECT_EQ(decoded->back().GetList().size(), 2UL);
+  ASSERT_TRUE(decoded->back().is_list());
+  ASSERT_EQ(decoded->back().GetList().size(), 2UL);
   EXPECT_EQ(decoded->back().GetList()[0], base::Value("hello"));
   EXPECT_EQ(decoded->back().GetList()[1], base::Value("web3"));
 }
@@ -696,7 +695,7 @@ TEST(EthABIDecoderTest, ABIDecodeTuple) {
                            data);
   ASSERT_NE(decoded, std::nullopt);
   ASSERT_EQ(decoded->size(), 1UL);
-  EXPECT_TRUE(decoded->back().is_list());
+  ASSERT_TRUE(decoded->back().is_list());
   ASSERT_EQ(decoded->back().GetList().size(), 2UL);
   EXPECT_EQ(decoded->back().GetList()[0], base::Value("0x45"));
   EXPECT_EQ(decoded->back().GetList()[1], base::Value(true));
@@ -721,10 +720,10 @@ TEST(EthABIDecoderTest, ABIDecodeTuple) {
       data);
   ASSERT_NE(decoded, std::nullopt);
   ASSERT_EQ(decoded->size(), 1UL);
-  EXPECT_TRUE(decoded->back().is_list());
+  ASSERT_TRUE(decoded->back().is_list());
   ASSERT_EQ(decoded->back().GetList().size(), 2UL);
   EXPECT_EQ(decoded->back().GetList()[0], base::Value(true));
-  EXPECT_TRUE(decoded->back().GetList()[1].is_list());
+  ASSERT_TRUE(decoded->back().GetList()[1].is_list());
   ASSERT_EQ(decoded->back().GetList()[1].GetList().size(), 2UL);
   EXPECT_EQ(decoded->back().GetList()[1].GetList()[0], base::Value("0x45"));
   EXPECT_EQ(decoded->back().GetList()[1].GetList()[1], base::Value(true));
@@ -758,73 +757,17 @@ TEST(EthABIDecoderTest, ABIDecodeTuple) {
       data);
   ASSERT_NE(decoded, std::nullopt);
   ASSERT_EQ(decoded->size(), 1UL);
-  EXPECT_TRUE(decoded->back().is_list());
+  ASSERT_TRUE(decoded->back().is_list());
   ASSERT_EQ(decoded->back().GetList().size(), 3UL);
   EXPECT_EQ(decoded->back().GetList()[0], base::Value("marin123123123123"));
   EXPECT_EQ(decoded->back().GetList()[1], base::Value(true));
-  EXPECT_TRUE(decoded->back().GetList()[2].is_list());
+  ASSERT_TRUE(decoded->back().GetList()[2].is_list());
   ASSERT_EQ(decoded->back().GetList()[2].GetList().size(), 2UL);
   EXPECT_EQ(decoded->back().GetList()[2].GetList()[0], base::Value(true));
   EXPECT_EQ(
       decoded->back().GetList()[2].GetList()[1],
       base::Value(
           "web3jstestinglongstriiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiing"));
-}
-
-TEST(EthABIDecoderTest, UniswapEncodedPathDecodeValid) {
-  // Single-hop swap: WETH → STG
-  std::optional<std::vector<std::string>> path;
-  path = UniswapEncodedPathDecode(
-      "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"  // WETH
-      "002710"                                      // POOL FEE (10000)
-      "af5191b0de278c7286d6c7cc6ab6bb8a73ba2cd6");  // STG
-  ASSERT_NE(path, std::nullopt);
-  EXPECT_EQ(path->size(), 2UL);
-  EXPECT_EQ(path->at(0), "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2");
-  EXPECT_EQ(path->at(1), "0xaf5191b0de278c7286d6c7cc6ab6bb8a73ba2cd6");
-
-  // Multi-hop swap: RSS3 → USDC → WETH
-  path = UniswapEncodedPathDecode(
-      "0xc98d64da73a6616c42117b582e832812e7b8d57f"  // RSS3
-      "000bb8"                                      // POOL FEE (3000)
-      "a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"    // USDC
-      "0001f4"                                      // POOL FEE (500)
-      "c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2");  // WETH
-  ASSERT_NE(path, std::nullopt);
-  ASSERT_EQ(path->size(), 3UL);
-  EXPECT_EQ(path->at(0), "0xc98d64da73a6616c42117b582e832812e7b8d57f");
-  EXPECT_EQ(path->at(1), "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48");
-  EXPECT_EQ(path->at(2), "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2");
-}
-
-TEST(EthABIDecoderTest, UniswapEncodedPathDecodeInvalid) {
-  // Empty string.
-  EXPECT_FALSE(UniswapEncodedPathDecode(""));
-
-  // Missing hops.
-  EXPECT_FALSE(UniswapEncodedPathDecode("0x"));
-
-  // Missing source hop.
-  EXPECT_FALSE(UniswapEncodedPathDecode(
-      "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"  // WETH
-      "002710"));                                   // POOL FEE
-
-  // Missing destination hop.
-  EXPECT_FALSE(UniswapEncodedPathDecode(
-      "0x002710"                                     // POOL FEE
-      "af5191b0de278c7286d6c7cc6ab6bb8a73ba2cd6"));  // STG
-
-  // Missing POOL FEE
-  EXPECT_FALSE(UniswapEncodedPathDecode(
-      "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"   // WETH
-      "af5191b0de278c7286d6c7cc6ab6bb8a73ba2cd6"));  // STG
-
-  // Extraneous data
-  EXPECT_FALSE(UniswapEncodedPathDecode(
-      "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"  // WETH
-      "002710"                                      // POOL FEE
-      "af5191b0de278c7286d6c7cc6ab6bb8a73ba2cd6"    // STG
-      "deadbeef"));                                 // Bogus data
 }
 
 }  // namespace brave_wallet

@@ -245,7 +245,6 @@ export function getBuildArgs(config: Config) {
     args.target_android_output_format =
       config.targetAndroidOutputFormat
       || (config.buildConfig === 'Release' ? 'aab' : 'apk')
-    args.android_override_version_name = config.androidOverrideVersionName
 
     args.brave_android_developer_options_code =
       config.braveAndroidDeveloperOptionsCode
@@ -295,9 +294,11 @@ export function getBuildArgs(config: Config) {
     // https://chromium.googlesource.com/chromium/src/+/master/docs/component_build.md
     args.is_component_build = false
 
-    if (!config.isBraveReleaseBuild()) {
+    if (!config.isBraveReleaseBuild() && config.isDebug()) {
       // When building locally iOS needs dSYMs in order for Xcode to map source
-      // files correctly since we are using a framework build
+      // files correctly since we are using a framework build, however this step
+      // takes a lot of extra time even with incremental builds so only generate
+      // dSYMs when making debug builds
       args.enable_dsyms = true
       if (args.use_remoteexec) {
         // RBE expects relative paths in dSYMs

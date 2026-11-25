@@ -5,12 +5,10 @@
 
 #include "brave/components/brave_wallet/browser/fil_nonce_tracker.h"
 
-#include <utility>
-
 #include "base/files/scoped_temp_dir.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/test/bind.h"
 #include "base/test/task_environment.h"
+#include "base/test/test_future.h"
 #include "brave/components/brave_wallet/browser/brave_wallet_utils.h"
 #include "brave/components/brave_wallet/browser/fil_tx_meta.h"
 #include "brave/components/brave_wallet/browser/fil_tx_state_manager.h"
@@ -61,6 +59,18 @@ class FilNonceTrackerUnitTest : public testing::Test {
         GetResultString());
   }
 
+  void SetRpcError() {
+    url_loader_factory_.ClearResponses();
+    const std::string error_response =
+        R"({"jsonrpc":"2.0","id":1,)"
+        R"("error":{"code":-32000,"message":"x"}})";
+    url_loader_factory_.AddResponse(
+        network_manager_
+            ->GetNetworkURL(mojom::kFilecoinTestnet, mojom::CoinType::FIL)
+            .spec(),
+        error_response);
+  }
+
   void GetNextNonce(const base::Location& location,
                     FilNonceTracker* tracker,
                     const std::string& chain_id,
@@ -68,15 +78,12 @@ class FilNonceTrackerUnitTest : public testing::Test {
                     bool expected_success,
                     uint64_t expected_nonce) {
     SCOPED_TRACE(testing::Message() << location.ToString());
-    base::RunLoop run_loop;
-    tracker->GetNextNonce(
-        chain_id, from,
-        base::BindLambdaForTesting([&](bool success, uint256_t nonce) {
-          EXPECT_EQ(expected_success, success);
-          EXPECT_EQ(expected_nonce, nonce);
-          run_loop.Quit();
-        }));
-    run_loop.Run();
+    base::test::TestFuture<bool, uint256_t> future;
+    tracker->GetNextNonce(chain_id, from, future.GetCallback());
+    ASSERT_TRUE(future.Wait());
+    auto [success, nonce] = future.Take();
+    EXPECT_EQ(expected_success, success);
+    EXPECT_EQ(expected_nonce, nonce);
   }
 
   JsonRpcService* json_rpc_service() { return json_rpc_service_.get(); }
@@ -149,6 +156,42 @@ TEST_F(FilNonceTrackerUnitTest, GetNonce) {
   // tx count: 2, confirmed: null, pending: null (mainnet)
   GetNextNonce(FROM_HERE, &nonce_tracker, mojom::kFilecoinMainnet, fil_acc,
                true, uint64_t{2});
+}
+
+TEST_F(FilNonceTrackerUnitTest, GetNonceRpcError) {
+  base::ScopedTempDir temp_dir;
+  ASSERT_TRUE(temp_dir.CreateUniqueTempDir());
+  std::unique_ptr<TxStorage> delegate =
+      CreateTxStorageForTest(temp_dir.GetPath());
+  auto account_resolver_delegate =
+      std::make_unique<AccountResolverDelegateForTest>();
+  FilTxStateManager tx_state_manager(*delegate, *account_resolver_delegate);
+  FilNonceTracker nonce_tracker(&tx_state_manager, json_rpc_service());
+
+  auto fil_acc = account_resolver_delegate->RegisterAccount(
+      MakeAccountId(mojom::CoinType::FIL, mojom::KeyringId::kFilecoinTestnet,
+                    mojom::AccountKind::kDerived,
+                    "t1lqarsh4nkg545ilaoqdsbtj4uofplt6sto26ziy"));
+
+  // A failed Filecoin.MpoolGetNonce must not be reported as success.
+  SetRpcError();
+  GetNextNonce(FROM_HERE, &nonce_tracker, mojom::kFilecoinTestnet, fil_acc,
+               false, uint64_t{0});
+
+  // Local transactions must not turn the failure into a success either.
+  FilTxMeta meta(fil_acc, std::make_unique<FilTransaction>());
+  meta.set_id(TxMeta::GenerateMetaID());
+  meta.set_chain_id(mojom::kFilecoinTestnet);
+  meta.set_status(mojom::TransactionStatus::Confirmed);
+  meta.tx()->set_nonce(uint64_t{5});
+  ASSERT_TRUE(tx_state_manager.AddOrUpdateTx(meta));
+  GetNextNonce(FROM_HERE, &nonce_tracker, mojom::kFilecoinTestnet, fil_acc,
+               false, uint64_t{0});
+
+  // The tracker succeeds again once the RPC recovers.
+  SetTransactionCount(2);
+  GetNextNonce(FROM_HERE, &nonce_tracker, mojom::kFilecoinTestnet, fil_acc,
+               true, uint64_t{6});
 }
 
 }  // namespace brave_wallet

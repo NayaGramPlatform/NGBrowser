@@ -31,7 +31,6 @@
 #include "brave/components/ai_chat/core/browser/engine/oai_message_utils.h"
 #include "brave/components/ai_chat/core/browser/engine/oai_parsing.h"
 #include "brave/components/ai_chat/core/browser/engine/oblivious_http_api_client.h"
-#include "brave/components/ai_chat/core/common/mojom/ai_chat.mojom.h"
 #include "brave/components/ai_chat/core/common/mojom/common.mojom.h"
 #include "components/grit/brave_components_strings.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
@@ -178,7 +177,7 @@ void EngineConsumerOAIRemote::OnGenerateQuestionSuggestionsResponse(
 
 void EngineConsumerOAIRemote::GenerateConversationTitle(
     const PageContentsMap& page_contents,
-    const ConversationHistory& conversation_history,
+    const ConversationHistoryView& conversation_history,
     GenerationCompletedCallback completed_callback) {
   auto messages = BuildOAIGenerateConversationTitleMessages(
       page_contents, conversation_history, max_associated_content_length_,

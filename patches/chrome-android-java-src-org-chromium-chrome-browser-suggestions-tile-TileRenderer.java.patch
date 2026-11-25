@@ -1,0 +1,27 @@
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/suggestions/tile/TileRenderer.java b/chrome/android/java/src/org/chromium/chrome/browser/suggestions/tile/TileRenderer.java
+index 0828a59faaa8e76a70208c4d49fc060eb822b65e..c0ea7fac1ef94b5e6fe89ba3afe54066774edc7d 100644
+--- a/chrome/android/java/src/org/chromium/chrome/browser/suggestions/tile/TileRenderer.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/suggestions/tile/TileRenderer.java
+@@ -334,6 +334,10 @@ public class TileRenderer {
+     }
+ 
+     boolean shouldShowAddNewButton(List<Tile> sectionTiles) {
++        if (org.chromium.chrome.browser.ntp.NtpUtil.getTopSitesDisplayMode()
++                != org.chromium.chrome.browser.ntp.NtpUtil.TOP_SITES_MODE_SHORTCUTS) {
++            return false;
++        }
+         if (sectionTiles.isEmpty()) {
+             // Still show the Add Custom Link Button, even if no suggestions exist. We might make
+             // this configurable.
+@@ -378,6 +382,11 @@ public class TileRenderer {
+         tileView.setOnKeyListener(
+                 (View view, int keyCode, KeyEvent event) ->
+                         TileUtils.isCustomTileSwapKeyCombo(keyCode, event));
++        tileView.setOnLongClickListener(
++                (View v) -> {
++                    org.chromium.chrome.browser.ntp.BraveNtpWidgetMenu.show(v);
++                    return true;
++                });
+         return tileView;
+     }
+ 

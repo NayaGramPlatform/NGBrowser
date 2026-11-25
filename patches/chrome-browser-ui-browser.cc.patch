@@ -1,26 +1,8 @@
 diff --git a/chrome/browser/ui/browser.cc b/chrome/browser/ui/browser.cc
-index 276016b98eb0bc34668c400e7257fa1b51bae0cb..614554479b5022cde17be2dc1f27cead0c80def2 100644
+index f5fdcc49b43d1b946fb248091f29bccc2554a5f3..33b589c53de0dfe0792b5966e6a15949fad7ad25 100644
 --- a/chrome/browser/ui/browser.cc
 +++ b/chrome/browser/ui/browser.cc
-@@ -239,7 +239,7 @@ Browser* Browser::Create(BrowserWindowCreateParams params) {
- 
-   Profile* const profile_ptr = &*params.profile;
-   std::unique_ptr<Browser> browser =
--      base::WrapUnique(new Browser(std::move(params)));
-+      base::WrapUnique(new BraveBrowser(std::move(params)));
-   Browser* const browser_ptr = browser.get();
-   BrowserManagerServiceFactory::GetForProfile(profile_ptr)
-       ->AddBrowser(std::move(browser));
-@@ -258,7 +258,7 @@ std::unique_ptr<Browser> Browser::DeprecatedCreateOwnedForTesting(
- 
-   Profile* const profile_ptr = &*params.profile;
-   std::unique_ptr<Browser> browser =
--      base::WrapUnique(new Browser(std::move(params)));
-+      base::WrapUnique(new BraveBrowser(std::move(params)));
-   BrowserManagerServiceFactory::GetForProfile(profile_ptr)
-       ->AddBrowserForTesting(browser.get());
-   return browser;
-@@ -269,8 +269,8 @@ Browser::Browser(BrowserWindowCreateParams params)
+@@ -265,8 +265,8 @@ Browser::Browser(BrowserWindowCreateParams params)
        profile_(&*params.profile),
        window_(nullptr),
        tab_strip_model_delegate_(
@@ -31,3 +13,31 @@ index 276016b98eb0bc34668c400e7257fa1b51bae0cb..614554479b5022cde17be2dc1f27cead
            tab_strip_model_delegate_.get(),
            profile_,
            // Tab groups are disabled for app browsers.
+@@ -612,6 +612,10 @@ void Browser::OnTabStripModelChanged(TabStripModel* tab_strip_model,
+ }
+ 
+ void Browser::TabStripEmpty() {
++  if (auto* controller = ClosingLastTabController::From(this);
++      controller && controller->MaybeKeepWindowOpen()) {
++    return;
++  }
+   // A touch tab drag session may still be delivering OS touch events to this
+   // window's native widget. Destroying it mid-gesture would strand the drag, so
+   // let TabDragController take ownership of closing this browser once the drag
+@@ -673,6 +677,7 @@ void Browser::OnTabInsertedAt(WebContents* contents, int index) {
+ 
+ void Browser::OnTabClosing(tabs::TabInterface* tab,
+                            bool* had_active_modal_dialog) {
++  [&]() -> void {
+   WebContents* contents = tab->GetContents();
+   // When this function is called |contents| has been removed from the
+   // TabStripModel. Some of the following code may trigger calling to the
+@@ -697,6 +702,8 @@ void Browser::OnTabClosing(tabs::TabInterface* tab,
+   metrics_observer->WebContentsWillSoonBeDestroyed();
+ 
+   ExclusiveAccessManager::From(this)->OnTabClosing(contents);
++  }();
++  brave_tabs::MaybeCloseWindowWithOnlySharedPinnedTabs(this);
+ }
+ 
+ void Browser::OnTabDetached(tabs::TabInterface* tab,

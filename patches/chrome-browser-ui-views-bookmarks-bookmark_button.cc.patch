@@ -1,0 +1,13 @@
+diff --git a/chrome/browser/ui/views/bookmarks/bookmark_button.cc b/chrome/browser/ui/views/bookmarks/bookmark_button.cc
+index 902ec46aaa8e1d171d77a1e4acd3301e667e4ed8..c7385239d783d557a0c5964698da9d5d72c341be 100644
+--- a/chrome/browser/ui/views/bookmarks/bookmark_button.cc
++++ b/chrome/browser/ui/views/bookmarks/bookmark_button.cc
+@@ -65,7 +65,7 @@ BookmarkButtonBase::BookmarkButtonBase(PressedCallback callback,
+   SetImageLabelSpacing(
+       GetLayoutConstant(LayoutConstant::kBookmarkBarButtonImageLabelPadding));
+ 
+-  views::InstallPillHighlightPathGenerator(this);
++  brave::RestyleBookmarkLabel(label());
+ 
+   SetFocusBehavior(FocusBehavior::ACCESSIBLE_ONLY);
+   views::FocusRing::Get(this)->SetOutsetFocusRingDisabled(true);

@@ -8,9 +8,10 @@
 #include <utility>
 
 #include "base/check.h"
-#include "brave/browser/ui/brave_browser.h"
+#include "base/check_deref.h"
 #include "brave/browser/ui/brave_file_select_utils.h"
 #include "brave/browser/ui/split_view/split_view_link_redirect_utils.h"
+#include "brave/browser/ui/tabs/public/before_unload_ignore_controller.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/unload_controller.h"
 #include "components/tabs/public/tab_interface.h"
@@ -18,7 +19,7 @@
 #include "content/public/browser/web_contents.h"
 #include "content/public/common/url_constants.h"
 #include "third_party/blink/public/mojom/choosers/file_chooser.mojom.h"
-#include "ui/base/window_open_disposition.h"
+#include "ui/base/mojom/window_open_disposition.mojom.h"
 #include "url/gurl.h"
 #include "url/origin.h"
 
@@ -48,22 +49,22 @@ content::WebContents* BraveBrowserWebContentsDelegate::AddNewContents(
     content::WebContents* source,
     std::unique_ptr<content::WebContents> new_contents,
     const GURL& target_url,
-    WindowOpenDisposition disposition,
+    ui::mojom::WindowOpenDisposition disposition,
     const blink::mojom::WindowFeatures& window_features,
     bool user_gesture,
     bool* was_blocked) {
-  // For NEW_FOREGROUND_TAB disposition (target="_blank" links) from a source
+  // For kNewForegroundTab disposition (target="_blank" links) from a source
   // in the left pane of a linked split view, set the split tab ID on the new
   // contents so that SplitViewLinkNavigationThrottle can redirect it to the
   // right pane. If the split tab ID was set, change the disposition to
-  // NEW_BACKGROUND_TAB to prevent the empty tab from becoming visible.
+  // kNewBackgroundTab to prevent the empty tab from becoming visible.
   // It'll be closed immediately right after navigation is routed to right
   // pane. By routing at SplitViewLinkNavigationThrottle, proper referrer/opener
   // could be set. These are set after navigation starts. So, can't get it here.
-  if (disposition == WindowOpenDisposition::NEW_FOREGROUND_TAB && source &&
-      user_gesture && new_contents.get() && !target_url.is_empty()) {
+  if (disposition == ui::mojom::WindowOpenDisposition::kNewForegroundTab &&
+      source && user_gesture && new_contents.get() && !target_url.is_empty()) {
     if (split_view::SetSplitTabIdForRedirect(source, new_contents.get())) {
-      disposition = WindowOpenDisposition::NEW_BACKGROUND_TAB;
+      disposition = ui::mojom::WindowOpenDisposition::kNewBackgroundTab;
     }
   }
 
@@ -100,9 +101,9 @@ void BraveBrowserWebContentsDelegate::BeforeUnloadFired(
 bool BraveBrowserWebContentsDelegate::ShouldSuppressDialogs(
     content::WebContents* source) {
   auto* tab = tabs::TabInterface::MaybeGetFromContents(source);
-  auto* brave_browser = static_cast<BraveBrowser*>(&*browser_);
-  return (tab && brave_browser->ShouldIgnoreBeforeUnloadHandlerForTab(
-                     tab->GetHandle())) ||
+  return (tab &&
+          CHECK_DEREF(BeforeUnloadIgnoreController::From(&*browser_))
+              .ShouldIgnoreBeforeUnloadHandlerForTab(tab->GetHandle())) ||
          BrowserWebContentsDelegate::ShouldSuppressDialogs(source);
 }
 

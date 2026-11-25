@@ -7,7 +7,6 @@
 
 #include <memory>
 
-#include "base/check_is_test.h"
 #include "base/no_destructor.h"
 #include "brave/browser/brave_browser_process.h"
 #include "brave/browser/tor/util.h"
@@ -66,7 +65,13 @@ bool TorProfileServiceFactory::IsTorManaged(content::BrowserContext* context) {
 
 // static
 bool TorProfileServiceFactory::IsTorDisabled(content::BrowserContext* context) {
-  if (Profile::FromBrowserContext(context)->IsGuestSession()) {
+  Profile* profile = Profile::FromBrowserContext(context);
+  if (profile->IsGuestSession()) {
+    return true;
+  }
+  // Tor windows derive from a regular profile; profiles that don't (e.g.
+  // System, Top Chrome WebUI) lack the prefs read below.
+  if (!profile->GetOriginalProfile()->IsRegularProfile()) {
     return true;
   }
   if (tor::IsIncognitoDisabledOrForced(context)) {
@@ -77,13 +82,8 @@ bool TorProfileServiceFactory::IsTorDisabled(content::BrowserContext* context) {
     return true;
   }
   if (g_browser_process) {
-    // local_state can be null in tests
-    if (g_browser_process->local_state()) {
-      return g_browser_process->local_state()->GetBoolean(
-          tor::prefs::kTorDisabled);
-    } else {
-      CHECK_IS_TEST();
-    }
+    return g_browser_process->local_state()->GetBoolean(
+        tor::prefs::kTorDisabled);
   }
   return false;
 }

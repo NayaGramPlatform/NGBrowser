@@ -1,0 +1,13 @@
+diff --git a/components/ttc/features.cc b/components/ttc/features.cc
+index dc6af8e4a937b1d659c9d98667c018e04b816daa..736c223e113916c39cbf795e691a55dfe4c3b8ec 100644
+--- a/components/ttc/features.cc
++++ b/components/ttc/features.cc
+@@ -6,7 +6,7 @@
+ 
+ namespace ttc {
+ 
+-BASE_FEATURE(kTtc, base::FEATURE_DISABLED_BY_DEFAULT);
++BASE_OVERRIDDEN_FEATURE(kTtc, base::FEATURE_DISABLED_BY_DEFAULT);
+ 
+ BASE_FEATURE(kTtcLiveRecipe, base::FEATURE_DISABLED_BY_DEFAULT);
+ 

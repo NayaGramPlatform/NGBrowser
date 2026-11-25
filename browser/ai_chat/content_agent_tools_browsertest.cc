@@ -24,6 +24,7 @@
 #include "chrome/browser/actor/actor_task.h"
 #include "chrome/browser/actor/execution_engine.h"
 #include "chrome/browser/actor/site_policy.h"
+#include "chrome/browser/actor/ui/actor_ui_state_manager.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/common/chrome_features.h"
@@ -57,7 +58,10 @@ class ContentAgentToolsTest : public InProcessBrowserTest {
   ContentAgentToolsTest() {
     scoped_feature_list_.InitWithFeatures(
         /*enabled_features=*/{features::kAIChatAgentProfile},
-        /*disabled_features=*/{actor::kGlicCrossOriginNavigationGating});
+        // kGlicConfirmTabClose: typed test navigations on the task tab would
+        // otherwise block on the "Leave site and end task?" dialog.
+        /*disabled_features=*/{actor::kGlicCrossOriginNavigationGating,
+                               ::features::kGlicConfirmTabClose});
   }
 
   ~ContentAgentToolsTest() override = default;
@@ -92,7 +96,8 @@ class ContentAgentToolsTest : public InProcessBrowserTest {
 
     // Get the browser tool provider
     tool_provider_ = std::make_unique<ContentAgentToolProvider>(
-        GetProfile(), actor_service, *actor_service->GetActorUiStateManager());
+        GetProfile(), actor_service,
+        *actor::ui::ActorUiStateManager::Get(GetProfile()));
     ASSERT_NE(tool_provider_, nullptr);
   }
 

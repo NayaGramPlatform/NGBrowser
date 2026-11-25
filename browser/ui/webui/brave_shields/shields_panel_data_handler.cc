@@ -11,7 +11,7 @@
 #include "base/task/sequenced_task_runner.h"
 #include "brave/browser/brave_browser_process.h"
 #include "brave/browser/ui/webui/webcompat_reporter/webcompat_reporter_dialog.h"
-#include "brave/components/brave_shields/content/browser/ad_block_service.h"
+#include "brave/components/brave_shields/core/browser/ad_block_service.h"
 #include "brave/components/brave_shields/core/browser/brave_shields_settings_service.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/webui/top_chrome/top_chrome_web_ui_controller.h"
@@ -36,15 +36,12 @@ ShieldsPanelDataHandler::ShieldsPanelDataHandler(
   DCHECK(tab_strip_model);
   tab_strip_model->AddObserver(this);
 
-  auto* web_contents = tab_strip_model->GetActiveWebContents();
-  if (!web_contents) {
+  auto* shields_data_controller =
+      BraveShieldsTabHelper::From(tab_strip_model->GetActiveTab());
+  if (!shields_data_controller) {
     return;
   }
-  active_shields_data_controller_ =
-      BraveShieldsTabHelper::FromWebContents(web_contents);
-  if (!active_shields_data_controller_) {
-    return;
-  }
+  active_shields_data_controller_ = shields_data_controller->GetWeakPtr();
 
   UpdateSiteBlockInfo();
   active_shields_data_controller_->AddObserver(this);
@@ -363,9 +360,9 @@ void ShieldsPanelDataHandler::OnTabStripModelChanged(
       active_shields_data_controller_ = nullptr;
     }
 
-    if (selection.new_contents) {
-      active_shields_data_controller_ =
-          BraveShieldsTabHelper::FromWebContents(selection.new_contents);
+    if (auto* shields_data_controller =
+            BraveShieldsTabHelper::From(selection.new_tab)) {
+      active_shields_data_controller_ = shields_data_controller->GetWeakPtr();
       active_shields_data_controller_->AddObserver(this);
 
       // OnResourcesChanged doesnt get triggered instantly on active tab change

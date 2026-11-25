@@ -11,18 +11,22 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
 
+#include "base/containers/flat_map.h"
+#include "base/containers/flat_set.h"
 #include "base/functional/callback.h"
+#include "base/functional/callback_forward.h"
 #include "base/functional/callback_helpers.h"
-#include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_multi_source_observation.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/threading/sequence_bound.h"
 #include "brave/components/ai_chat/core/browser/ai_chat_credential_manager.h"
 #include "brave/components/ai_chat/core/browser/ai_chat_database.h"
@@ -85,6 +89,21 @@ class AIChatService : public KeyedService,
   using GetFocusTabsCallback = base::OnceCallback<void(
       base::expected<std::vector<std::string>, mojom::APIError>)>;
 
+  // Tells the user when a response finishes in the background.
+  class NotificationDelegate {
+   public:
+    virtual ~NotificationDelegate() = default;
+
+    // |conversation_title| is empty if the conversation has none.
+    virtual void ShowCompletionNotification(
+        const std::string& conversation_uuid,
+        const std::u16string& conversation_title) = 0;
+
+    // The conversation was viewed or removed.
+    virtual void CloseCompletionNotification(
+        const std::string& conversation_uuid) = 0;
+  };
+
   AIChatService(
       ModelService* model_service,
       TabTrackerService* tab_tracker_service,
@@ -124,6 +143,8 @@ class AIChatService : public KeyedService,
       std::optional<PageContents> maybe_associated_content) override;
   void OnConversationEntryRemoved(ConversationHandler* handler,
                                   const std::string& entry_uuid) override;
+  void OnNewConversationThread(ConversationHandler* handler,
+                               const mojom::Thread& thread) override;
   void OnToolUseEventOutput(ConversationHandler* handler,
                             const std::string& entry_uuid,
                             size_t event_order,
@@ -131,9 +152,11 @@ class AIChatService : public KeyedService,
   void OnClientConnectionChanged(ConversationHandler* handler) override;
   void OnConversationTitleChanged(const std::string& conversation_uuid,
                                   const std::string& title) override;
-  void OnConversationTokenInfoChanged(const std::string& conversation_uuid,
-                                      uint64_t total_tokens,
-                                      uint64_t trimmed_tokens) override;
+  void OnConversationTokenInfoChanged(
+      const std::string& conversation_uuid,
+      std::optional<std::string_view> thread_uuid,
+      uint64_t total_tokens,
+      uint64_t trimmed_tokens) override;
   void OnAssociatedContentUpdated(ConversationHandler* handler) override;
 
   // mojom::TabDataObserver
@@ -148,6 +171,11 @@ class AIChatService : public KeyedService,
   ConversationHandler* GetConversation(std::string_view uuid);
   void GetConversation(std::string_view conversation_uuid,
                        base::OnceCallback<void(ConversationHandler*)>);
+
+  void GetConversationThreadEntries(
+      const std::string& thread_uuid,
+      base::OnceCallback<void(std::vector<mojom::ConversationTurnPtr>)>
+          callback);
 
   // Creates and owns a ConversationHandler if one hasn't been made for the
   // associated_content_id yet. |associated_content_id| should not be stored. It
@@ -239,14 +267,31 @@ class AIChatService : public KeyedService,
   void BindUntrustedService(
       mojo::PendingReceiver<mojom::UntrustedService> receiver);
 
-  bool GetIsContentAgentAllowed() const;
-  void SetIsContentAgentAllowed(bool is_allowed);
+  bool content_agent_tools_allowed() const {
+    return content_agent_tools_allowed_;
+  }
+  void set_content_agent_tools_allowed(bool allowed) {
+    content_agent_tools_allowed_ = allowed;
+  }
+
+  bool content_agent_user_selectable() const {
+    return content_agent_user_selectable_;
+  }
+  void set_content_agent_user_selectable(bool user_selectable) {
+    content_agent_user_selectable_ = user_selectable;
+  }
 
   bool HasUserOptedIn();
   bool IsPremiumStatus();
 
   // Whether the feature and user preference for history storage is enabled
   bool IsAIChatHistoryEnabled();
+
+  std::unique_ptr<AssociatedContentDelegate>
+  RestoreWorkspaceAssociatedContentFromUrl(const GURL& url,
+                                           const std::string& content_uuid);
+
+  void SetNotificationDelegate(std::unique_ptr<NotificationDelegate> delegate);
 
   std::unique_ptr<EngineConsumer> GetDefaultAIEngine();
   std::unique_ptr<EngineConsumer> GetEngineForModel(
@@ -289,12 +334,21 @@ class AIChatService : public KeyedService,
   void SetDatabaseForTesting(base::SequenceBound<AIChatDatabase> db) {
     ai_chat_db_ = std::move(db);
   }
+  bool HasDatabaseForTesting() const { return !ai_chat_db_.is_null(); }
+  // Null until storage has been initialized.
+  scoped_refptr<base::SequencedTaskRunner> GetDatabaseTaskRunnerForTesting()
+      const {
+    return db_task_runner_;
+  }
+
+  void SetWorkspaceContentRestorer(
+      base::RepeatingCallback<
+          std::unique_ptr<AssociatedContentDelegate>(GURL, std::string)>
+          workspace_content_restorer) {
+    workspace_content_restorer_ = std::move(workspace_content_restorer);
+  }
 
  private:
-  friend class AIChatServiceUnitTest;
-  FRIEND_TEST_ALL_PREFIXES(AIChatServiceUnitTest,
-                           CreateTabOrganizationEngineIfNeeded_InvalidModelKey);
-
   // Key is uuid
   using ConversationMap =
       std::map<std::string, mojom::ConversationPtr, std::less<>>;
@@ -393,15 +447,31 @@ class AIChatService : public KeyedService,
 
   void CreateTabOrganizationEngineIfNeeded();
   void OnTabOrganizationModelPrefChanged();
+  void OnTabOrganizationSendPageContentPrefChanged();
 
   void OnSuggestedTopicsReceived(
+      size_t passage_count,
       GetSuggestedTopicsCallback callback,
       base::expected<std::vector<std::string>, mojom::APIError> topics);
   void OnGetFocusTabs(
       GetFocusTabsCallback callback,
       base::expected<std::vector<std::string>, mojom::APIError> result);
-  std::vector<std::unique_ptr<ToolProvider>>
-  CreateToolProvidersForNewConversation();
+  // Creates the tool providers for |conversation| and adds them to it.
+  void AddToolProvidersToConversation(ConversationHandler* conversation);
+  // Sends |conversation_generation_state_| to all |observer_remotes_| and
+  // closes out-of-date notifications.
+  void NotifyConversationGenerationStateChanged();
+  // Whether |uuid| has a loaded ConversationHandler with a connected client.
+  // This doesn't mean the conversation is on screen.
+  bool IsConversationClientConnected(const std::string& uuid) const;
+  // Marks |conversation_uuid| as no longer generating once its handler is
+  // neither generating nor running tools: kCompletedNotViewed, or idle if a
+  // client is connected.
+  void MaybeMarkGenerationComplete(const std::string& conversation_uuid);
+  // DeleteConversation() without OnConversationListChanged(), for callers that
+  // delete several conversations and then send the list once.
+  void DeleteConversationWithoutNotifyingList(const std::string& id);
+  void ShowCompletionNotification(const std::string& uuid);
 
   raw_ptr<ModelService> model_service_;
   raw_ptr<TabTrackerService> tab_tracker_service_;
@@ -438,6 +508,11 @@ class AIChatService : public KeyedService,
   // All conversation metadata. Mainly just titles and uuids.
   ConversationMap conversations_;
 
+  // Used to restore a WorkspaceAssociatedContent from a url.
+  base::RepeatingCallback<
+      std::unique_ptr<AssociatedContentDelegate>(GURL, std::string)>
+      workspace_content_restorer_;
+
   // Only keep ConversationHandlers around that are being
   // actively used. Any metadata that needs to stay in-memory
   // should be kept in |conversations_|. Any other data only for viewing
@@ -457,6 +532,11 @@ class AIChatService : public KeyedService,
   // Cached suggested topics for users to be focused on from the latest
   // GetSuggestedTopics call, would be cleared when there are tab data changes.
   std::vector<std::string> cached_focus_topics_;
+  // Total passages `cached_focus_topics_` was derived from, so it only means
+  // anything while that is non-empty. Excerpts arrive from background indexing,
+  // which clears nothing, and any tab change clears the cache anyway, so with
+  // the same tabs a different total means different excerpts.
+  size_t cached_focus_passage_count_ = 0;
 
   base::ScopedMultiSourceObservation<ConversationHandler,
                                      ConversationHandler::Observer>
@@ -468,6 +548,11 @@ class AIChatService : public KeyedService,
   mojo::RemoteSet<mojom::UntrustedServiceObserver>
       untrusted_service_observer_remotes_;
 
+  // Session-only generation state per conversation uuid. A conversation with
+  // no entry is idle.
+  base::flat_map<std::string, mojom::ConversationGenerationState>
+      conversation_generation_state_;
+
   mojo::Receiver<mojom::TabDataObserver> tab_data_observer_receiver_{this};
 
   // AIChatCredentialManager / Skus does not provide an event when
@@ -475,9 +560,16 @@ class AIChatService : public KeyedService,
   // often (whenever UI is focused).
   mojom::PremiumStatus last_premium_status_ = mojom::PremiumStatus::Unknown;
 
-  // Whether conversations can utilize content agent capabilities. For now,
-  // this is profile-specific.
-  bool is_content_agent_allowed_ = false;
+  // Whether conversations can utilize content agent capabilities, i.e. whether
+  // the content agent's tools are registered for this profile. For now, this is
+  // profile-specific.
+  bool content_agent_tools_allowed_ = false;
+
+  // Whether the user decides, per conversation, if the content agent is used.
+  // Independent of |content_agent_tools_allowed_|: main profiles offer the
+  // choice before the tools are registered there, and the dedicated agent
+  // profile registers the tools without offering a choice.
+  bool content_agent_user_selectable_ = false;
 
   // Background task runner for the database and sync bridge. Created
   // synchronously the first time MaybeInitStorage() succeeds so that a
@@ -496,6 +588,10 @@ class AIChatService : public KeyedService,
   // can hand out a proxy delegate before the bridge itself exists; the bridge
   // is owned, accessed, and destroyed only on |db_task_runner_|.
   scoped_refptr<AIChatSyncBackend> sync_backend_;
+
+  std::unique_ptr<NotificationDelegate> notification_delegate_;
+  // Conversations we've shown a notification for.
+  base::flat_set<std::string> notified_conversations_;
 
   base::WeakPtrFactory<AIChatService> weak_ptr_factory_{this};
 };

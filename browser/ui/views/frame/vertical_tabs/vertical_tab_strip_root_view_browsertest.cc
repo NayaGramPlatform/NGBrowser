@@ -3,12 +3,12 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+#include "base/test/test_future.h"
 #include "brave/browser/ui/browser_commands.h"
 #include "brave/browser/ui/tabs/public/vertical_tab_controller.h"
 #include "brave/browser/ui/views/frame/brave_browser_view.h"
 #include "brave/browser/ui/views/frame/vertical_tabs/vertical_tab_strip_container_view.h"
 #include "brave/browser/ui/views/frame/vertical_tabs/vertical_tab_strip_region_view.h"
-#include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/views/frame/browser_frame_view.h"
 #include "chrome/browser/ui/views/frame/browser_root_view.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
@@ -21,6 +21,7 @@
 #include "ui/base/dragdrop/mojom/drag_drop_types.mojom.h"
 #include "ui/base/dragdrop/os_exchange_data.h"
 #include "ui/base/mojom/menu_source_type.mojom.h"
+#include "ui/compositor/layer_tree_owner.h"
 
 class VerticalTabStripRootViewBrowserTest : public InProcessBrowserTest {
  public:
@@ -71,8 +72,9 @@ class VerticalTabStripRootViewBrowserTest : public InProcessBrowserTest {
     BrowserRootView* root_view = browser_root_view();
     EXPECT_NE(nullptr, root_view);
 
-    base::RunLoop run_loop;
-    root_view->SetOnFilteringCompleteClosureForTesting(run_loop.QuitClosure());
+    base::test::TestFuture<void> filtering_done;
+    root_view->SetOnFilteringCompleteClosureForTesting(
+        filtering_done.GetCallback());
     root_view->OnDragEntered(event);
 
     // At this point, the drag information will have been set, and a background
@@ -80,7 +82,7 @@ class VerticalTabStripRootViewBrowserTest : public InProcessBrowserTest {
     // (`GetURLMimeTypes()` -> `FilterURLs()`). Ensure that all background
     // processing is complete before checking the drag operation or invoking the
     // drag callback.
-    run_loop.Run();
+    ASSERT_TRUE(filtering_done.Wait());
 
     EXPECT_NE(ui::DragDropTypes::DRAG_NONE, root_view->OnDragUpdated(event));
 
@@ -98,8 +100,8 @@ IN_PROC_BROWSER_TEST_F(VerticalTabStripRootViewBrowserTest,
                        MAYBE_DragAfterCurrentTab) {
   ToggleVerticalTabStrip();
 
-  ASSERT_TRUE(VerticalTabController::FromBrowser(browser())
-                  ->ShouldShowBraveVerticalTabs());
+  ASSERT_TRUE(
+      VerticalTabController::From(browser())->ShouldShowBraveVerticalTabs());
 
   auto* tab_strip_model = browser()->tab_strip_model();
   EXPECT_EQ(tab_strip_model->count(), 1);
@@ -134,8 +136,8 @@ IN_PROC_BROWSER_TEST_F(VerticalTabStripRootViewBrowserTest,
                        MAYBE_DragOnCurrentTab) {
   ToggleVerticalTabStrip();
 
-  ASSERT_TRUE(VerticalTabController::FromBrowser(browser())
-                  ->ShouldShowBraveVerticalTabs());
+  ASSERT_TRUE(
+      VerticalTabController::From(browser())->ShouldShowBraveVerticalTabs());
 
   auto* tab_strip_model = browser()->tab_strip_model();
   EXPECT_EQ(tab_strip_model->count(), 1);
@@ -179,8 +181,8 @@ IN_PROC_BROWSER_TEST_F(VerticalTabStripRootViewBrowserTest,
                        MAYBE_ContextMenuInUnobscuredRegion) {
   ToggleVerticalTabStrip();
 
-  ASSERT_TRUE(VerticalTabController::FromBrowser(browser())
-                  ->ShouldShowBraveVerticalTabs());
+  ASSERT_TRUE(
+      VerticalTabController::From(browser())->ShouldShowBraveVerticalTabs());
 
   auto* region_view =
       vertical_tab_strip_container_view()->vertical_tab_strip_region_view();
@@ -209,8 +211,8 @@ IN_PROC_BROWSER_TEST_F(VerticalTabStripRootViewBrowserTest,
                        MAYBE_CloseBrowserWithContextMenuOpen) {
   ToggleVerticalTabStrip();
 
-  ASSERT_TRUE(VerticalTabController::FromBrowser(browser())
-                  ->ShouldShowBraveVerticalTabs());
+  ASSERT_TRUE(
+      VerticalTabController::From(browser())->ShouldShowBraveVerticalTabs());
 
   auto* region_view =
       vertical_tab_strip_container_view()->vertical_tab_strip_region_view();

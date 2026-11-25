@@ -1,5 +1,5 @@
 diff --git a/chrome/browser/ui/web_applications/BUILD.gn b/chrome/browser/ui/web_applications/BUILD.gn
-index 67fdbc4ecccc85b1d12a26bdb26e04fbd1f1bd49..a50e40593cc5ba3417e0be4b7bbf88d4169c98dc 100644
+index e30285918d768bb1f64c338ba2184ea5820ffb86..97dafdf309221ea6dabb76884a570637bc5525c4 100644
 --- a/chrome/browser/ui/web_applications/BUILD.gn
 +++ b/chrome/browser/ui/web_applications/BUILD.gn
 @@ -2,6 +2,7 @@
@@ -10,8 +10,8 @@ index 67fdbc4ecccc85b1d12a26bdb26e04fbd1f1bd49..a50e40593cc5ba3417e0be4b7bbf88d4
  import("//build/config/ui.gni")
  import("//extensions/buildflags/buildflags.gni")
  
-@@ -105,6 +106,7 @@ source_set("impl") {
-     "//chrome/browser/ui:browser_window_state",
+@@ -119,6 +120,7 @@ source_set("impl") {
+     "//chrome/browser/ui:unload_controller",
      "//chrome/browser/ui/browser_window:create_browser_window",
    ]
 +  deps += brave_chrome_browser_ui_web_applications_deps

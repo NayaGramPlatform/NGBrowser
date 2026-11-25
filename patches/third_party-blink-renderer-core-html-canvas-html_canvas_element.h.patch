@@ -1,8 +1,8 @@
 diff --git a/third_party/blink/renderer/core/html/canvas/html_canvas_element.h b/third_party/blink/renderer/core/html/canvas/html_canvas_element.h
-index 179817e58cabf2686bf30258cfa27a8c8c0ec9b8..cdd7e61abc365b980fd1d79aaa2d189297b08241 100644
+index c97d6d2b2b935338bc4a78d44cb8ef04e1829bca..64d78358c5a077e4f2c1e479e7acb6cf3ed9a5da 100644
 --- a/third_party/blink/renderer/core/html/canvas/html_canvas_element.h
 +++ b/third_party/blink/renderer/core/html/canvas/html_canvas_element.h
-@@ -408,12 +408,21 @@ class CORE_EXPORT HTMLCanvasElement final
+@@ -407,12 +407,21 @@ class CORE_EXPORT HTMLCanvasElement final
      return hit_testable_descendants_;
    }
  
@@ -21,6 +21,6 @@ index 179817e58cabf2686bf30258cfa27a8c8c0ec9b8..cdd7e61abc365b980fd1d79aaa2d1892
  
   private:
 +  mutable UntracedMember<ExecutionContext> scoped_execution_context_;
-   void Dispose();
- 
-   void ColorSchemeMayHaveChanged();
+   // Notifies the `cc::LayerTreeHost` that a canvas frame was dispatched
+   // directly (bypassing the main-thread commit).
+   void NotifyOutOfBandFrame();

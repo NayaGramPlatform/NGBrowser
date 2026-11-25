@@ -80,6 +80,7 @@
 <translation id="8982438328166986164">북마크 및 인터넷 사용 기록을 기반으로 한 추천 웹사이트를 표시합니다.</translation>
 <translation id="924029461438529367">추천 검색어 표시</translation>
 <translation id="9148058034647219655">나가기</translation>
+<translation id="2139186145475833000">홈 화면에 추가</translation>
 <translation id="7534079972563542000">Unstoppable Domains</translation>
 <translation id="6486983549008741930">콘텐츠 필터링</translation>
 <translation id="2398817776566547893">맞춤 필터를 활성화하여 특정 지역 및 언어에 특화된 트래커 등 짜증 나는 요소를 차단합니다.</translation>
@@ -193,9 +194,6 @@
 <translation id="5668852698659986622">스폰서 광고 활성화</translation>
 <translation id="431194936581466649">스폰서 광고로 독립적이고 사용자 우선의 웹을 구축하려는 Brave의 미션을 지원하세요. 저희는 광고 성과를 사용자를 식별하지 않고 비공개로 측정합니다.</translation>
 <translation id="1939813747486101115">스폰서 광고에 대해 자세히 알아보기</translation>
-<translation id="8347743943525229984">Brave 설문조사 허용</translation>
-<translation id="6022939994702081659">새 탭 페이지에서 비공개 설문조사 링크를 표시할 수 있도록 허용합니다. 설문조사는 더 나은 기능을 개발하고, 브라우저 기반 광고 캠페인의 효과를 측정하는 데 도움이 됩니다.</translation>
-<translation id="7746496306508543965">Brave 설문조사에 대해 자세히 알아보기</translation>
 <translation id="410351446219883937">자동재생</translation>
 <translation id="7445411102860286510">사이트에서 음소거된 동영상을 자동재생하도록 허용(권장)</translation>
 <translation id="7837721118676387834">특정 사이트에서 음소거된 동영상이 자동재생되도록 허용합니다.</translation>
@@ -292,7 +290,7 @@
 <translation id="2569646144216067185">글자 수: <ph name="WORD_COUNT"/></translation>
 <translation id="7507533586185621084">잘못된 동기화 코드</translation>
 <translation id="8284063834901328650">잘못된 동기화 QR 코드</translation>
-<translation id="859506441384380749">이 코드는 더 이상 지원되지 않는 Brave 구버전에서 생성되었습니다. 다른 기기를 먼저 업그레이드하세요.</translation>
+<translation id="4002014583969312635">이 코드는 구버전 Brave를 실행 중인 기기에서 만들어진 것 같습니다. 다른 기기에서 최신 버전의 Brave로 업데이트한 다음, 새 동기화 코드를 만드세요.</translation>
 <translation id="3132642509209154999">만료된 코드입니다. 다른 기기에서 새 코드를 생성하고 다시 시도하세요.</translation>
 <translation id="2859229680945501779">유효하지 않은 코드입니다. 디바이스에 시간과 시간대가 제대로 설정되어 있는지 확인하세요.</translation>
 <translation id="3149880132460839085">Brave 동기화</translation>
@@ -338,8 +336,6 @@
 <translation id="8185825081026121627">개인정보를 보호하는 Brave 상금 광고를 시청하고 기본 관심 토큰을 받으세요.</translation>
 <translation id="5321518976657560663">오류 초기화</translation>
 <translation id="4114170343590425996">Brave 리워드 초기화 중 오류가 발생했습니다. Brave를 재실행하고 다시 시도하세요.</translation>
-<translation id="6417420737057016607">Brave 광고</translation>
-<translation id="5611966874859284786">Brave를 사용하지 않을 때 알림 광고 표시</translation>
 <translation id="5717636703619499822"><ph name="BEGIN_LINK1"/>Brave 리워드 데이터 초기화…<ph name="END_LINK1"/></translation>
 <translation id="1830919318137227284"><ph name="BEGIN_LINK1"/>Brave Ads 데이터 지우기…<ph name="END_LINK1"/></translation>
 <translation id="8293206222192510085">북마크 추가</translation>
@@ -398,6 +394,13 @@
 <translation id="8793108040181436796">위젯</translation>
 <translation id="8643377320501056697">탑 사이트 보기</translation>
 <translation id="7275773481201277457">Brave Stats 보기</translation>
+<translation id="8516804522688861636">자주 방문하는 사이트 표시</translation>
+<translation id="4546260624932151782">즐겨찾기 표시</translation>
+<translation id="5313967007315987356">사이트 추가</translation>
+<translation id="1773147648972887693">자주 방문하는 사이트 표시</translation>
+<translation id="7134741506051403308">위젯 숨기기</translation>
+<translation id="1247759249260562308">즐겨찾기 편집</translation>
+<translation id="6387214885349500492">이 즐겨찾기 고정</translation>
 <translation id="7462178177755090262">시작 화면</translation>
 <translation id="5365434987337264071">마지막으로 열었던 탭</translation>
 <translation id="6019856124237323989">{HOURS, plural,
@@ -975,6 +978,7 @@
 <translation id="6365389672683343144">Brave VPN 구독은 최대 5대의 Android, iOS, 데스크톱 기기를 보호할 수 있습니다. Google Play 구독을 Brave 계정에 연결하기만 하면 됩니다.</translation>
 <translation id="6610899852831463073">세이프 브라우징 활성화 불가</translation>
 <translation id="7954263306665462056">세이프 브라우징이 디바이스에 비활성화되어 있습니다. 활성화하려면 Google Play Services를 설치하고 최신 상태로 업데이트하세요.</translation>
+<translation id="6417420737057016607">Brave 광고</translation>
 <translation id="7748944510530490017">주사용 네트워크</translation>
 <translation id="2781668117338732220">보조 네트워크</translation>
 <translation id="282560918037172384">테스트 네트워크</translation>
@@ -1001,6 +1005,13 @@
 <translation id="7530313002494358590">Brave 기능을 활성화하거나 비활성화하려면 브라우저를 다시 시작하여 변경 사항을 적용해야 합니다. Brave Origin 업데이트가 완료되면 <ph name="BEGIN_BOLD"/>지금 다시 시작<ph name="END_BOLD"/>을 탭하세요.</translation>
 <translation id="1028940738207645746">모든 설정을 기본값으로 재설정하시겠습니까?</translation>
 <translation id="5939518447894949180">초기화</translation>
+<translation id="3222790865318305905">활성화 한도 도달</translation>
+<translation id="3787857711016546034">사기를 방지하기 위해 Origin 활성화에는 횟수 제한이 있습니다. 하지만 언제든지 추가 활성화를 요청하여 더 많은 기기에서 Origin 라이선스를 사용할 수 있습니다. 추가 활성화 요청 옵션을 클릭하거나 도움이 필요하면 <ph name="CONTACT_SUPPORT"/>하세요.</translation>
+<translation id="6760819753412779585">지원팀에 문의</translation>
+<translation id="571697836019670200">추가 활성화 요청</translation>
+<translation id="9019545131475425538">처리 중…</translation>
+<translation id="7242700630179071243">활성화 준비 완료</translation>
+<translation id="5463918917265356202">이제 이 기기에서 Brave Origin이 활성화되었습니다. 이 기능을 사용하려면 브라우저를 다시 시작해야 합니다. 지금 다시 시작하시겠습니까?</translation>
 <translation id="8554205386170195281">구매</translation>
 <translation id="8613144770663526433">Brave 월렛으로 로그인</translation>
 <translation id="3696514931437952995"><ph name="ORIGIN"/>에 로그인합니다. Brave 월렛이 귀하의 월렛 주소를 <ph name="ORIGIN"/>에 공유합니다.</translation>

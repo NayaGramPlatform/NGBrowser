@@ -4,7 +4,6 @@
 // You can obtain one at https://mozilla.org/MPL/2.0/.
 
 #include <memory>
-#include <optional>
 #include <string>
 
 #include "base/test/bind.h"
@@ -16,7 +15,6 @@
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/search_engines/template_url_service_factory.h"
-#include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/omnibox/omnibox_controller.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/webui/searchbox/realbox_handler.h"
@@ -34,8 +32,8 @@
 #include "content/public/test/browser_test_utils.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/base/mojom/window_open_disposition.mojom.h"
 #include "ui/base/page_transition_types.h"
-#include "ui/base/window_open_disposition.h"
 
 #if BUILDFLAG(ENABLE_AI_CHAT)
 #include "brave/components/ai_chat/core/common/features.h"
@@ -43,7 +41,8 @@
 
 struct NewTabSourceTestParams {
   const std::string source;
-  const std::optional<base::test::FeatureRef> enabled_feature;
+  const bool search_v1_enabled;
+  const bool ai_chat_input_enabled;
 };
 
 class BraveRealboxHandlerTest : public InProcessBrowserTest {
@@ -70,10 +69,10 @@ class BraveRealboxHandlerTest : public InProcessBrowserTest {
     AutocompleteMatch match;
     match.keyword = keyword;
     handler.omnibox_controller()->client()->OnAutocompleteAccept(
-        url, nullptr, WindowOpenDisposition::CURRENT_TAB,
+        url, nullptr, ui::mojom::WindowOpenDisposition::kCurrentTab,
         ui::PageTransition::PAGE_TRANSITION_TYPED,
-        AutocompleteMatchType::SEARCH_SUGGEST, base::TimeTicks::Now(), false,
-        false, u"", match, match);
+        omnibox::AutocompleteMatchType::kSearchSuggest, base::TimeTicks::Now(),
+        false, false, u"", match, match);
     content::WaitForLoadStop(contents());
   }
 
@@ -96,9 +95,14 @@ class BraveRealboxHandlerSourceTest
       public testing::WithParamInterface<NewTabSourceTestParams> {
  public:
   BraveRealboxHandlerSourceTest() {
-    if (GetParam().enabled_feature) {
-      scoped_feature_list_.InitWithFeatures({*GetParam().enabled_feature}, {});
-    }
+    scoped_feature_list_.InitWithFeatureStates({
+        {brave_search::features::kSearchNewTabV1Source,
+         GetParam().search_v1_enabled},
+#if BUILDFLAG(ENABLE_AI_CHAT)
+        {ai_chat::features::kShowAIChatInputOnNewTabPage,
+         GetParam().ai_chat_input_enabled},
+#endif
+    });
   }
 
  protected:
@@ -127,16 +131,13 @@ IN_PROC_BROWSER_TEST_P(BraveRealboxHandlerSourceTest,
 INSTANTIATE_TEST_SUITE_P(
     ,
     BraveRealboxHandlerSourceTest,
-    testing::Values(
-        NewTabSourceTestParams{"newtab", std::nullopt},
-        NewTabSourceTestParams{"newtab_v1b",
-                               brave_search::features::kSearchNewTabV1Source}
+    testing::Values(NewTabSourceTestParams{"newtab", false, false},
+                    NewTabSourceTestParams{"newtab_v1b", true, false}
 #if BUILDFLAG(ENABLE_AI_CHAT)
-        ,
-        NewTabSourceTestParams{"newtab_v2b",
-                               ai_chat::features::kShowAIChatInputOnNewTabPage}
+                    ,
+                    NewTabSourceTestParams{"newtab_v2b", false, true}
 #endif
-        ));
+                    ));
 
 IN_PROC_BROWSER_TEST_F(BraveRealboxHandlerTest,
                        BraveSearchNoKeywordIsUnaffected) {

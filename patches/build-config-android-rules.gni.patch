@@ -1,12 +1,16 @@
 diff --git a/build/config/android/rules.gni b/build/config/android/rules.gni
-index e2c65b898e377cac31638b371d48b1abb7a25255..51b218aa362bc1a3f9fecd6cf643ee9648fd7582 100644
+index e36929c35a0fbd5ddc407a7bac1cafc0fa11acb5..53470b62a602ff6e581b7f90ca0b9d459c13c881 100644
 --- a/build/config/android/rules.gni
 +++ b/build/config/android/rules.gni
-@@ -412,6 +412,7 @@ if (!is_robolectric && enable_java_templates) {
+@@ -413,6 +413,11 @@ if (!is_robolectric && enable_java_templates) {
    #     output = "$target_gen_dir/AndroidManifest.xml"
    #   }
    template("jinja_template") {
-+    if (defined(invoker.includes)) { invoker.includes += brave_android_manifest_includes } else { invoker.includes = brave_android_manifest_includes }
++    if (defined(invoker.includes)) {
++      invoker.includes += brave_android_manifest_includes
++    } else {
++      invoker.includes = brave_android_manifest_includes
++    }
      action_with_pydeps(target_name) {
        forward_variables_from(invoker, TESTONLY_AND_VISIBILITY + [ "deps" ])
        inputs = [ invoker.input ]

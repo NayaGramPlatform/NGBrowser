@@ -1,12 +1,36 @@
 diff --git a/third_party/blink/renderer/core/BUILD.gn b/third_party/blink/renderer/core/BUILD.gn
-index 383115087fb61a1901983b7ebefe32a0c40f7d1a..1b63be0d54c3f8b9050d0b888f922d821ff21be1 100644
+index bf9c2c4b6485a2cf28df4daffb56673d52779a91..4fbae68386ce9f2b101a8d13548560950bcdf104 100644
 --- a/third_party/blink/renderer/core/BUILD.gn
 +++ b/third_party/blink/renderer/core/BUILD.gn
-@@ -476,6 +476,7 @@ component("core") {
+@@ -264,6 +264,7 @@ component("core") {
+     "core_initializer.cc",
+     "core_initializer.h",
+   ]
++  sources += brave_blink_renderer_core_sources
+ 
+   sources += blink_core_sources_bindings
+ 
+@@ -395,6 +396,7 @@ component("core") {
+     "//url",
+     "//v8",
+   ]
++  public_deps += brave_blink_renderer_core_public_deps
+ 
+   if (is_mac) {
+     public_deps += [ "//ui/gfx" ]
+@@ -447,6 +449,7 @@ component("core") {
+     "//ui/gfx/geometry:geometry_skia",
+     "//ui/strings",
+   ]
++  deps += brave_blink_renderer_core_deps
+ 
+   if (is_mac) {
+     deps += [ "//ui/base/mojom" ]
+@@ -479,6 +482,7 @@ component("core") {
        "Carbon.framework",
      ]
    }
-+  visibility += brave_blink_renderer_core_visibility public_deps += brave_blink_renderer_core_public_deps sources += brave_blink_renderer_core_sources deps += brave_blink_renderer_core_deps
++  visibility += brave_blink_renderer_core_visibility
  }
  
- # Certain sources should be compiled with heavy optimization enabled.
+ # Isolate loader/resource/font_resource.{h,cc} from component("core") because

@@ -98,9 +98,6 @@ class BraveVerticalTabStripRegionView : public views::View,
   void ResetExpandedWidth();
   bool IsMenuShowing() const;
 
-  void ListenFullscreenChanges();
-  void StopListeningFullscreenChanges();
-
   // Handles a mouse move event from the browser-wide mouse move monitor.
   // Shows the vertical tab strip when the mouse moves around the hot corner
   // while it's completely hidden, and collapses it when the mouse moves out
@@ -116,6 +113,8 @@ class BraveVerticalTabStripRegionView : public views::View,
       const views::SizeBounds& available_size) const override;
   gfx::Size GetMinimumSize() const override;
   void Layout(PassKey) override;
+  void AddedToWidget() override;
+  void RemovedFromWidget() override;
   void OnThemeChanged() override;
   void OnMouseExited(const ui::MouseEvent& event) override;
   void OnMouseEntered(const ui::MouseEvent& event) override;
@@ -144,7 +143,6 @@ class BraveVerticalTabStripRegionView : public views::View,
       ui::mojom::MenuSourceType source_type) override;
 
  private:
-  FRIEND_TEST_ALL_PREFIXES(VerticalTabStripBrowserTest, VisualState);
   FRIEND_TEST_ALL_PREFIXES(VerticalTabStripBrowserTest, ExpandedState);
   FRIEND_TEST_ALL_PREFIXES(VerticalTabStripBrowserTest, ExpandedWidth);
   FRIEND_TEST_ALL_PREFIXES(VerticalTabStripBrowserTest,
@@ -163,7 +161,7 @@ class BraveVerticalTabStripRegionView : public views::View,
   void UpdateStateAfterDragAndDropFinished(State original_state);
 
   void OnShowVerticalTabsPrefChanged();
-  void OnBrowserPanelsMoved();
+  void OnVerticalTabSideChanged();
 
   void UpdateLayout();
 
@@ -242,7 +240,6 @@ class BraveVerticalTabStripRegionView : public views::View,
   State last_state_ = State::kExpanded;
   std::optional<State> floating_restore_state_;
 
-  BooleanPrefMember sidebar_side_;
   BooleanPrefMember show_vertical_tabs_;
   BooleanPrefMember collapsed_pref_;
   BooleanPrefMember expanded_state_per_window_pref_;
@@ -255,8 +252,6 @@ class BraveVerticalTabStripRegionView : public views::View,
 
   base::OneShotTimer mouse_enter_timer_;
   base::OneShotTimer mouse_exit_timer_;
-
-  bool mouse_events_for_test_ = false;
 
   gfx::SlideAnimation width_animation_{this};
 

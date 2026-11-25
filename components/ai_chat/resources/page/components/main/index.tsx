@@ -4,10 +4,10 @@
  * You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 import * as React from 'react'
-import AlertCenter from '@brave/leo/react/alertCenter'
-import Button from '@brave/leo/react/button'
-import Dialog from '@brave/leo/react/dialog'
-import Icon from '@brave/leo/react/icon'
+import AlertCenter from '@brave/nala/react/alertCenter'
+import Button from '@brave/nala/react/button'
+import Dialog from '@brave/nala/react/dialog'
+import Icon from '@brave/nala/react/icon'
 import { getLocale } from '$web-common/locale'
 import classnames from '$web-common/classnames'
 import DragOverlay from '../drag_overlay'
@@ -20,12 +20,14 @@ import DeleteConversationModal from '../delete_conversation_modal'
 import { ConversationHeader } from '../header'
 import InputBox, { type InputBoxHandle } from '../input_box'
 import ImageLightbox from '../image_lightbox'
+import WorkspaceFileLightbox from '../workspace_file_lightbox'
 import RateMessagePrivacyModal from '../rate_message_privacy_modal'
 import SkillModal from '../skill_modal/skill_modal'
 import PrivacyMessage from '../privacy_message'
 import FeedbackForm from '../feedback_form'
 import ShareConversationModal from '../share_conversation_modal'
 import SharedConversationsModal from '../shared_conversations_modal'
+import VisionModelSwitchModal from '../vision_model_switch_modal'
 import ToolsMenu, {
   ExtendedActionEntry,
   getIsSkill,
@@ -48,6 +50,12 @@ function Main() {
     React.useState(false)
   const { isDragActive, isDragOver } = conversationContext
 
+  // Deleting the open conversation, usually from this list, starts a new one.
+  // Show it, as starting a new conversation from the list does.
+  conversationContext.api.useOnConversationDeleted(() => {
+    setIsConversationsListOpen(false)
+  }, [conversationContext.api])
+
   const showAttachments = !!conversationContext.attachmentsDialog
 
   const headerElement = React.useRef<HTMLDivElement>(null)
@@ -61,6 +69,10 @@ function Main() {
   const hasConversationStarted = useHasConversationStarted(
     conversationContext.conversationUuid,
   )
+
+  const conversationTitle = aiChatContext.conversations.find(
+    (c) => c.uuid === conversationContext.conversationUuid,
+  )?.title
 
   const isHistoryPlaceholderData =
     conversationContext.api.useGetConversationHistory().isPlaceholderData
@@ -164,7 +176,10 @@ function Main() {
     >
       <DragOverlay />
       {isConversationListOpen && !aiChatContext.isStandalone && (
-        <div className={styles.conversationsList}>
+        <div
+          className={styles.conversationsList}
+          data-testid='conversations-list'
+        >
           <div
             className={classnames({
               [styles.conversationsListHeader]: true,
@@ -265,9 +280,22 @@ function Main() {
         />
       </div>
       <DeleteConversationModal />
+      <VisionModelSwitchModal />
       <ImageLightbox
         file={conversationContext.previewUploadedFile}
         onClose={() => conversationContext.setPreviewUploadedFile(null)}
+      />
+      <WorkspaceFileLightbox
+        file={conversationContext.previewWorkspaceFile}
+        onClose={() => conversationContext.setPreviewWorkspaceFile(null)}
+        conversationTitle={conversationTitle}
+        onOpen={(file) => {
+          aiChatContext.api.uiHandler.openWorkspaceFile(
+            { url: file.workspaceUrl },
+            file.filePath,
+          )
+          conversationContext.setPreviewWorkspaceFile(null)
+        }}
       />
       <RateMessagePrivacyModal />
       <FeedbackForm />

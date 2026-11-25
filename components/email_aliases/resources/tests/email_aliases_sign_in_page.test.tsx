@@ -7,7 +7,7 @@ import * as React from 'react'
 import { render } from '@testing-library/react'
 import { SignInPage } from '../content/email_aliases_manage_page'
 import { useBraveAccountState } from '../content/use_email_aliases'
-import type { AccountState } from 'gen/brave/components/brave_account/mojom/brave_account.mojom.m'
+import type { AccountState } from 'gen/brave/components/brave_account/mojom/brave_account.mojom-webui.js'
 
 jest.mock('../content/use_email_aliases', () => ({
   ...jest.requireActual('../content/use_email_aliases'),
@@ -30,7 +30,7 @@ const makeLoggedOutAccountState = (): AccountState =>
 
 describe('SignInPage autofill suggestion toggle visibility', () => {
   beforeAll(() => {
-    defineStubElement('settings-brave-account-row')
+    defineStubElement('brave-account-compact-row')
   })
 
   beforeEach(() => {

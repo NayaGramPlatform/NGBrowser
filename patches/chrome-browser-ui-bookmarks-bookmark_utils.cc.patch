@@ -1,25 +1,8 @@
 diff --git a/chrome/browser/ui/bookmarks/bookmark_utils.cc b/chrome/browser/ui/bookmarks/bookmark_utils.cc
-index bbb39ea6755c83c275349a9cf911e237a7327141..866ccf23649ab4b72df2d765d135f073ff94943e 100644
+index e22886a51a3b9bc35283fabb3d539c889c15c688..67873993b358ae54bd8d4789d84d21ffaa01e4c4 100644
 --- a/chrome/browser/ui/bookmarks/bookmark_utils.cc
 +++ b/chrome/browser/ui/bookmarks/bookmark_utils.cc
-@@ -197,6 +197,7 @@ bool GetURLAndTitleToBookmark(content::WebContents* web_contents,
- }
- 
- void ToggleBookmarkBarWhenVisible(content::BrowserContext* browser_context) {
-+  [&]() -> void {
-   PrefService* prefs = user_prefs::UserPrefs::Get(browser_context);
-   // The user changed when the bookmark bar is shown, update the preferences.
-   if (base::FeatureList::IsEnabled(
-@@ -217,6 +218,8 @@ void ToggleBookmarkBarWhenVisible(content::BrowserContext* browser_context) {
-         !prefs->GetBoolean(bookmarks::prefs::kShowBookmarkBar);
-     prefs->SetBoolean(bookmarks::prefs::kShowBookmarkBar, always_show);
-   }
-+  }();
-+  BraveToggleBookmarkBarState(browser_context);
- }
- 
- // Called upon direct user interaction with the Bookmarks Bar UI (e.g. clicking
-@@ -256,6 +259,7 @@ void UpdateBookmarkBarVisibilityPrefOnUserAction(Profile* profile) {
+@@ -186,6 +186,7 @@ bool GetURLAndTitleToBookmark(content::WebContents* web_contents,
  }
  
  std::u16string FormatBookmarkURLForDisplay(const GURL& url) {
@@ -27,7 +10,7 @@ index bbb39ea6755c83c275349a9cf911e237a7327141..866ccf23649ab4b72df2d765d135f073
    // Because this gets re-parsed by FixupURL(), it's safe to omit the scheme
    // and trailing slash, and unescape most characters. However, it's
    // important not to drop any username/password, or unescape anything that
-@@ -272,9 +276,13 @@ std::u16string FormatBookmarkURLForDisplay(const GURL& url) {
+@@ -202,6 +203,9 @@ std::u16string FormatBookmarkURLForDisplay(const GURL& url) {
  
    return url_formatter::FormatUrl(url, format_types, base::UnescapeRule::SPACES,
                                    nullptr, nullptr, nullptr);
@@ -36,20 +19,8 @@ index bbb39ea6755c83c275349a9cf911e237a7327141..866ccf23649ab4b72df2d765d135f073
 +  return url_string;
  }
  
- bool IsAppsShortcutEnabled(Profile* profile) {
-+  if ((true)) return false;
- #if BUILDFLAG(IS_CHROMEOS)
-   // Chrome OS uses the app list / app launcher.
-   return false;
-@@ -284,6 +292,7 @@ bool IsAppsShortcutEnabled(Profile* profile) {
- }
- 
- bool ShouldShowAppsShortcutInBookmarkBar(Profile* profile) {
-+  if ((true)) return false;
-   return IsAppsShortcutEnabled(profile) &&
-          profile->GetPrefs()->GetBoolean(
-              bookmarks::prefs::kShowAppsShortcutInBookmarkBar);
-@@ -385,6 +394,9 @@ bool CanAllBeEditedByUser(
+ int GetBookmarkDragOperation(content::BrowserContext* browser_context,
+@@ -295,6 +299,9 @@ bool CanAllBeEditedByUser(
  
  ui::ImageModel GetBookmarkFolderIcon(BookmarkFolderIconType icon_type,
                                       ui::ColorVariant color) {

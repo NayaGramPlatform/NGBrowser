@@ -1,0 +1,31 @@
+diff --git a/chrome/browser/ui/webui/side_panel/read_anything/read_anything_untrusted_ui.cc b/chrome/browser/ui/webui/side_panel/read_anything/read_anything_untrusted_ui.cc
+index cecec10af308bf359d282ec1a5d3d32efb4b9d2a..07b5ed691d4748e1e3c0285e11db25737533eca0 100644
+--- a/chrome/browser/ui/webui/side_panel/read_anything/read_anything_untrusted_ui.cc
++++ b/chrome/browser/ui/webui/side_panel/read_anything/read_anything_untrusted_ui.cc
+@@ -254,20 +254,20 @@ ReadAnythingUntrustedUI::ReadAnythingUntrustedUI(content::WebUI* web_ui)
+   source->OverrideContentSecurityPolicy(
+       network::mojom::CSPDirectiveName::ScriptSrc,
+       "script-src 'self' chrome-untrusted://resources "
+-      "chrome-untrusted://webui-test https://translate.googleapis.com "
+-      "https://translate.google.com;");
++      "chrome-untrusted://webui-test"
++      ";");
+   source->OverrideContentSecurityPolicy(
+       network::mojom::CSPDirectiveName::ConnectSrc,
+-      "connect-src 'self' https://translate.googleapis.com "
+-      "https://translate.google.com;");
++      "connect-src 'self'"
++      ";");
+   source->OverrideContentSecurityPolicy(
+       network::mojom::CSPDirectiveName::StyleSrc,
+       "style-src 'self' chrome-untrusted://resources chrome-untrusted://theme "
+-      "https://fonts.googleapis.com https://www.gstatic.com 'unsafe-inline';");
++      "'unsafe-inline';");
+   source->OverrideContentSecurityPolicy(
+       network::mojom::CSPDirectiveName::FontSrc,
+       "font-src 'self' chrome-untrusted://resources "
+-      "https://fonts.gstatic.com;");
++      ";");
+   source->OverrideContentSecurityPolicy(
+       network::mojom::CSPDirectiveName::ImgSrc,
+       "img-src 'self' data: chrome://resources https: "

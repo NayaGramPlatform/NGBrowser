@@ -116,6 +116,10 @@ export default defineConfig([
     '**/*.d.ts',
     'tools/chromium_src/lit_mangler/*.ts',
 
+    // Built and type-checked by GN's `build_webui_tests`, with `chrome://`
+    // path mappings that `tsconfig-lint.json` can't resolve.
+    'test/data/webui/',
+
     // External or vendored code; not maintained in this repo
     'vendor/',
     'third_party/',
@@ -329,8 +333,24 @@ export default defineConfig([
   },
   {
     files: ['chromium_src/**/*.ts'],
+    plugins: {
+      // Chromium's webui lint plugin isn't loaded here; stub the rule so
+      // `eslint-disable` comments for it in overridden files resolve.
+      '@webui-eslint': {
+        rules: { 'lit-element-structure': { create: () => ({}) } },
+      },
+    },
     rules: {
       '@eslint-community/eslint-comments/no-unlimited-disable': 'off',
     },
+  },
+  {
+    // The stub above never reports, so directives for it look
+    // unused.
+    files: [
+      'chromium_src/chrome/browser/resources/settings/**/*.ts',
+      'chromium_src/chrome/browser/resources/signin/**/*.ts',
+    ],
+    linterOptions: { reportUnusedDisableDirectives: 'off' },
   },
 ])

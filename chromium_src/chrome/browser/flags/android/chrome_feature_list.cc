@@ -6,6 +6,7 @@
 #include "brave/browser/android/safe_browsing/features.h"
 #include "brave/browser/android/youtube_script_injector/features.h"
 #include "brave/browser/brave_browser_features.h"
+#include "brave/browser/ui/brave_ui_features.h"
 #include "brave/components/ai_chat/core/common/features.h"
 #include "brave/components/brave_ads/buildflags/buildflags.h"
 #include "brave/components/brave_news/common/features.h"
@@ -18,7 +19,6 @@
 #include "brave/components/debounce/core/common/features.h"
 #include "brave/components/email_aliases/buildflags/buildflags.h"
 #include "brave/components/google_sign_in_permission/features.h"
-#include "brave/components/ntp_background_images/browser/features.h"
 #include "brave/components/playlist/core/common/features.h"
 #include "brave/components/request_otr/common/features.h"
 #include "brave/components/web_discovery/buildflags/buildflags.h"
@@ -107,11 +107,13 @@
     &brave_shields::features::kBraveShieldsElementPicker,                      \
     &features::kBraveAndroidDynamicColorsByDefault,                            \
     &features::kBraveFreshNtpAfterIdleExperiment,                              \
-    &ntp_background_images::features::kBraveNTPBrandedWallpaperSurveyPanelist, \
     &brave_shields::features::kBraveShredFeature,                              \
     &brave_origin::features::kBraveOrigin,                                     \
     &features::kBraveCustomSearchEngines,                                      \
-    &features::kBraveAndroidTabGroupsSettings
+    &features::kBraveAndroidTabGroupsSettings,                                 \
+    &features::kBraveAndroidMergeInstallPwaAndCreateShortcut,                  \
+    &features::kBraveAndroidExtensions,                                        \
+    &features::kBraveRecap
 
 // clang-format on
 

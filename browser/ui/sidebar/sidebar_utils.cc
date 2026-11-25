@@ -30,16 +30,15 @@
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/search/search.h"
-#include "chrome/browser/ui/browser_window/public/browser_window_features.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface_iterator.h"
 #include "chrome/browser/ui/side_panel/side_panel_entry_id.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/ui_features.h"
-#include "chrome/browser/ui/webui/new_tab_page/new_tab_page_ui.h"
-#include "chrome/browser/ui/webui/ntp/new_tab_ui.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/common/webui_url_constants.h"
 #include "components/prefs/pref_service.h"
+#include "components/tabs/public/tab_interface.h"
 #include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/web_contents.h"
@@ -71,7 +70,7 @@ bool IsActiveTabNTP(content::WebContents* active_web_contents) {
     return false;
   }
   const GURL url = entry->GetURL();
-  return NewTabUI::IsNewTab(url) || NewTabPageUI::IsNewTabPageOrigin(url) ||
+  return search::IsNewTabOrigin(url) || search::IsNewTabPageOrigin(url) ||
          search::NavEntryIsInstantNTP(active_web_contents, entry);
 }
 
@@ -247,7 +246,7 @@ std::optional<BuiltInItemType> BuiltInItemTypeFromSidePanelId(
 }
 
 SidePanelEntryId SidePanelIdFromSideBarItem(const SidebarItem& item) {
-  CHECK(item.open_in_panel) << static_cast<int>(item.built_in_item_type);
+  CHECK(item.is_side_panel_type()) << static_cast<int>(item.built_in_item_type);
   return SidePanelIdFromSideBarItemType(item.built_in_item_type);
 }
 
@@ -260,8 +259,9 @@ std::optional<SidebarItem> AddItemForSidePanelIdIfNeeded(Profile* profile,
   }
 
   for (const auto& item : hidden_default_items) {
-    // Only panel item could have panel id.
-    if (item.open_in_panel && id == sidebar::SidePanelIdFromSideBarItem(item)) {
+    // Only side panel item could have panel id.
+    if (item.is_side_panel_type() &&
+        id == sidebar::SidePanelIdFromSideBarItem(item)) {
       GetSidebarService(profile)->AddItem(item);
       return item;
     }
@@ -324,7 +324,7 @@ std::optional<SidePanelEntryId> GetLastUsedSidePanel(
   }
 #endif
   // If cached type item is not included in current model, return null.
-  if (!browser->GetFeatures().sidebar_controller()->model()->GetIndexOf(type)) {
+  if (!sidebar::SidebarController::From(browser)->model()->GetIndexOf(type)) {
     return std::nullopt;
   }
   return SidePanelIdFromSideBarItemType(type);
@@ -389,13 +389,10 @@ SidebarService::ShowSidebarOption GetDefaultShowSidebarOption(
     return ShowSidebarOption::kShowAlways;
   }
 
-  if (auto* local_state = g_browser_process->local_state()) {
-    return local_state->GetBoolean(kTargetUserForSidebarEnabledTest)
-               ? ShowSidebarOption::kShowAlways
-               : ShowSidebarOption::kShowNever;
-  }
-
-  return ShowSidebarOption::kShowNever;
+  return g_browser_process->local_state()->GetBoolean(
+             kTargetUserForSidebarEnabledTest)
+             ? ShowSidebarOption::kShowAlways
+             : ShowSidebarOption::kShowNever;
 #endif  // BUILDFLAG(IS_BRAVE_ORIGIN_BRANDED)
 }
 
@@ -406,6 +403,60 @@ views::BubbleBorder::Arrow GetBubbleArrowForSidebar(PrefService* prefs) {
   // When sidebar is on the left, bubble appears to the right with LEFT arrow.
   return on_right ? views::BubbleBorder::RIGHT_TOP
                   : views::BubbleBorder::LEFT_TOP;
+}
+
+void CloseAllWebPanelsForShutdown() {
+  ForEachCurrentBrowserWindowInterfaceOrderedByActivation(
+      [](BrowserWindowInterface* browser) {
+        MaybeCloseWebPanelForShutdown(browser);
+        return true;
+      });
+}
+
+void MaybeCloseWebPanelForShutdown(BrowserWindowInterface* browser) {
+  if (auto* sidebar_controller = sidebar::SidebarController::From(browser)) {
+    sidebar_controller->CloseWebPanelForShutdown();
+  }
+}
+
+bool IsWebPanelTab(BrowserWindowInterface* browser,
+                   const content::WebContents* contents) {
+  if (auto* sidebar_controller = sidebar::SidebarController::From(browser)) {
+    return sidebar_controller->IsWebPanelTab(contents);
+  }
+  return false;
+}
+
+bool IsWebPanelTab(tabs::TabInterface* tab) {
+  if (!tab) {
+    return false;
+  }
+
+  // A detached tab has no window, and a panel never outlives its own window.
+  BrowserWindowInterface* browser = tab->GetBrowserWindowInterface();
+  return browser && IsWebPanelTab(browser, tab->GetContents());
+}
+
+bool IsWebPanelTabActive(BrowserWindowInterface* browser) {
+  TabStripModel* tab_strip_model = browser->GetTabStripModel();
+  if (!tab_strip_model) {
+    // Browser always has one; only MockBrowserWindowInterface doesn't, and
+    // upstream's context menu unit tests reach here through it.
+    CHECK_IS_TEST();
+    return false;
+  }
+
+  // An empty strip has no active contents, and IsWebPanelTab() would match a
+  // null query against the null panel_contents_ of a panel-less controller.
+  content::WebContents* active_contents =
+      tab_strip_model->GetActiveWebContents();
+  return active_contents && IsWebPanelTab(browser, active_contents);
+}
+
+bool IsWebPanelOnlyTab(BrowserWindowInterface* browser) {
+  auto* tab_strip_model = browser->GetTabStripModel();
+  return tab_strip_model->count() == 1 &&
+         IsWebPanelTab(browser, tab_strip_model->GetWebContentsAt(0));
 }
 
 }  // namespace sidebar

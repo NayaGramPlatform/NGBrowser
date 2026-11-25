@@ -3,6 +3,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+import DesignSystem
 import Shared
 import UIKit
 import Web
@@ -51,6 +52,15 @@ class SearchQuickEnginesViewController: UITableViewController {
     action: #selector(onEditButton)
   )
 
+  /// Every quick search engine in its stored order. Disabled engines are included — this screen
+  /// is where they are toggled back on.
+  private var quickSearchItems: [QuickSearchItem] {
+    QuickSearchItem.quickSearchCatalog(
+      from: searchEngines.orderedEngines,
+      excludingDefault: searchEngines.defaultEngine(forType: .standard)
+    )
+  }
+
   // MARK: Lifecycle
 
   init(profile: LegacyBrowserProfile) {
@@ -96,25 +106,42 @@ class SearchQuickEnginesViewController: UITableViewController {
   // MARK: TableViewDataSource - TableViewDelegate
 
   override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-    return searchEngines.orderedEngines.count - 1
+    return quickSearchItems.count
   }
 
   override func tableView(
     _ tableView: UITableView,
     cellForRowAt indexPath: IndexPath
   ) -> UITableViewCell {
-    var engine: OpenSearchEngine?
+    guard let item = quickSearchItems[safe: indexPath.item] else {
+      assertionFailure("No item backing quick search row \(indexPath.item)")
+      return UITableViewCell()
+    }
 
-    // The default engine is not a quick search engine.
-    let index = indexPath.item + 1
-    engine = searchEngines.orderedEngines[safe: index]
+    let title: String
+    let searchTemplate: String
+    let icon: UIImage?
+    switch item.source {
+    case .engine(let engine):
+      title = engine.displayName
+      searchTemplate = engine.searchTemplate
+      icon = engine.image.createScaled(UX.iconSize)
+    case .braveVertical(let vertical):
+      title = vertical.displayName
+      searchTemplate = vertical.searchTemplate
+      icon = UIImage(braveSystemNamed: vertical.iconName)?.createScaled(
+        CGSize(width: 26, height: 26)
+      )?.withRenderingMode(.alwaysTemplate)
+    case .aiChat:
+      // Leo is pinned to the row by the view and is not customizable here.
+      assertionFailure("Leo in the quick search customize list")
+      return UITableViewCell()
+    }
 
     let toggle = UISwitch().then {
-      $0.tag = index
+      $0.tag = indexPath.item
       $0.addTarget(self, action: #selector(didToggleEngine), for: .valueChanged)
-      if let searchEngine = engine {
-        $0.isOn = searchEngines.isEngineEnabled(searchEngine)
-      }
+      $0.isOn = item.id.isQuickSearchEnabled
       $0.onTintColor = UIColor(braveSystemName: .primitivePrimary40)
     }
 
@@ -126,15 +153,25 @@ class SearchQuickEnginesViewController: UITableViewController {
       $0.showsReorderControl = true
       $0.accessoryView = toggle
       $0.selectionStyle = .none
-      $0.textLabel?.text = engine?.displayName
+      $0.textLabel?.text = title
       $0.textLabel?.adjustsFontSizeToFitWidth = true
       $0.textLabel?.minimumScaleFactor = 0.5
-      $0.detailTextLabel?.text = searchTemplateHost(for: engine?.searchTemplate ?? "")
+      $0.detailTextLabel?.text = searchTemplateHost(for: searchTemplate)
       $0.detailTextLabel?.textColor = UIColor.secondaryLabel
-      $0.imageView?.image = engine?.image.createScaled(UX.iconSize)
+      $0.imageView?.image = icon
       $0.imageView?.layer.cornerRadius = 4
       $0.imageView?.layer.cornerCurve = .continuous
       $0.imageView?.layer.masksToBounds = true
+    }
+
+    if case .braveVertical = item.source, let icon, let imageView = searchEngineCell.imageView {
+      imageView.tintColor = .clear
+      let bounds = CGRect(origin: .zero, size: icon.size)
+      let gradientView = GradientView(braveSystemName: .hero).then {
+        $0.frame = bounds
+        $0.mask = UIImageView(image: icon).then { $0.frame = bounds }
+      }
+      imageView.addSubview(gradientView)
     }
 
     return searchEngineCell
@@ -145,21 +182,25 @@ class SearchQuickEnginesViewController: UITableViewController {
     moveRowAt indexPath: IndexPath,
     to newIndexPath: IndexPath
   ) {
-    // The first engine (default engine) is not shown in the list, so the indices are off-by-1.
-    let index = indexPath.item + 1
-    let newIndex = newIndexPath.item + 1
-    let engine = searchEngines.orderedEngines.remove(at: index)
+    var items = quickSearchItems
+    guard items.indices.contains(indexPath.item), items.indices.contains(newIndexPath.item) else {
+      assertionFailure("Reordered a row outside the quick search list")
+      // The row already moved on screen, so put it back.
+      tableView.reloadData()
+      return
+    }
 
-    searchEngines.orderedEngines.insert(engine, at: newIndex)
+    items.insert(items.remove(at: indexPath.item), at: newIndexPath.item)
+    items.persistQuickSearchOrder()
     tableView.reloadData()
+    delegate?.searchQuickEnginesUpdated()
   }
 
   override func tableView(
     _ tableView: UITableView,
     editingStyleForRowAt indexPath: IndexPath
   ) -> UITableViewCell.EditingStyle {
-    let index = indexPath.item + 1
-    guard let engine = searchEngines.orderedEngines[safe: index]
+    guard case .engine(let engine) = quickSearchItems[safe: indexPath.item]?.source
     else { return .none }
     if engine.isCustomEngine {
       return .delete
@@ -173,7 +214,8 @@ class SearchQuickEnginesViewController: UITableViewController {
     forRowAt forRowAtIndexPath: IndexPath
   ) {
     if commitEditingStyle == .delete,
-      let engine = searchEngines.orderedEngines[safe: forRowAtIndexPath.item + 1]
+      let item = quickSearchItems[safe: forRowAtIndexPath.item],
+      case .engine(let engine) = item.source
     {
       Task {
         do {
@@ -208,13 +250,9 @@ class SearchQuickEnginesViewController: UITableViewController {
 extension SearchQuickEnginesViewController {
 
   @objc func didToggleEngine(_ toggle: UISwitch) {
-    let engine = searchEngines.orderedEngines[toggle.tag]
+    guard let item = quickSearchItems[safe: toggle.tag] else { return }
 
-    if toggle.isOn {
-      searchEngines.enableEngine(engine)
-    } else {
-      searchEngines.disableEngine(engine, type: .standard)
-    }
+    item.id.setQuickSearchEnabled(toggle.isOn)
     delegate?.searchQuickEnginesUpdated()
   }
 

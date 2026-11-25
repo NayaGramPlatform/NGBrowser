@@ -16,11 +16,13 @@
 #include "brave/components/brave_vpn/browser/brave_vpn_service.h"
 #include "brave/components/brave_vpn/browser/v2/skus_service_client.h"
 #include "brave/components/brave_vpn/common/buildflags/buildflags.h"
+#include "brave/components/brave_vpn/common/mojom/browser_agent.mojom-forward.h"
 #include "build/build_config.h"
 
 #if BUILDFLAG(ENABLE_BRAVE_VPN_V2_APPS)
 #include "brave/components/brave_vpn/browser/v2/agent/agent_client.h"
 #include "brave/components/brave_vpn/browser/v2/agent/agent_launcher.h"
+#include "brave/components/brave_vpn/common/mojom/browser_agent.mojom.h"
 #endif  // BUILDFLAG(ENABLE_BRAVE_VPN_V2_APPS)
 
 namespace network {
@@ -37,7 +39,8 @@ class PurchasedStateManager;
 class BraveVpnServiceImpl : public BraveVpnService
 #if BUILDFLAG(ENABLE_BRAVE_VPN_V2_APPS)
     ,
-                            public AgentClient::Observer
+                            public AgentClient::Observer,
+                            public mojom::BrowserEndpoint
 #endif  // BUILDFLAG(ENABLE_BRAVE_VPN_V2_APPS)
 {
  public:
@@ -85,13 +88,14 @@ class BraveVpnServiceImpl : public BraveVpnService
                            CreateSupportTicketCallback callback) override;
   void GetSupportData(GetSupportDataCallback callback) override;
   void ResetConnectionState() override;
-  void EnableOnDemand(bool enable) override;
-  void GetOnDemandState(GetOnDemandStateCallback callback) override;
+  void EnableAutoReconnect(bool enable) override;
+  void GetAutoReconnectState(GetAutoReconnectStateCallback callback) override;
   void EnableSmartProxyRouting(bool enable) override;
   void GetSmartProxyRoutingState(
       GetSmartProxyRoutingStateCallback callback) override;
   void AllowLanTraffic(bool allow) override;
   void GetAllowLanTraffic(GetAllowLanTrafficCallback callback) override;
+  void ReconnectToAgent() override;
 #else   // !BUILDFLAG(IS_ANDROID)
   // mojom::ServiceHandler overrides:
   void GetPurchaseToken(GetPurchaseTokenCallback callback) override;
@@ -142,6 +146,26 @@ class BraveVpnServiceImpl : public BraveVpnService
   void Shutdown() override;
 
 #if BUILDFLAG(ENABLE_BRAVE_VPN_V2_APPS)
+  // What the agent last reported through BrowserEndpoint. Lives exactly as long
+  // as an agent session, created in OnAgentConnected() and dropped in
+  // OnAgentDisconnected(), so nothing one session reported can outlast it. The
+  // agent sends the current value of everything as soon as a session is up;
+  // the initializers only cover the moment before that.
+  struct AgentState {
+    AgentState();
+    ~AgentState();
+
+    mojom::VpnConnectionState connection_state =
+        mojom::VpnConnectionState::kDisconnected;
+    std::string connection_error;
+    mojom::VpnRegionPtr selected_region;
+    bool auto_reconnect_enabled = false;
+    bool smart_proxy_routing_enabled = false;
+    bool allow_lan_traffic_available = false;
+    bool allow_lan_traffic_enabled = false;
+    std::string last_hostname;
+  };
+
   // Brings the agent connection in line with |state|. The subscription is what
   // decides whether this profile has any business holding a connection, so this
   // is the one place that opens or drops one.
@@ -149,16 +173,41 @@ class BraveVpnServiceImpl : public BraveVpnService
 
   // AgentClient::Observer overrides:
   void OnAgentConnected() override;
+  void OnAgentSessionStable() override;
   void OnAgentDisconnected() override;
-  void OnAgentUnavailable(
-      std::optional<mojom::BrowserAuthResult> result) override;
   void OnAgentNotRunning() override;
+  void OnAgentConnectionFailed(AgentClient::Error error) override;
 
   // Called when the agent process fails to launch.
   void OnAgentLaunchFailed(AgentLauncher::LaunchError error);
+
+  // mojom::BrowserEndpoint overrides:
+  void OnConnectionStateChanged(
+      mojom::VpnConnectionState state,
+      const std::optional<std::string>& error_message) override;
+  void OnSelectedRegionChanged(mojom::VpnRegionPtr region) override;
+  void OnAutoReconnectStateChanged(bool enabled) override;
+  void OnSmartProxyRoutingStateChanged(bool enabled) override;
+  void OnAllowLanTrafficStateChanged(bool available, bool enabled) override;
+  void OnLastHostnameChanged(const std::string& hostname) override;
+
+  // Makes the connection state the agent last reported this service's own.
+  // Needs an agent session.
+  void UpdateConnectionStateFromAgent();
 #endif  // BUILDFLAG(ENABLE_BRAVE_VPN_V2_APPS)
 
 #if !BUILDFLAG(IS_ANDROID)
+  // Returns the authenticated agent's API surface if available, or nullptr
+  // otherwise.
+  mojom::BrowserHost* GetConnectedBrowserHost();
+
+  // Called by the agent or internal components to update the connection state.
+  // An optional connection error string updates VPN's last connection error.
+  // Does nothing when neither the state nor the error change.
+  void UpdateConnectionState(
+      mojom::ConnectionState state,
+      std::optional<std::string> connection_error = std::nullopt);
+
   // BraveVpnService overrides:
   void SetConnectionStateForTesting(mojom::ConnectionState state) override;
   void SetPurchasedStateForTesting(const std::string& env,
@@ -174,10 +223,14 @@ class BraveVpnServiceImpl : public BraveVpnService
 #if BUILDFLAG(ENABLE_BRAVE_VPN_V2_APPS)
   std::unique_ptr<AgentClient> agent_client_;
   std::unique_ptr<AgentLauncher> agent_launcher_;
+  std::optional<AgentState> agent_state_;
 #endif  // BUILDFLAG(ENABLE_BRAVE_VPN_V2_APPS)
   std::unique_ptr<PurchasedStateManager> purchased_state_manager_;
-
-  [[maybe_unused]] mojom::ConnectionState connection_state_;
+#if !BUILDFLAG(IS_ANDROID)
+  mojom::ConnectionState connection_state_ =
+      mojom::ConnectionState::DISCONNECTED;
+  std::string last_connection_error_;
+#endif  // !BUILDFLAG(IS_ANDROID)
   base::WeakPtrFactory<BraveVpnServiceImpl> weak_factory_{this};
 };
 

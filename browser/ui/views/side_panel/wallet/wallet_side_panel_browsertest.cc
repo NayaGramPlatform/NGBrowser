@@ -8,7 +8,6 @@
 #include "brave/components/brave_wallet/browser/brave_wallet_utils.h"
 #include "brave/components/brave_wallet/common/features.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/side_panel/side_panel_entry.h"
 #include "chrome/browser/ui/side_panel/side_panel_entry_id.h"
 #include "chrome/browser/ui/side_panel/side_panel_registry.h"
@@ -56,8 +55,23 @@ IN_PROC_BROWSER_TEST_F(WalletSidePanelBrowserTest, ShowsWalletSidePanel) {
   EXPECT_EQ(SidePanelEntryId::kWallet, panel_ui->GetCurrentEntryId());
 }
 
-// Feature is disabled by default; no need to disable it explicitly.
-using WalletSidePanelDisabledBrowserTest = InProcessBrowserTest;
+// Verifies Wallet does not register a contextual entry when
+// kBraveWalletSidePanel is disabled.
+class WalletSidePanelDisabledBrowserTest : public InProcessBrowserTest {
+ public:
+  WalletSidePanelDisabledBrowserTest() {
+    scoped_feature_list_.InitAndDisableFeature(
+        brave_wallet::features::kBraveWalletSidePanel);
+  }
+  WalletSidePanelDisabledBrowserTest(
+      const WalletSidePanelDisabledBrowserTest&) = delete;
+  WalletSidePanelDisabledBrowserTest& operator=(
+      const WalletSidePanelDisabledBrowserTest&) = delete;
+  ~WalletSidePanelDisabledBrowserTest() override = default;
+
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_;
+};
 
 IN_PROC_BROWSER_TEST_F(WalletSidePanelDisabledBrowserTest,
                        DoesNotRegisterContextualEntry) {

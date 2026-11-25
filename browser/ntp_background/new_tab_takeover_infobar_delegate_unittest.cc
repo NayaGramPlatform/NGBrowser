@@ -6,7 +6,7 @@
 #include "brave/browser/ntp_background/new_tab_takeover_infobar_delegate.h"
 
 #include "brave/components/brave_rewards/core/pref_names.h"
-#include "brave/components/ntp_background_images/browser/new_tab_takeover_infobar_util.h"
+#include "brave/components/ntp_background_images/browser/sponsored_content/new_tab_takeover/new_tab_takeover_infobar_util.h"
 #include "brave/components/ntp_background_images/common/infobar_constants.h"
 #include "brave/components/ntp_background_images/common/pref_names.h"
 #include "chrome/test/base/chrome_render_view_host_test_harness.h"
@@ -16,6 +16,7 @@
 #include "components/prefs/pref_service.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/base/mojom/window_open_disposition.mojom.h"
 
 #if !BUILDFLAG(IS_ANDROID)
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
@@ -158,7 +159,8 @@ TEST_F(NewTabTakeoverInfoBarDelegateTest,
   ASSERT_THAT(GetInfobarManager()->infobars(), ::testing::SizeIs(1));
 
   infobars::InfoBar* infobar = GetInfobarManager()->infobars()[0];
-  infobar->delegate()->LinkClicked(WindowOpenDisposition::CURRENT_TAB);
+  infobar->delegate()->LinkClicked(
+      ui::mojom::WindowOpenDisposition::kCurrentTab);
   CloseInfobar();
 
   VerifyInfobarWasNotDisplayedExpectation();

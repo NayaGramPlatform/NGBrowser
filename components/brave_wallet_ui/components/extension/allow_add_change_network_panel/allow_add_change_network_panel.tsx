@@ -5,7 +5,7 @@
 
 import * as React from 'react'
 import { skipToken } from '@reduxjs/toolkit/query'
-import Button from '@brave/leo/react/button'
+import Button from '@brave/nala/react/button'
 
 // types
 import { BraveWallet } from '../../../constants/types'
@@ -41,6 +41,7 @@ import {
   ArrowIconWrapper,
   ArrowIcon,
   Card,
+  ButtonRow,
 } from './allow_add_change_network_panel.style'
 import { Column, Row, VerticalDivider } from '../../shared/style'
 
@@ -72,10 +73,16 @@ export function AllowAddChangeNetworkPanel(props: Props) {
   // state
   const [showNetworkDetails, setShowNetworkDetails] = React.useState(false)
 
+  // computed from props
+  const dappOriginInfo = switchChainRequest
+    ? switchChainRequest.dappOriginInfo
+    : addChainRequest.dappOriginInfo
+
   // queries
   const { data: dappsAccounts } = useGetSelectedDappAccountsQuery()
   const { data: selectedNetwork } = useGetNetworkForAccountOnActiveOriginQuery({
     accountId: dappsAccounts?.ethAccountId,
+    activeOriginSpec: dappOriginInfo.originSpec,
   })
 
   const { data: switchChainRequestNetwork } = useGetNetworkQuery(
@@ -97,11 +104,6 @@ export function AllowAddChangeNetworkPanel(props: Props) {
   // mutations
   const [acknowledgeSwitchChainRequest] =
     useAcknowledgeSwitchChainRequestMutation()
-
-  // computed from props
-  const originInfo = switchChainRequest
-    ? switchChainRequest.originInfo
-    : addChainRequest.originInfo
 
   // mutations
   const [acknowledgePendingAddChainRequest] =
@@ -172,7 +174,7 @@ export function AllowAddChangeNetworkPanel(props: Props) {
           height='100%'
           justifyContent='space-between'
         >
-          {originInfo && <OriginInfoCard origin={originInfo} />}
+          <OriginInfoCard origin={dappOriginInfo} />
           <Column
             padding='0px 16px'
             gap='8px'
@@ -345,10 +347,7 @@ export function AllowAddChangeNetworkPanel(props: Props) {
               </Button>
             )}
           </Column>
-          <Row
-            padding='16px'
-            gap='8px'
-          >
+          <ButtonRow>
             <Button
               kind='outline'
               size='medium'
@@ -369,7 +368,7 @@ export function AllowAddChangeNetworkPanel(props: Props) {
                 ? getLocale(S.BRAVE_WALLET_ALLOW_CHANGE_NETWORK_BUTTON)
                 : getLocale(S.BRAVE_WALLET_ALLOW_ADD_NETWORK_BUTTON)}
             </Button>
-          </Row>
+          </ButtonRow>
         </Card>
       </Column>
       <BottomSheet

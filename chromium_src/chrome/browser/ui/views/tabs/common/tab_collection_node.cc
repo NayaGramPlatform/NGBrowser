@@ -5,14 +5,16 @@
 
 #include "chrome/browser/ui/views/tabs/common/tab_collection_node.h"
 
-#define BRAVE_GET_TYPE_FROM_NODE             \
-  case tabs::TabCollection::Type::TREE_NODE: \
-    return TabCollectionNode::Type::TREE_NODE;
+#include <functional>
+#include <vector>
 
-#define BRAVE_TAB_COLLECTION_NODE_CREATE_VIEW_FOR_NODE \
-  case Type::TREE_NODE:                                \
-    NOTREACHED();
+#include "components/tabs/public/tab_collection_types.h"
+
+// Tree tab hook. Defined in brave/browser/ui/views/tabs/tree_tab_view_utils.cc
+// so that this upstream target doesn't depend on Brave targets.
+namespace tree_tab_view_utils {
+std::vector<std::reference_wrapper<const tabs::Child>> GetUnwrappedChildren(
+    const tabs::TabCollection& collection);
+}  // namespace tree_tab_view_utils
 
 #include <chrome/browser/ui/views/tabs/common/tab_collection_node.cc>
-#undef BRAVE_TAB_COLLECTION_NODE_CREATE_VIEW_FOR_NODE
-#undef BRAVE_GET_TYPE_FROM_NODE

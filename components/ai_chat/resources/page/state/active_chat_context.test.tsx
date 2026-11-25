@@ -19,6 +19,7 @@ import {
   defaultConversationState,
 } from '../api/mock_interfaces'
 import createConversationAPI from '../api/conversation_api'
+import * as Mojom from '../../common/mojom'
 
 // Replace the real BindConversation helpers with jest mocks so we can:
 // - assert which routing decision the provider made (bind by uuid vs new vs
@@ -33,6 +34,9 @@ jest.mock('../api/bind_conversation', () => ({
 
 const mockedBind = BindConversation as jest.Mocked<typeof BindConversation>
 
+// What the browser sends each bound conversation's events to, by uuid.
+const uiObservers = new Map<string, Mojom.ConversationUIInterface>()
+
 const makeBindings = (uuid: string): BindConversation.ConversationBindings => {
   const handler = createMockConversationHandler({
     getState: () =>
@@ -44,6 +48,7 @@ const makeBindings = (uuid: string): BindConversation.ConversationBindings => {
       }),
   })
   const conversation = createConversationAPI(handler)
+  uiObservers.set(uuid, conversation.conversationUIObserver)
   return {
     api: conversation.api,
     close: jest.fn(),
@@ -56,6 +61,7 @@ interface RenderOptions {
   selectedConversationId: string | undefined
   isGlobalPanel: boolean
   updateSelectedConversationId?: jest.Mock
+  conversations?: Array<Pick<Mojom.Conversation, 'uuid' | 'hasContent'>>
 }
 
 const renderProvider = async (opts: RenderOptions) => {
@@ -72,7 +78,15 @@ const renderProvider = async (opts: RenderOptions) => {
   }
 
   const tree = (selectedConversationId: string | undefined) => (
-    <MockContext aiChatOverrides={{ isGlobalPanel: opts.isGlobalPanel }}>
+    <MockContext
+      aiChatOverrides={{ isGlobalPanel: opts.isGlobalPanel }}
+      service={{
+        getConversations: () =>
+          Promise.resolve({
+            conversations: (opts.conversations ?? []) as Mojom.Conversation[],
+          }),
+      }}
+    >
       <ActiveChatProvider
         selectedConversationId={selectedConversationId}
         updateSelectedConversationId={updateSelectedConversationId}
@@ -114,13 +128,15 @@ const renderProvider = async (opts: RenderOptions) => {
 
 beforeEach(() => {
   clearAllDataForTesting()
+  uiObservers.clear()
   let nextNew = 0
   let nextRelated = 0
   mockedBind.newConversation.mockReset()
   mockedBind.bindConversation.mockReset()
-  mockedBind.newConversation.mockImplementation(() =>
-    makeBindings(`new-${nextNew++}`),
-  )
+  mockedBind.newConversation.mockImplementation(() => ({
+    ...makeBindings(`new-${nextNew++}`),
+    isNew: true,
+  }))
   mockedBind.bindConversation.mockImplementation((_aiChat, id) =>
     makeBindings(id ?? `related-${nextRelated++}`),
   )
@@ -344,5 +360,152 @@ describe('ActiveChatProvider routing — sidebar (non-global panel) mode', () =>
     expect(() => detailsRef.current!.openMainConversation()).toThrow(
       'No main conversation!',
     )
+  })
+})
+
+describe('ActiveChatProvider when the bound conversation is deleted', () => {
+  it('binds a new tab-related conversation and stays on /tab', async () => {
+    await renderProvider({
+      isGlobalPanel: false,
+      selectedConversationId: tabAssociatedChatId,
+    })
+    window.history.replaceState(null, '', '/tab')
+
+    act(() => {
+      uiObservers.get('related-0')!.onConversationDeleted()
+    })
+
+    await waitFor(() =>
+      expect(mockedBind.newConversation).toHaveBeenCalledTimes(1),
+    )
+    expect(window.location.pathname).toBe('/tab')
+  })
+
+  it('binds a new main conversation in the global panel', async () => {
+    await renderProvider({
+      isGlobalPanel: true,
+      selectedConversationId: undefined,
+    })
+    expect(mockedBind.newConversation).toHaveBeenCalledTimes(1)
+
+    act(() => {
+      uiObservers.get('new-0')!.onConversationDeleted()
+    })
+
+    await waitFor(() =>
+      expect(mockedBind.newConversation).toHaveBeenCalledTimes(2),
+    )
+  })
+
+  it('navigates from a standalone conversation to "/"', async () => {
+    await renderProvider({
+      isGlobalPanel: false,
+      selectedConversationId: 'standalone-uuid',
+    })
+    window.history.replaceState(null, '', '/standalone-uuid')
+
+    act(() => {
+      uiObservers.get('standalone-uuid')!.onConversationDeleted()
+    })
+
+    await waitFor(() => expect(window.location.pathname).toBe('/'))
+  })
+
+  // The list of conversations no longer has the deleted one, so at "/" it
+  // would pass for a new conversation that hasn't started, which is kept.
+  it('replaces a conversation that was new when bound and is now selected by id', async () => {
+    const { setSelectedConversationId } = await renderProvider({
+      isGlobalPanel: false,
+      selectedConversationId: undefined,
+    })
+    await setSelectedConversationId('new-0')
+    window.history.replaceState(null, '', '/new-0')
+    expect(mockedBind.newConversation).toHaveBeenCalledTimes(1)
+
+    act(() => {
+      uiObservers.get('new-0')!.onConversationDeleted()
+    })
+    expect(window.location.pathname).toBe('/')
+    await setSelectedConversationId(undefined)
+
+    expect(mockedBind.newConversation).toHaveBeenCalledTimes(2)
+  })
+
+  it('ignores the deletion of a conversation it has moved on from', async () => {
+    const { setSelectedConversationId } = await renderProvider({
+      isGlobalPanel: false,
+      selectedConversationId: 'standalone-uuid',
+    })
+    await setSelectedConversationId('other-uuid')
+    window.history.replaceState(null, '', '/other-uuid')
+
+    act(() => {
+      uiObservers.get('standalone-uuid')!.onConversationDeleted()
+    })
+    // Give a handler that was wrongly still subscribed the chance to run.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve))
+    })
+
+    expect(window.location.pathname).toBe('/other-uuid')
+    expect(mockedBind.newConversation).not.toHaveBeenCalled()
+  })
+})
+
+describe('ActiveChatProvider createNewConversationWithWorkspace', () => {
+  const workspaceUrl = {
+    url: 'workspace://1b4e28ba-2fa1-41d2-883f-0016d3cca427',
+  }
+
+  it('binds a new conversation with the workspace, which navigating to "/" keeps', async () => {
+    const { detailsRef, setSelectedConversationId } = await renderProvider({
+      isGlobalPanel: false,
+      selectedConversationId: 'standalone-uuid',
+    })
+
+    act(() => {
+      detailsRef.current!.createNewConversationWithWorkspace(workspaceUrl)
+    })
+    expect(window.location.pathname).toBe('/')
+    await setSelectedConversationId(undefined)
+
+    expect(mockedBind.newConversation).toHaveBeenCalledTimes(1)
+    expect(mockedBind.newConversation).toHaveBeenCalledWith(
+      expect.anything(),
+      workspaceUrl,
+    )
+  })
+
+  it('stays on /tab, binding a new tab-related conversation with the workspace', async () => {
+    const { detailsRef } = await renderProvider({
+      isGlobalPanel: false,
+      selectedConversationId: tabAssociatedChatId,
+    })
+    window.history.replaceState(null, '', '/tab')
+
+    act(() => {
+      detailsRef.current!.createNewConversationWithWorkspace(workspaceUrl)
+    })
+
+    expect(window.location.pathname).toBe('/tab')
+    expect(mockedBind.newConversation).toHaveBeenCalledTimes(1)
+    expect(mockedBind.newConversation).toHaveBeenCalledWith(
+      expect.anything(),
+      workspaceUrl,
+    )
+  })
+
+  it('navigating to "/" replaces a new conversation once it has started', async () => {
+    const { setSelectedConversationId } = await renderProvider({
+      isGlobalPanel: false,
+      selectedConversationId: undefined,
+      conversations: [{ uuid: 'new-0', hasContent: true }],
+    })
+    expect(mockedBind.newConversation).toHaveBeenCalledTimes(1)
+
+    await setSelectedConversationId('new-0')
+    await setSelectedConversationId(undefined)
+
+    expect(mockedBind.newConversation).toHaveBeenCalledTimes(2)
   })
 })

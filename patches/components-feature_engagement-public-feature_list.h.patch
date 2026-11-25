@@ -1,16 +1,16 @@
 diff --git a/components/feature_engagement/public/feature_list.h b/components/feature_engagement/public/feature_list.h
-index 3ae5f7b58a85893b262d4a61aea873df9042216f..72c7f980a9d26ef49ac12d9840398b61d745c016 100644
+index c86363c9dd8fe357988c16741e0e963cab461725..97d12efdd7902f8d7c415505ace0f39f74e38a0c 100644
 --- a/components/feature_engagement/public/feature_list.h
 +++ b/components/feature_engagement/public/feature_list.h
-@@ -646,6 +646,7 @@ DEFINE_VARIATION_PARAM(kIPHiOSTabGroupsDesktopFeature,
- DEFINE_VARIATION_PARAM(kIPHiOSPriceTrackingDesktopFeature,
-                        "IPH_iOSPriceTrackingDesktop");
- #endif  // !BUILDFLAG(IS_ANDROID)
-+BRAVE_FEATURE_ENGAGEMENT_VARIATION_PARAMS
+@@ -675,12 +675,15 @@ DEFINE_VARIATION_PARAM(kIPHExtensionsPinnedByDefaultFeature,
+                        "IPH_ExtensionsPinnedByDefault");
+ #endif
  
- #if !BUILDFLAG(IS_IOS)
- DEFINE_VARIATION_PARAM(kIPHResumptionRailFeature, "IPH_ResumptionRail");
-@@ -667,6 +668,7 @@ DEFINE_VARIATION_PARAM(kIPHExtensionsPinnedByDefaultFeature,
++BRAVE_FEATURE_ENGAGEMENT_VARIATION_PARAMS
++
+ // Defines the array of which features should be listed in the chrome://flags
+ // UI to be able to select them alone for demo-mode. The features listed here
+ // are possible to enable on their own in demo mode.
  inline constexpr flags_ui::FeatureEntry::FeatureVariation
      kIPHDemoModeChoiceVariations[] = {
  // clang-format off

@@ -5,6 +5,8 @@
 
 #include "brave/ios/browser/api/webcompat_reporter/webcompat_reporter_service_factory.h"
 
+#include <utility>
+
 #include "brave/components/webcompat_reporter/browser/webcompat_reporter_service.h"
 #include "brave/components/webcompat_reporter/common/pref_names.h"
 #include "brave/ios/browser/api/webcompat_reporter/webcompat_reporter_service_delegate.h"
@@ -17,29 +19,20 @@ namespace webcompat_reporter {
 // static
 mojo::PendingRemote<mojom::WebcompatReporterHandler>
 WebcompatReporterServiceFactory::GetHandlerForContext(ProfileIOS* profile) {
-  auto* service =
-      GetInstance()->GetServiceForProfileAs<WebcompatReporterService>(profile,
-                                                                      true);
+  auto* service = GetForProfile(profile);
   if (!service) {
     return mojo::PendingRemote<mojom::WebcompatReporterHandler>();
   }
   return service->MakeRemote();
 }
 
-// static
-WebcompatReporterServiceFactory*
-WebcompatReporterServiceFactory::GetInstance() {
-  static base::NoDestructor<WebcompatReporterServiceFactory> instance;
-  return instance.get();
-}
-
-WebcompatReporterServiceFactory::WebcompatReporterServiceFactory()
-    : ProfileKeyedServiceFactoryIOS("WebcompatReporterService",
-                                    ProfileSelection::kOwnInstanceInIncognito,
-                                    ServiceCreation::kCreateLazily,
-                                    TestingCreation::kCreateService) {}
-
-WebcompatReporterServiceFactory::~WebcompatReporterServiceFactory() {}
+WebcompatReporterServiceFactory::WebcompatReporterServiceFactory(PassKey key)
+    : TypedProfileKeyedServiceFactoryIOS(
+          std::move(key),
+          "WebcompatReporterService",
+          ProfileSelection::kOwnInstanceInIncognito,
+          ServiceCreation::kCreateLazily,
+          TestingCreation::kCreateService) {}
 
 void WebcompatReporterServiceFactory::RegisterProfilePrefs(
     user_prefs::PrefRegistrySyncable* registry) {
@@ -49,13 +42,13 @@ void WebcompatReporterServiceFactory::RegisterProfilePrefs(
 
 std::unique_ptr<KeyedService>
 WebcompatReporterServiceFactory::BuildServiceInstanceFor(
-    ProfileIOS* profile) const {
+    ProfileIOS& profile) const {
   auto report_uploader = std::make_unique<WebcompatReportUploader>(
-      profile->GetSharedURLLoaderFactory());
+      profile.GetSharedURLLoaderFactory());
   component_updater::ComponentUpdateService* cus =
       GetApplicationContext()->GetComponentUpdateService();
   return std::make_unique<WebcompatReporterService>(
-      !profile || profile->IsOffTheRecord() ? nullptr : profile->GetPrefs(),
+      profile.IsOffTheRecord() ? nullptr : profile.GetPrefs(),
       std::make_unique<WebcompatReporterServiceDelegateImpl>(cus),
       std::move(report_uploader));
 }

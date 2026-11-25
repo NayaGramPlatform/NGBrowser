@@ -1,0 +1,72 @@
+/* Copyright (c) 2026 The Brave Authors. All rights reserved.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at https://mozilla.org/MPL/2.0/. */
+
+#include "brave/browser/speech/on_device_speech_model_permission_request.h"
+
+#include <memory>
+#include <utility>
+
+#include "base/check.h"
+#include "base/functional/bind.h"
+#include "brave/components/local_ai/core/pref_names.h"
+#include "brave/grit/brave_generated_resources.h"
+#include "components/permissions/permission_decision.h"
+#include "components/permissions/permission_prompt_decision.h"
+#include "components/permissions/permission_request_data.h"
+#include "components/permissions/request_type.h"
+#include "components/prefs/pref_service.h"
+#include "ui/base/l10n/l10n_util.h"
+
+namespace speech {
+
+OnDeviceSpeechModelPermissionRequest::OnDeviceSpeechModelPermissionRequest(
+    PrefService& profile_prefs,
+    const GURL& requesting_origin,
+    ConsentCallback callback)
+    : PermissionRequest(
+          std::make_unique<permissions::PermissionRequestData>(
+              permissions::RequestType::kBraveOnDeviceSpeechModel,
+              /*user_gesture=*/true,
+              requesting_origin),
+          base::BindRepeating(
+              &OnDeviceSpeechModelPermissionRequest::PermissionDecided,
+              base::Unretained(this))),
+      callback_(std::move(callback)),
+      profile_prefs_(profile_prefs) {
+  CHECK(callback_);
+}
+
+OnDeviceSpeechModelPermissionRequest::~OnDeviceSpeechModelPermissionRequest() =
+    default;
+
+std::u16string OnDeviceSpeechModelPermissionRequest::GetMessageTextFragment()
+    const {
+  return l10n_util::GetStringUTF16(
+      IDS_ON_DEVICE_SPEECH_MODEL_PERMISSION_FRAGMENT);
+}
+
+void OnDeviceSpeechModelPermissionRequest::PermissionDecided(
+    const permissions::PermissionPromptDecision& decision,
+    const permissions::PermissionRequestData& request_data) {
+  // A non-final decision means a final one can follow, so wait for it.
+  // PermissionRequestManager sends one only for the quiet UI and for embedded
+  // permission prompts. This request uses neither of them.
+  if (!decision.is_final) {
+    return;
+  }
+
+  // Only the request that the prompt shows gets the checkbox. A request that
+  // joined the prompt gets the same block without it, so a block without the
+  // checkbox writes nothing, and does not undo the choice of the user.
+  if (decision.overall_decision == PermissionDecision::kDeny &&
+      get_dont_ask_again()) {
+    profile_prefs_->SetBoolean(local_ai::prefs::kAskEnableOnDeviceSpeechModel,
+                               false);
+  }
+  std::move(callback_).Run(decision.overall_decision ==
+                           PermissionDecision::kAllow);
+}
+
+}  // namespace speech

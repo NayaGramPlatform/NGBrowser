@@ -36,6 +36,7 @@
 #include "chrome/browser/history/history_service_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/webui/favicon_source.h"
+#include "chrome/browser/ui/webui/theme_source.h"
 #include "components/favicon_base/favicon_url_parser.h"
 #include "components/grit/brave_components_resources.h"
 #include "components/grit/brave_components_webui_strings.h"
@@ -54,7 +55,6 @@
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/tabs/tab_model.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
-#include "chrome/browser/ui/webui/theme_source.h"
 #else
 #include "chrome/browser/ui/android/tab_model/tab_model.h"
 #include "chrome/browser/ui/android/tab_model/tab_model_list.h"
@@ -116,6 +116,10 @@ AIChatUI::AIChatUI(content::WebUI* web_ui)
   source->AddBoolean(
       "isWorkspaceToolsEnabled",
       base::FeatureList::IsEnabled(ai_chat::features::kAIChatWorkspaceTools));
+  source->AddBoolean(
+      "isWorkspaceNativeDirectoriesEnabled",
+      base::FeatureList::IsEnabled(ai_chat::features::kAIChatWorkspaceTools) &&
+          ai_chat::features::kWorkspaceNativeDirectories.Get());
 
   web_ui->AddRequestableScheme(content::kChromeUIUntrustedScheme);
   source->OverrideContentSecurityPolicy(
@@ -133,14 +137,19 @@ AIChatUI::AIChatUI(content::WebUI* web_ui)
   source->OverrideContentSecurityPolicy(
       network::mojom::CSPDirectiveName::ChildSrc,
       absl::StrFormat("child-src %s;", kAIChatUntrustedConversationUIURL));
+  // Allow framing workspace pages in the lightbox for viewing workspace files.
+  // Workspaces live at chrome-untrusted://<uuid>.leo-workspace origins.
+  source->OverrideContentSecurityPolicy(
+      network::mojom::CSPDirectiveName::FrameSrc,
+      absl::StrFormat("frame-src %s chrome-untrusted://*.%s;",
+                      kAIChatUntrustedConversationUIURL,
+                      ai_chat::kAIChatLeoWorkspaceUIHost));
 
   content::URLDataSource::Add(
       profile_, std::make_unique<FaviconSource>(
                     profile_, chrome::FaviconUrlFormat::kFavicon2));
-#if !BUILDFLAG(IS_ANDROID)
   content::URLDataSource::Add(profile_,
                               std::make_unique<ThemeSource>(profile_));
-#endif
 
   // Links in a conversation are plain anchors, so the browser opens them
   // without going through any AI Chat handler. Watch for that so a full-page

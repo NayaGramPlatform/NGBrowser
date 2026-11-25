@@ -9,11 +9,12 @@
 // runEncoder() and runDecoder() return synthetic encoder/decoder outputs instead
 // of invoking ONNX Runtime and the actual Nemotron model.
 
-import { describe, expect, it, jest } from '@jest/globals'
+import { afterEach, describe, expect, it, jest } from '@jest/globals'
 
+import { StreamingMelFrontend } from './audio_features'
 import { NemotronStreamSession, OrtNemotronModel } from './nemotron_recognizer'
-
 import * as config from './configs'
+import { getNemotronLocale } from './utils'
 
 jest.mock('./ort_env', () => ({
   // Used by processAvailable(); no-op for unit tests
@@ -47,6 +48,7 @@ type EncoderFeeds = {
   cache_last_channel: TestTensor
   cache_last_time: TestTensor
   cache_last_channel_len: TestTensor
+  prompt_index?: TestTensor
 }
 
 // inputs to runDecoder()
@@ -81,9 +83,17 @@ function samplesForStableFrames(frameCount: number): number {
   return config.STREAMING_RIGHT_CONTEXT + (frameCount - 1) * config.HOP_LENGTH
 }
 
-// Raw samples needed before exactly `chunkCount` complete encoder chunks can be available.
+// The session starts its frontend with this much silence before addAudio().
+const LEADING_SILENCE_SAMPLES =
+  (config.TARGET_SAMPLE_RATE * config.LEADING_SILENCE_MS) / 1000
+
+// Samples addAudio() must receive before exactly `chunkCount` complete encoder
+// chunks can be available, net of the leading silence.
 function samplesForChunks(chunkCount: number): number {
-  return samplesForStableFrames(chunkCount * config.NEMO_CHUNK)
+  return (
+    samplesForStableFrames(chunkCount * config.NEMO_CHUNK)
+    - LEADING_SILENCE_SAMPLES
+  )
 }
 
 // Once the first chunk is available, each additional encoder chunk advances by exactly 56 * 160 samples.
@@ -136,13 +146,18 @@ function makeEncoderResult(cacheMarker = 0, cacheLen = 0, nEnc = 1) {
 }
 
 // create mock/fake decoder results
-function makeDecoderResult(token: number, stateMarker = 0) {
-  const logits = new Float32Array(config.NEMO_VOCAB)
+function makeDecoderResult(
+  token: number,
+  stateMarker = 0,
+  modelType: config.NemotronModelType = 'english',
+) {
+  const vocabSize = config.MODEL_CONFIGS[modelType].NEMO_VOCAB
+  const logits = new Float32Array(vocabSize)
 
   logits[token] = 1
 
   return {
-    outputs: new TestTensor('float32', logits, [1, config.NEMO_VOCAB]),
+    outputs: new TestTensor('float32', logits, [1, vocabSize]),
 
     output_states_1: new TestTensor(
       'float32',
@@ -160,16 +175,25 @@ function makeDecoderResult(token: number, stateMarker = 0) {
 
 // Creates a mock model for NemotronStreamSession with simulated encoder and
 // decoder inference.
-function createMockModel(): MockModel {
+function createMockModel(
+  modelType: config.NemotronModelType = 'english',
+): MockModel {
+  const modelConfig = config.MODEL_CONFIGS[modelType]
   const tokens: string[] = []
 
   tokens[1] = '▁hello'
   tokens[2] = '▁world'
-  tokens[config.NEMO_BLANK] = '<blank>'
+  if (modelType === 'multilingual') {
+    tokens[100] = '<es-ES>'
+    tokens[101] = '<fr-CA>'
+  }
+  tokens[modelConfig.NEMO_BLANK] = '<blank>'
 
   const runEncoder = jest.fn(async () => makeEncoderResult())
 
-  const runDecoder = jest.fn(async () => makeDecoderResult(config.NEMO_BLANK))
+  const runDecoder = jest.fn(async () =>
+    makeDecoderResult(modelConfig.NEMO_BLANK, 0, modelType),
+  )
 
   const ort = {
     Tensor: TestTensor,
@@ -198,9 +222,9 @@ function createMockModel(): MockModel {
 }
 
 //
-function createSession(mock: MockModel) {
+function createSession(mock: MockModel, lang: string = 'en-US') {
   const results: Result[] = []
-
+  const locale = getNemotronLocale(lang)
   const onResult = jest.fn((text: string, isFinal: boolean) => {
     results.push({
       text,
@@ -212,6 +236,7 @@ function createSession(mock: MockModel) {
 
   const session = new NemotronStreamSession(
     mock.model,
+    locale,
     config.TARGET_SAMPLE_RATE,
     onResult,
     onError,
@@ -233,11 +258,13 @@ describe('NemotronStreamSession', () => {
 
     it('accepts the Nemotron sample rate', () => {
       const mock = createMockModel()
+      const locale = getNemotronLocale('en-US')
 
       expect(
         () =>
           new NemotronStreamSession(
             mock.model,
+            locale,
             config.TARGET_SAMPLE_RATE,
             () => {},
             () => {},
@@ -247,12 +274,14 @@ describe('NemotronStreamSession', () => {
 
     it('rejects unsupported sample rates', () => {
       const mock = createMockModel()
+      const locale = getNemotronLocale('en-US')
       const wrongSamplingRate = 8000
 
       expect(
         () =>
           new NemotronStreamSession(
             mock.model,
+            locale,
             wrongSamplingRate,
             () => {},
             () => {},
@@ -368,6 +397,126 @@ describe('NemotronStreamSession', () => {
     })
   })
 
+  describe('leading silence', () => {
+    // Streaming tests for the lead-in silence verifying that -
+    // (a) the session feeds exactly LEADING_SILENCE_SAMPLES zeros to the
+    // frontend when it starts, before any addAudio()
+    // (b) the silence is added only once for the whole session, however many
+    // addAudio() calls follow, and finish() adds only its own flush silence
+    // (c) the first real sample directly follows the silence
+    // (d) every real sample reaches the frontend unchanged and in order
+    afterEach(() => {
+      jest.restoreAllMocks()
+    })
+
+    // Records every array the session passes to the real frontend. Call this
+    // before createSession(), because the silence is fed in the constructor.
+    function recordFrontendInput(): () => Float32Array[] {
+      const spy = jest.spyOn(
+        StreamingMelFrontend.prototype,
+        'appendAudioSamples',
+      )
+      return () => spy.mock.calls.map(([samples]) => samples)
+    }
+
+    function concat(parts: Float32Array[]): Float32Array {
+      const all = new Float32Array(
+        parts.reduce((total, part) => total + part.length, 0),
+      )
+      let offset = 0
+      for (const part of parts) {
+        all.set(part, offset)
+        offset += part.length
+      }
+      return all
+    }
+
+    // Non-zero samples that differ from each other, so a dropped, repeated or
+    // reordered sample is detectable and none can pass for silence.
+    function makeRealAudio(length: number): Float32Array {
+      return Float32Array.from({ length }, (_, i) => (i + 1) / 1000)
+    }
+
+    function splitInto(audio: Float32Array, sizes: number[]): Float32Array[] {
+      const packets: Float32Array[] = []
+      let offset = 0
+      for (const size of sizes) {
+        packets.push(audio.slice(offset, offset + size))
+        offset += size
+      }
+      return packets
+    }
+
+    it('feeds the silence at construction, before any real audio', () => {
+      const frontendInput = recordFrontendInput()
+      createSession(createMockModel())
+
+      const calls = frontendInput()
+
+      expect(LEADING_SILENCE_SAMPLES).toBeGreaterThan(0)
+      expect(calls).toHaveLength(1)
+      expect(calls[0]).toHaveLength(LEADING_SILENCE_SAMPLES)
+      expect(calls[0].every((sample) => sample === 0)).toBe(true)
+    })
+
+    it('places the first real sample right after the silence', () => {
+      const frontendInput = recordFrontendInput()
+      const { session } = createSession(createMockModel())
+      const real = makeRealAudio(100)
+
+      session.addAudio(real)
+
+      const stream = concat(frontendInput())
+
+      expect(stream[LEADING_SILENCE_SAMPLES - 1]).toBe(0)
+      expect(stream[LEADING_SILENCE_SAMPLES]).toBe(real[0])
+    })
+
+    it('adds the silence once and keeps every real sample in order', async () => {
+      const frontendInput = recordFrontendInput()
+      const { session } = createSession(createMockModel())
+      const packetSizes = [1, 700, 5000, 300]
+      const real = makeRealAudio(packetSizes.reduce((a, b) => a + b, 0))
+
+      for (const packet of splitInto(real, packetSizes)) {
+        session.addAudio(packet)
+      }
+      await waitForIdle(session)
+
+      const calls = frontendInput()
+      const stream = concat(calls)
+
+      // One call for the silence, then one per addAudio() call.
+      expect(calls).toHaveLength(1 + packetSizes.length)
+      expect(stream).toHaveLength(LEADING_SILENCE_SAMPLES + real.length)
+      expect(
+        stream
+          .slice(0, LEADING_SILENCE_SAMPLES)
+          .every((sample) => sample === 0),
+      ).toBe(true)
+      expect(stream.slice(LEADING_SILENCE_SAMPLES)).toEqual(real)
+    })
+
+    it('adds only the flush silence on finish, not another lead-in', async () => {
+      const frontendInput = recordFrontendInput()
+      const { session } = createSession(createMockModel())
+      const real = makeRealAudio(2000)
+      const flushSamples =
+        config.SILENCE_FLUSH_CHUNKS * config.NEMO_CHUNK * config.HOP_LENGTH
+
+      session.addAudio(real)
+      session.finish()
+      await waitForIdle(session)
+
+      const stream = concat(frontendInput())
+      const realEnd = LEADING_SILENCE_SAMPLES + real.length
+
+      expect(stream).toHaveLength(realEnd + flushSamples)
+      expect(stream.slice(LEADING_SILENCE_SAMPLES, realEnd)).toEqual(real)
+      expect(stream.slice(realEnd).every((sample) => sample === 0)).toBe(true)
+    })
+  })
+
   describe('encoder state', () => {
     // Streaming tests for encoder state verifying that -
     // (a) the previous encoder call’s cache is fed into the next call
@@ -424,7 +573,9 @@ describe('NemotronStreamSession', () => {
 
       const { session } = createSession(mock)
 
-      mock.runDecoder.mockResolvedValue(makeDecoderResult(config.NEMO_BLANK))
+      mock.runDecoder.mockResolvedValue(
+        makeDecoderResult(config.MODEL_CONFIGS.english.NEMO_BLANK),
+      )
 
       session.addAudio(new Float32Array(samplesForChunks(1)))
 
@@ -446,7 +597,7 @@ describe('NemotronStreamSession', () => {
           return makeDecoderResult(1, fakeLSTMStateMarker)
         }
 
-        return makeDecoderResult(config.NEMO_BLANK)
+        return makeDecoderResult(config.MODEL_CONFIGS.english.NEMO_BLANK)
       })
 
       session.addAudio(new Float32Array(samplesForChunks(1)))
@@ -478,13 +629,13 @@ describe('NemotronStreamSession', () => {
             return makeDecoderResult(1, fakeLSTMStateMarker1)
 
           case 1:
-            return makeDecoderResult(config.NEMO_BLANK)
+            return makeDecoderResult(config.MODEL_CONFIGS.english.NEMO_BLANK)
 
           case 2:
             return makeDecoderResult(2, fakeLSTMStateMarker2)
 
           default:
-            return makeDecoderResult(config.NEMO_BLANK)
+            return makeDecoderResult(config.MODEL_CONFIGS.english.NEMO_BLANK)
         }
       })
 
@@ -521,7 +672,7 @@ describe('NemotronStreamSession', () => {
           return makeDecoderResult(1, fakeLSTMStateMarker)
         }
 
-        return makeDecoderResult(config.NEMO_BLANK)
+        return makeDecoderResult(config.MODEL_CONFIGS.english.NEMO_BLANK)
       })
 
       session.addAudio(new Float32Array(samplesForChunks(2)))
@@ -565,7 +716,9 @@ describe('NemotronStreamSession', () => {
 
       const { session, onResult } = createSession(mock)
 
-      mock.runDecoder.mockResolvedValue(makeDecoderResult(config.NEMO_BLANK))
+      mock.runDecoder.mockResolvedValue(
+        makeDecoderResult(config.MODEL_CONFIGS.english.NEMO_BLANK),
+      )
 
       session.addAudio(new Float32Array(samplesForChunks(1)))
 
@@ -761,6 +914,173 @@ describe('NemotronStreamSession', () => {
       } finally {
         consoleSpy.mockRestore()
       }
+    })
+  })
+
+  describe('model-specific encoder inputs', () => {
+    it('uses English cache dimensions and omits prompt_index', async () => {
+      const mock = createMockModel('english')
+      const { session } = createSession(mock, 'en-US')
+
+      session.addAudio(new Float32Array(samplesForChunks(1)))
+      await waitForIdle(session)
+
+      const feeds = mock.runEncoder.mock.calls[0][0] as EncoderFeeds
+      expect(feeds.audio_signal.dims).toEqual([
+        1,
+        config.N_MELS,
+        config.NEMO_FRAMES,
+      ])
+      expect(feeds.cache_last_channel.dims).toEqual([
+        1,
+        config.NEMO_NUM_ENCODER_LAYERS,
+        config.MODEL_CONFIGS.english.NEMO_LEFT_CONTEXT,
+        config.NEMO_HIDDEN_DIM,
+      ])
+      expect(feeds.cache_last_time.dims).toEqual([
+        1,
+        config.NEMO_NUM_ENCODER_LAYERS,
+        config.NEMO_HIDDEN_DIM,
+        config.NEMO_CONV_CONTEXT,
+      ])
+      expect(feeds.prompt_index).toBeUndefined()
+    })
+
+    it.each([
+      ['es-ES', 2],
+      ['fr-CA', 100],
+      ['ar', 7],
+    ])(
+      'uses multilingual cache dimensions and prompt_index for %s',
+      async (lang: string, promptId: number) => {
+        const mock = createMockModel('multilingual')
+        const { session } = createSession(mock, lang)
+
+        session.addAudio(new Float32Array(samplesForChunks(1)))
+        await waitForIdle(session)
+
+        expect(mock.runEncoder).toHaveBeenCalledTimes(1)
+        const feeds = mock.runEncoder.mock.calls[0][0] as EncoderFeeds
+        expect(feeds.audio_signal.dims).toEqual([
+          1,
+          config.N_MELS,
+          config.NEMO_FRAMES,
+        ])
+        expect(feeds.cache_last_channel.dims).toEqual([
+          config.NEMO_NUM_ENCODER_LAYERS,
+          1,
+          config.MODEL_CONFIGS.multilingual.NEMO_LEFT_CONTEXT,
+          config.NEMO_HIDDEN_DIM,
+        ])
+        expect(feeds.cache_last_channel.data).toHaveLength(
+          config.NEMO_NUM_ENCODER_LAYERS
+            * config.MODEL_CONFIGS.multilingual.NEMO_LEFT_CONTEXT
+            * config.NEMO_HIDDEN_DIM,
+        )
+        expect(feeds.cache_last_time.dims).toEqual([
+          config.NEMO_NUM_ENCODER_LAYERS,
+          1,
+          config.NEMO_HIDDEN_DIM,
+          config.NEMO_CONV_CONTEXT,
+        ])
+        expect(feeds.prompt_index?.type).toBe('int64')
+        expect(feeds.prompt_index?.dims).toEqual([1])
+        expect(feeds.prompt_index?.data).toEqual(
+          BigInt64Array.from([BigInt(promptId)]),
+        )
+      },
+    )
+
+    it('reuses multilingual cache values on the next chunk', async () => {
+      const mock = createMockModel('multilingual')
+      const { session } = createSession(mock, 'es-ES')
+      mock.runEncoder
+        .mockImplementationOnce(async () => makeEncoderResult(42, 1))
+        .mockImplementationOnce(async () => makeEncoderResult(84, 2))
+
+      session.addAudio(new Float32Array(samplesForChunks(2)))
+      await waitForIdle(session)
+
+      expect(mock.runEncoder).toHaveBeenCalledTimes(2)
+      const feeds = mock.runEncoder.mock.calls[1][0] as EncoderFeeds
+      expect((feeds.cache_last_channel.data as Float32Array)[0]).toBe(42)
+      expect((feeds.cache_last_time.data as Float32Array)[0]).toBe(42)
+      expect((feeds.cache_last_channel_len.data as BigInt64Array)[0]).toBe(1n)
+      expect(feeds.prompt_index?.data).toEqual(BigInt64Array.from([2n]))
+    })
+  })
+
+  describe('multilingual RNN-T decoding', () => {
+    it('uses the multilingual blank ID to stop decoding', async () => {
+      const mock = createMockModel('multilingual')
+      const { session, onResult } = createSession(mock, 'es-ES')
+
+      session.addAudio(new Float32Array(samplesForChunks(1)))
+      await waitForIdle(session)
+
+      expect(mock.runDecoder).toHaveBeenCalledTimes(1)
+      const feeds = mock.runDecoder.mock.calls[0][0] as DecoderFeeds
+      expect((feeds.targets.data as Int32Array)[0]).toBe(
+        config.MODEL_CONFIGS.multilingual.NEMO_BLANK,
+      )
+      expect(onResult).not.toHaveBeenCalled()
+    })
+
+    it('strips language tags from transcripts but retains them in predictor state', async () => {
+      const mock = createMockModel('multilingual')
+      const { session, results } = createSession(mock, 'es-ES')
+      const blank = config.MODEL_CONFIGS.multilingual.NEMO_BLANK
+      const emitted = [1, 100, 2, blank]
+      let call = 0
+      mock.runDecoder.mockImplementation(async () => {
+        const i = call++
+        return makeDecoderResult(emitted[i], 10 + i, 'multilingual')
+      })
+
+      session.addAudio(new Float32Array(samplesForChunks(1)))
+      await waitForIdle(session)
+
+      expect(results).toEqual([{ text: 'hello world', isFinal: false }])
+      expect(mock.runDecoder).toHaveBeenCalledTimes(4)
+      // The language-control token is retained as the predictor input.
+      const feedsAfterTag = mock.runDecoder.mock.calls[2][0] as DecoderFeeds
+      expect((feedsAfterTag.targets.data as Int32Array)[0]).toBe(100)
+      expect((feedsAfterTag.input_states_1.data as Float32Array)[0]).toBe(11)
+    })
+
+    it('does not emit an interim result when only a language tag is decoded', async () => {
+      const mock = createMockModel('multilingual')
+      const { session, onResult } = createSession(mock, 'es-ES')
+      const blank = config.MODEL_CONFIGS.multilingual.NEMO_BLANK
+      let call = 0
+      mock.runDecoder.mockImplementation(async () =>
+        makeDecoderResult(call++ === 0 ? 100 : blank, 0, 'multilingual'),
+      )
+
+      session.addAudio(new Float32Array(samplesForChunks(1)))
+      await waitForIdle(session)
+
+      expect(mock.runDecoder).toHaveBeenCalledTimes(2)
+      expect(onResult).not.toHaveBeenCalled()
+    })
+
+    it('emits a final transcript without the language tag', async () => {
+      const mock = createMockModel('multilingual')
+      const { session, results } = createSession(mock, 'es-ES')
+      const blank = config.MODEL_CONFIGS.multilingual.NEMO_BLANK
+      const emitted = [1, 100, blank]
+      let call = 0
+      mock.runDecoder.mockImplementation(async () =>
+        makeDecoderResult(emitted[call++] ?? blank, 0, 'multilingual'),
+      )
+
+      session.addAudio(new Float32Array(samplesForChunks(1)))
+      await waitForIdle(session)
+      session.finish()
+      await waitForIdle(session)
+
+      expect(results.at(-1)).toEqual({ text: 'hello', isFinal: true })
+      expect(results.every(({ text }) => !text.includes('<es-ES>'))).toBe(true)
     })
   })
 })

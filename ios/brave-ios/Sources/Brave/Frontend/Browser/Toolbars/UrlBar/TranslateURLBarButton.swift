@@ -28,8 +28,8 @@ class TranslateURLBarButton: UIButton {
     var configuration = UIButton.Configuration.plain()
     configuration.baseBackgroundColor = .clear
     configuration.contentInsets = .zero
+    configuration.image = imageIcon
     self.configuration = configuration
-    setImage(imageIcon, for: .normal)
     updateIconSize()
 
     registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (self: Self, _) in
@@ -75,10 +75,8 @@ class TranslateURLBarButton: UIButton {
       forTextStyle: .body,
       compatibleWith: .init(preferredContentSizeCategory: sizeCategory)
     ).pointSize
-    setPreferredSymbolConfiguration(
-      .init(pointSize: pointSize, weight: .regular, scale: .medium),
-      forImageIn: .normal
-    )
+    configuration?.preferredSymbolConfigurationForImage =
+      .init(pointSize: pointSize, weight: .regular, scale: .medium)
   }
 
   var translateState: TranslationState = .unavailable {

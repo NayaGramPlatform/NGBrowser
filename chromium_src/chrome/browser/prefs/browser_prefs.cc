@@ -8,6 +8,7 @@
 #include "brave/browser/brave_local_state_prefs.h"
 #include "brave/browser/brave_profile_prefs.h"
 #include "brave/browser/brave_stats/buildflags.h"
+#include "brave/browser/misc_metrics/fingerprint_frequency_metrics.h"
 #include "brave/browser/misc_metrics/uptime_monitor_impl.h"
 #include "brave/browser/translate/brave_translate_prefs_migration.h"
 #include "brave/components/ai_chat/core/common/buildflags/buildflags.h"
@@ -18,7 +19,7 @@
 #include "brave/components/brave_rewards/core/buildflags/buildflags.h"
 #include "brave/components/brave_search/browser/backup_results_metrics.h"
 #include "brave/components/brave_search_conversion/p3a.h"
-#include "brave/components/brave_shields/content/browser/ad_block_service.h"
+#include "brave/components/brave_shields/core/browser/ad_block_service.h"
 #include "brave/components/brave_shields/core/browser/brave_shields_p3a.h"
 #include "brave/components/brave_sync/brave_sync_prefs.h"
 #include "brave/components/brave_vpn/common/buildflags/buildflags.h"
@@ -26,12 +27,14 @@
 #include "brave/components/constants/pref_names.h"
 #include "brave/components/ipfs/ipfs_prefs.h"
 #include "brave/components/l10n/common/prefs.h"
+#include "brave/components/local_ai/buildflags/buildflags.h"
 #include "brave/components/ntp_background_images/browser/ntp_background_images_service.h"
 #include "brave/components/ntp_background_images/buildflags/buildflags.h"
 #include "brave/components/ntp_background_images/common/view_counter_pref_registry.h"
 #include "brave/components/omnibox/browser/brave_omnibox_prefs.h"
 #include "brave/components/p3a/metric_log_store.h"
 #include "brave/components/p3a/rotation_scheduler.h"
+#include "brave/components/psst/buildflags/buildflags.h"
 #include "brave/components/speedreader/common/buildflags/buildflags.h"
 #include "brave/components/tor/buildflags/buildflags.h"
 #include "chrome/common/pref_names.h"
@@ -62,9 +65,16 @@
 #endif
 
 #if !BUILDFLAG(IS_ANDROID)
-#include "brave/browser/ui/tabs/brave_tab_prefs.h"
+#include "brave/browser/ui/bookmark/bookmark_helper.h"
 #include "brave/browser/ui/webui/brave_new_tab_page_refresh/new_tab_page_initializer.h"
 #include "brave/browser/ui/webui/brave_welcome_page/brave_welcome_page_prefs.h"
+
+// Defined in //brave/browser/ui:brave_tab_prefs, linked through
+// //brave/browser:core.
+namespace brave_tabs {
+void MigrateBraveProfilePrefs(PrefService* prefs);
+void MaybeApplyVerticalTabMigrationTestingOverride(PrefService* prefs);
+}  // namespace brave_tabs
 #endif
 
 #if BUILDFLAG(ENABLE_BRAVE_VPN)
@@ -77,8 +87,13 @@
 #include "brave/components/decentralized_dns/core/utils.h"
 #endif
 
+#if BUILDFLAG(ENABLE_LOCAL_AI)
+#include "brave/components/local_ai/core/pref_names.h"
+#endif
+
 #if BUILDFLAG(ENABLE_TOR)
 #include "brave/components/tor/pref_names.h"
+#include "brave/components/tor/tor_profile_service.h"
 #include "brave/components/tor/tor_utils.h"
 #endif
 
@@ -96,6 +111,10 @@
 
 #if BUILDFLAG(ENABLE_SPEEDREADER)
 #include "brave/components/speedreader/speedreader_pref_migration.h"
+#endif
+
+#if BUILDFLAG(ENABLE_PSST)
+#include "brave/components/psst/core/browser/pref_names.h"
 #endif
 
 #if !BUILDFLAG(ENABLE_EXTENSIONS)
@@ -189,6 +208,8 @@ void MigrateObsoleteBraveProfilePrefsAfterChromium(
   // Added 03/2024
 #if BUILDFLAG(ENABLE_TOR)
   profile_prefs->ClearPref(tor::prefs::kAutoOnionRedirect);
+
+  tor::TorProfileService::MigrateObsoleteProfilePrefs(profile_prefs);
 #endif
 
 #if defined(TOOLKIT_VIEWS)
@@ -222,6 +243,8 @@ void MigrateObsoleteBraveProfilePrefsAfterChromium(
 #if !BUILDFLAG(IS_ANDROID)
   // Added 2024-01
   brave_tabs::MigrateBraveProfilePrefs(profile_prefs);
+  // Dev/QA override for vertical tab migration testing
+  brave_tabs::MaybeApplyVerticalTabMigrationTestingOverride(profile_prefs);
 #endif  // !BUILDFLAG(IS_ANDROID)
 
   // Added 2024-04
@@ -270,6 +293,18 @@ void MigrateObsoleteBraveProfilePrefsAfterChromium(
 
   // Added 2026-06
   profile_prefs->ClearPref(kTabsSearchShow);
+
+  // Added 2026-09
+#if !BUILDFLAG(IS_ANDROID)
+  brave::MigrateBookmarkState(profile_prefs);
+#endif
+
+  // Added 2026-11
+#if BUILDFLAG(ENABLE_PSST)
+  profile_prefs->ClearPref(psst::prefs::kPsstInfobarShownCounter);
+  profile_prefs->ClearPref(psst::prefs::kPsstInfobarDeclineCounter);
+#endif
+
   // END_MIGRATE_OBSOLETE_PROFILE_PREFS
 }
 
@@ -297,6 +332,7 @@ void MigrateObsoleteBraveLocalStatePrefsAfterChromium(
 #endif
 
   misc_metrics::UptimeMonitorImpl::MigrateObsoletePrefs(local_state);
+  misc_metrics::FingerprintFrequencyMetrics::MigrateObsoletePrefs(local_state);
   brave_search::BackupResultsMetrics::MigrateObsoleteLocalStatePrefs(
       local_state);
   brave_search_conversion::p3a::MigrateObsoleteLocalStatePrefs(local_state);
@@ -314,6 +350,10 @@ void MigrateObsoleteBraveLocalStatePrefsAfterChromium(
       MigrateObsoleteLocalStatePrefs(local_state);
 #if BUILDFLAG(ENABLE_BRAVE_WALLET)
   brave_wallet::MigrateObsoleteLocalStatePrefs(local_state);
+#endif
+#if BUILDFLAG(ENABLE_LOCAL_AI)
+  // Added 2026-11.
+  local_ai::prefs::MigrateObsoleteLocalStatePrefs(local_state);
 #endif
   // END_MIGRATE_OBSOLETE_LOCAL_STATE_PREFS
 }

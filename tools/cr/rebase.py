@@ -10,9 +10,11 @@ file-in / file-out transforms that brockit hooks into git via the
 `git rebase --interactive`:
 
 * `rewrite_plan(todo_file, …)` -- reorders the rebase TODO produced by
-  `GIT_SEQUENCE_EDITOR`. Pinned commits get grouped to the top, recyclable
-  commits get optionally evicted, reassign commits get placed next to
-  their target, and drop commits remove themselves along with their target.
+  `GIT_SEQUENCE_EDITOR`. Pinned commits get grouped to the top, with the
+  branch's `[brockit]` and `[git-cr]` commits right after the
+  `Update from Chromium` group,
+  recyclable commits get optionally evicted, reassign commits get placed next
+  to their target, and drop commits remove themselves along with their target.
 * `MessageWriter.parse(todo_file)` + `rewrite_with_last_message()` --
   composes the squash commit message produced by `GIT_EDITOR`, picking
   whichever surviving message corresponds to the kind of squash being
@@ -25,48 +27,35 @@ as a `#`-comment and opens the user's editor.
 
 Commit categories formalised here (see `EntryType`):
 
-* PINNED -- commits that should be unique in the history of the branch.
-  Multiple occurrences of the same pinned change are auto-squashed by
-  `brockit.py rebase --squash-minor-bumps`, and the resulting squash is
-  moved to the top of the branch history. Priority order is the entry
-  order in `PINNED_GROUPS`. Subjects that fit this category:
-
-    - Update from Chromium * to Chromium *.
-    - Apply-fixed 🩹 patches from Chromium * to Chromium *.
-    - Conflict-resolved patches from Chromium * to Chromium *.
-    - [cr*] `gnrt` run for Chromium *.
-    - [cr*] IWYU fixes.
-    - [cr*] Bump resource_ids.
-    - [cr*] Update Lit mangler snapshot.
-    - [cr*] Disable failing upstream tests.
-    - [cr*] Update lists for upstream flake tests.
-
-* RECYCLABLE -- commits we can always drop and regenerate with tooling.
-  They're discarded by `brockit.py rebase --discard-regen-changes`.
-  Subjects that fit this category:
-
-    - Update patches from Chromium * to Chromium *.
-    - Updated strings for Chromium *.
-
+* PINNED and RECYCLABLE -- the subjects `pinned_commits` matches.
 * REASSIGNMENT -- `reassign!<hash>!` commits authored by
   `brockit reassign`. Repositioned next to their target when
   `pinned_squashed=True`.
-* DROP -- `drop!<hash>!` commits authored by `brockit drop`. Both the
-  marker and its target are removed from the plan when
-  `pinned_squashed=True`.
+* DROP -- `drop!<hash>!` commits authored by `brockit drop`. The marker,
+  its target and the target's attached `fixup!`/`amend!`/`squash!` commits
+  are removed from the plan when `pinned_squashed=True`.
 * DEFAULT -- everything else.
 """
 
 from __future__ import annotations
 
 import enum
+import hashlib
 import logging
 import os
 import re
 import shlex
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+import chromium_changes
+from pinned_commits import (
+    PINNED_GROUPS,
+    derived_change_id,
+    get_pinned_group_for_subject,
+    is_recyclable,
+)
 from terminal import terminal
 
 # Brockit-specific prefixes for commit messages, similar to `fixup!`. Each
@@ -74,25 +63,19 @@ from terminal import terminal
 REASSIGN_COMMIT_MSG_PREFIX = 'reassign!'
 DROP_COMMIT_MSG_PREFIX = 'drop!'
 
-# Strips one or more leading bracketed tags whose first token starts with
-# `cr` followed by digits -- e.g. `[cr149] `, `[cr149][ios] `. Leaves
-# unrelated bracketed tags alone. This means branch tags are irrelevant
-# when determining the commit type.
-_CR_TAG_RE = re.compile(r'^(?:\[cr\d+\](?:\[[^\]]+\])*\s+)?')
+# The todo commands that fold a commit into the one before it, and those of
+# them that replace its message.
+_FOLDING_COMMANDS = frozenset({'squash', 'fixup', 'fixup -C', 'fixup -c'})
+_REPLACING_COMMANDS = frozenset({'fixup -C', 'fixup -c'})
 
-# Strips repeated leading autosquash prefixes like `fixup! `, `amend! `,
-# `squash! ` -- these stack when commits fix up an already-fixup commit
-# (e.g. `fixup! fixup! fixup! Conflict-resolved patches …`). Pre-stripping
-# them lets the pinned/recyclable regexes match the underlying subject
-# regardless of how many autosquash levels deep the user has gone.
-_AUTOSQUASH_PREFIX_RE = re.compile(r'^(?:(?:fixup|amend|squash)!\s+)+')
+# A rebase's `exec` lines, message editor and `--continue` run the working
+# tree's Brockit and `git cr`, so the plan replays the branch's changes to them,
+# the commits tagged so, right after the `Update from Chromium` group.
+_TOOLING_TAGS = frozenset({'brockit', 'git-cr'})
+_LEADING_TAGS = re.compile(r'(?:\[[^\]]+\])+')
 
 # Git-naitve subcommands that brockit treats as autosquash markers.
 _AUTOSQUASH_SUBCOMMANDS = frozenset({'fixup', 'amend', 'reword', 'squash'})
-
-# Chromium version shape: exactly four dot-separated numeric segments
-# (e.g. 149.0.7827.5).
-_CR_VERSION = r'\d+\.\d+\.\d+\.\d+'
 
 # Matches the contiguous `!`-separated subcommand prefix of a comment, e.g.
 # `reassign!hash!`, `amend!`, `fixup!`. Git already uses `amend!`, `fixup!`,
@@ -109,85 +92,56 @@ _SUBCOMMAND_RE = re.compile(r'^[A-Za-z]\w*!(?:\w+!)*')
 # the line as the commit-subject suffix.
 _AUTOSQUASH_NOTE_RE = re.compile(r'#\s*(\w+!)\s*(.+)')
 
-
-def _strip_cr_tag(subject: str) -> str:
-    """Returns `subject` with any leading `[crNNN]` (or `[crNNN][...]…`)
-    tag and the trailing whitespace removed. A subject that doesn't
-    start with such a tag is returned unchanged."""
-    return _CR_TAG_RE.sub('', subject, count=1)
+# A Gerrit Change-Id trailer. Quoted ones (indented culprit messages, `> `
+# lines of a revert) don't match.
+_CHANGE_ID_RE = re.compile(r'Change-Id: (I[0-9a-f]{40})')
 
 
-def _strip_autosquash_prefixes(subject: str) -> str:
-    """Returns `subject` with any leading stack of `fixup! ` / `amend! `
-    / `squash! ` prefixes removed. Subjects without those prefixes are
-    returned unchanged."""
-    return _AUTOSQUASH_PREFIX_RE.sub('', subject)
+def _change_id_lines(lines: list[str]) -> tuple[list[int], int]:
+    """The indices of the Change-Id trailers in the last paragraph of
+    `lines`, where git looks for trailers, and the index the paragraph ends
+    at, before the comment lines git strips. The subject is never one."""
+    end = len(lines)
+    while end and (not lines[end - 1].strip() or lines[end - 1][0] == '#'):
+        end -= 1
+    start = next(
+        (i + 1 for i in range(end - 1, 0, -1) if not lines[i].strip()), end
+    )
+    return [
+        i
+        for i in range(start, end)
+        if _CHANGE_ID_RE.fullmatch(lines[i].rstrip())
+    ], end
 
 
-def _match(subject: str, pattern: re.Pattern) -> bool:
-    """True if `pattern` fully matches `subject` after stripping any
-    leading `fixup!` / `amend!` / `squash!` autosquash prefixes and any
-    `[crNNN]` tag. The stripped subject is also right-trimmed so a
-    trailing space in the original line doesn't break the fullmatch."""
-    cleaned = _strip_cr_tag(_strip_autosquash_prefixes(subject)).rstrip()
-    return pattern.fullmatch(cleaned) is not None
+def change_id_of(message: str) -> str | None:
+    """The Change-Id trailer of a commit message, if it has one."""
+    lines = message.split('\n')
+    found, _ = _change_id_lines(lines)
+    if not found:
+        return None
+    return _CHANGE_ID_RE.fullmatch(lines[found[0]].rstrip()).group(1)
 
 
-# Ordered list of `(pinned-group-id, regex)` entries. The order *is* the
-# squash priority order: when multiple pinned groups are present in the
-# same rebase plan, they're emitted top-to-bottom in this order
-# (version → plaster_reruns → conflict → gnrt → IWYU →
-# resource_ids → lit_mangler → disable_tests →
-# dead_upstream_tests → flake_tests). The regexes are
-# anchored fullmatches applied to the `[crNNN]`-stripped subject, so each
-# pattern matches both the tagged and the untagged form of the same commit.
-PINNED_GROUPS = [
-    ('version',
-     re.compile(rf'Update from Chromium {_CR_VERSION} to '
-                rf'Chromium {_CR_VERSION}\.?')),
-    ('plaster_reruns',
-     re.compile(rf'Apply-fixed 🩹 patches from Chromium {_CR_VERSION} to '
-                rf'Chromium {_CR_VERSION}\.?')),
-    ('conflict',
-     re.compile(rf'Conflict-resolved patches from Chromium {_CR_VERSION} to '
-                rf'Chromium {_CR_VERSION}\.?')),
-    ('gnrt', re.compile(rf'`gnrt` run for Chromium {_CR_VERSION}\.?')),
-    ('iwyu', re.compile(r'IWYU fixes\.?')),
-    ('resource_ids', re.compile(r'Bump resource_ids\.?')),
-    ('lit_mangler', re.compile(r'Update Lit mangler snapshot\.?')),
-    ('disable_tests',
-     re.compile(r'Disable failing upstream tests\.?|'
-                r'Filter upstream tests as needed\.?')),
-    ('dead_upstream_tests',
-     re.compile(r'Remove dead upstream tests from filters\.?')),
-    ('flake_tests', re.compile(r'Update lists for upstream flake tests\.?')),
-]
-
-# Subjects produced by `pnpm run update_patches` and string generation --
-# evicted when `discard_recyclable=True`.
-RECYCLABLE_PATTERNS = [
-    re.compile(rf'Update patches from Chromium {_CR_VERSION} to '
-               rf'Chromium {_CR_VERSION}\.?'),
-    re.compile(rf'Updated strings for Chromium {_CR_VERSION}\.?'),
-]
+def new_change_id(commit: str, message: str) -> str:
+    """A Change-Id for a commit that has none, from its hash and message,
+    as Gerrit's commit-msg hook makes one from what it has."""
+    digest = hashlib.sha1(f'{commit}\n{message}'.encode('utf-8')).hexdigest()
+    return f'I{digest}'
 
 
-def get_pinned_group_for_subject(subject: str) -> str | None:
-    """Returns the `PINNED_GROUPS` group id that `subject` matches
-    (e.g. `'version'`, `'iwyu'`), or `None` when no pattern matches.
-    Matching strips a leading `[crNNN]`-style tag, so the tagged and
-    untagged forms of the same subject return the same group id."""
-    for pinned_group, pattern in PINNED_GROUPS:
-        if _match(subject, pattern):
-            return pinned_group
-    return None
-
-
-def is_recyclable(subject: str) -> bool:
-    """Returns True when `subject` matches any `RECYCLABLE_PATTERNS`
-    entry -- i.e. the commit is auto-generated and can be regenerated
-    from the current source tree."""
-    return any(_match(subject, p) for p in RECYCLABLE_PATTERNS)
+def with_change_id(message: str, change_id: str) -> str:
+    """The message with `change_id` as its only Change-Id trailer: in place
+    of the first one it has, or as a paragraph of its own."""
+    lines = message.split('\n')
+    found, end = _change_id_lines(lines)
+    if not found:
+        lines[end:end] = ['', f'Change-Id: {change_id}']
+        return '\n'.join(lines)
+    lines[found[0]] = f'Change-Id: {change_id}'
+    for index in reversed(found[1:]):
+        del lines[index]
+    return '\n'.join(lines)
 
 
 def get_entry_type_for_subject(subject: str) -> 'EntryType':
@@ -225,7 +179,8 @@ def get_git_editor(primary_env: str = 'GIT_EDITOR') -> str:
                 f'${env_name} is already set to a brockit internal '
                 f'dispatch ({value!r}). `get_git_editor` must run '
                 f'BEFORE brockit overrides the env vars -- otherwise '
-                f'the editor fallback would loop on ourselves.')
+                f'the editor fallback would loop on ourselves.'
+            )
         return value
     return 'vim'
 
@@ -245,15 +200,20 @@ def hand_off_to_editor(todo_file: Path, reason: str, editor: str) -> None:
     through unchanged.
     """
     if reason:
-        intro = ('# B🚀 has been unable to handle this rebase. Investigate '
-                 'why, and\n'
-                 '# file a bug. Failure reason below.\n')
+        intro = (
+            '# B🚀 has been unable to handle this rebase. Investigate '
+            'why, and\n'
+            '# file a bug. Failure reason below.\n'
+        )
         prefix = intro + ''.join(
             (line if line.startswith('#') else f'# {line}') + '\n'
-            for line in reason.splitlines())
-        todo_file.write_text(prefix + todo_file.read_bytes().decode('utf-8'),
-                             encoding='utf-8',
-                             newline='')
+            for line in reason.splitlines()
+        )
+        todo_file.write_text(
+            prefix + todo_file.read_bytes().decode('utf-8'),
+            encoding='utf-8',
+            newline='',
+        )
 
     # `editor` may be a multi-token command (e.g. `vim -X`,
     # `code --wait`, `my_editor --feature="with space"`).
@@ -273,6 +233,7 @@ class EntryType(enum.Enum):
                         `MessageWriter.parse` never returns this value
                         -- it raises `EditorRecoverableFailure` instead.
     """
+
     PINNED = 'pinned'
     RECYCLABLE = 'recyclable'
     REASSIGNMENT = 'reassignment'
@@ -300,19 +261,19 @@ class EditorRecoverableFailure(Exception):
 
 
 class EntryLine:
-    """A parsed line from a `git rebase --interactive` TODO file.
-    """
+    """A parsed line from a `git rebase --interactive` TODO file."""
 
     def __init__(
-            self,
-            *,
-            out: str,
-            command: str,
-            # Disabling pylint here as `hash` is an appropriate word.
-            hash: str,  # pylint: disable=redefined-builtin
-            message: str,
-            subcommand: list | None = None,
-            note: str | None = None):
+        self,
+        *,
+        out: str,
+        command: str,
+        # Disabling pylint here as `hash` is an appropriate word.
+        hash: str,  # pylint: disable=redefined-builtin
+        message: str,
+        subcommand: list | None = None,
+        note: str | None = None,
+    ):
 
         # The text for the entry line in the file. This is loaded from the
         # file, however it does get updated when fields in this class are
@@ -403,13 +364,26 @@ class EntryLine:
 
     @property
     def is_orphan(self) -> bool:
-        """ True when a autosquash marker is orphaned, False otherwise.
+        """True when a autosquash marker is orphaned, False otherwise.
 
         An autosquash marker is orphaned when git could not reattach it to a
         target commit during the rebase, which leaves it still on a `pick`.
         """
-        return (self._command == 'pick' and self._subcommand is not None
-                and self._subcommand[0] in _AUTOSQUASH_SUBCOMMANDS)
+        return (
+            self._command == 'pick'
+            and self._subcommand is not None
+            and self._subcommand[0] in _AUTOSQUASH_SUBCOMMANDS
+        )
+
+    @property
+    def is_attached_autosquash(self) -> bool:
+        """True when git reattached this autosquash marker to its target,
+        i.e. it already carries git's `fixup`/`fixup -C`/`squash` command."""
+        return (
+            self._command != 'pick'
+            and self._subcommand is not None
+            and self._subcommand[0] in _AUTOSQUASH_SUBCOMMANDS
+        )
 
     @property
     def reassign_target_hash(self) -> str | None:
@@ -419,8 +393,8 @@ class EntryLine:
         should gate on `is_reassignment` first)."""
         if not self.is_reassignment:
             raise NotImplementedError(
-                'reassign_target_hash is only defined for reassignment '
-                'commits')
+                'reassign_target_hash is only defined for reassignment commits'
+            )
         return self._subcommand_target_hash()
 
     @property
@@ -430,7 +404,8 @@ class EntryLine:
         on a non-drop commit (callers should gate on `is_drop` first)."""
         if not self.is_drop:
             raise NotImplementedError(
-                'drop_target_hash is only defined for drop commits')
+                'drop_target_hash is only defined for drop commits'
+            )
         return self._subcommand_target_hash()
 
     # ----- the one mutable property -----------------------------------------
@@ -459,6 +434,9 @@ class EntryLine:
         """
         if not line.strip() or line.lstrip().startswith('#'):
             return None
+        if line.split(maxsplit=1)[0] in ('exec', 'x'):
+            # Runs a command, rather than naming a commit.
+            return None
 
         # Split into at most three sections: command-part, comment, and an
         # optional trailing ` # <note>` marker (e.g. ` # empty`). Capping
@@ -466,7 +444,8 @@ class EntryLine:
         parts = line.rstrip().split('#', maxsplit=2)
         if len(parts) < 2:
             raise EditorRecoverableFailure(
-                f'Cannot parse TODO line (no comment): {line!r}')
+                f'Cannot parse TODO line (no comment): {line!r}'
+            )
 
         cmd_part = parts[0].rstrip()
         comment = parts[1].strip()
@@ -478,23 +457,26 @@ class EntryLine:
         comand_parts = cmd_part.rsplit(maxsplit=1)
         if len(comand_parts) != 2:
             raise EditorRecoverableFailure(
-                f'Cannot parse TODO line (no hash): {line!r}')
+                f'Cannot parse TODO line (no hash): {line!r}'
+            )
         command, commit_hash = comand_parts
 
         subcommand = None
         sub_match = _SUBCOMMAND_RE.match(comment)
         if sub_match:
             subcommand = [tok for tok in sub_match.group(0).split('!') if tok]
-            message = comment[sub_match.end():].lstrip()
+            message = comment[sub_match.end() :].lstrip()
         else:
             message = comment
 
-        return EntryLine(out=line,
-                         command=command,
-                         hash=commit_hash,
-                         subcommand=subcommand,
-                         message=message,
-                         note=note)
+        return EntryLine(
+            out=line,
+            command=command,
+            hash=commit_hash,
+            subcommand=subcommand,
+            message=message,
+            note=note,
+        )
 
     # ----- private helpers --------------------------------------------------
 
@@ -510,19 +492,29 @@ class EntryLine:
         """Regenerates `_out` from the current field values in the
         canonical `<command> <hash> # [<sub1>!<sub2>! ]<message>[ # <note>]`
         form. Called automatically by the `command` setter."""
-        subcommand_prefix = (''.join(f'{tok}!' for tok in self._subcommand) +
-                             ' ' if self._subcommand else '')
-        line = (f'{self._command} {self._hash} # '
-                f'{subcommand_prefix}{self._message}')
+        subcommand_prefix = (
+            ''.join(f'{tok}!' for tok in self._subcommand) + ' '
+            if self._subcommand
+            else ''
+        )
+        line = (
+            f'{self._command} {self._hash} # {subcommand_prefix}{self._message}'
+        )
         if self._note:
             line = f'{line} # {self._note}'
         self._out = line
 
 
-def rewrite_plan(*,
-                 todo_file: Path,
-                 pinned_squashed: bool = False,
-                 discard_recyclable: bool = False) -> None:
+def rewrite_plan(
+    *,
+    todo_file: Path,
+    pinned_squashed: bool = False,
+    discard_recyclable: bool = False,
+    carry_change_id: Callable[[list[str]], str] | None = None,
+    changed_paths: Callable[[str], list[str]] | None = None,
+    has_change_id: Callable[[str], bool] | None = None,
+    foreign_cr_tag: Callable[[str], bool] | None = None,
+) -> None:
     """Rewrites a `git rebase --interactive` TODO file in place.
 
     The two operations are independent and may be used alone or
@@ -535,12 +527,37 @@ def rewrite_plan(*,
         pinned_squashed: When `True`, group pinned commits at the top
             of the plan, in `PINNED_GROUPS` priority order. The first
             commit in each group stays `pick`; subsequent ones become
-            `squash`. Reassign commits are repositioned to sit
-            immediately above their target (with the target rewritten
-            to `squash`). Drop commits remove themselves together with
+            `squash`, except attached `fixup!`/`amend!`/`squash!`
+            markers, which keep git's command. Reassign commits are
+            repositioned to sit immediately above their target (with the
+            target rewritten to `squash`). Drop commits remove themselves together with
             their target. Defaults to `False`.
         discard_recyclable: When `True`, drop recyclable commits from
             the plan entirely. Defaults to `False`.
+        carry_change_id: Makes the todo line that gives HEAD the first
+            Change-Id of the commits it is given, or the branch's derived
+            one for a pinned or recyclable commit. When set, one follows
+            each `fixup -C`/`fixup -c`, whose `amend!` message would
+            otherwise replace the Change-Id of what it folds into, and each
+            pinned group and recyclable commit.
+        has_change_id: Whether a commit has a Change-Id trailer. When set,
+            with `pinned_squashed`, a `carry_change_id` line also follows
+            each commit that, with what folds into it, has none, so that it
+            gets one. A `fixup!`, `amend!` or `squash!` left on a `pick`
+            gets none.
+        changed_paths: The paths a commit changes. When set, with
+            `pinned_squashed`, the commits tagged `[brockit]` or `[git-cr]`,
+            with the lines folding into them, move to just after the
+            `Update from Chromium` group, which stays the branch's first
+            commit, so the rest of the rebase runs the branch's tooling,
+            ahead of the other pinned groups. A commit stays in place when it
+            shares a path with an earlier one that does, which it would
+            otherwise replay ahead of.
+        foreign_cr_tag: Whether a subject has another branch's `[cr<N>]`
+            tag, as a commit picked from another `cr` branch keeps. When
+            set, with `pinned_squashed` and `carry_change_id`, a
+            `carry_change_id` line also follows each such commit, which
+            gives it the branch's own tag.
 
     Raises:
         EditorRecoverableFailure: Any TODO line that doesn't parse
@@ -556,8 +573,8 @@ def rewrite_plan(*,
     all_others = []
 
     def find_marker_target(
-            marker: EntryLine,
-            target_hash: str | None) -> tuple[EntryLine | None, int | None]:
+        marker: EntryLine, target_hash: str | None
+    ) -> tuple[EntryLine | None, int | None]:
         """Locates a `reassign!`/`drop!` marker's target among the entries
         seen so far (`all_others`), returning it with its index, or
         `(None, None)` when the marker is orphaned.
@@ -569,9 +586,16 @@ def rewrite_plan(*,
         `all_others`, so a marker pointing at one ends up orphaned."""
 
         def find(predicate) -> tuple[EntryLine | None, int | None]:
-            return next(((c, i) for c, i in zip(
-                reversed(all_others), range(len(all_others) - 1, -1, -1))
-                         if predicate(c)), (None, None))
+            return next(
+                (
+                    (c, i)
+                    for c, i in zip(
+                        reversed(all_others), range(len(all_others) - 1, -1, -1)
+                    )
+                    if predicate(c)
+                ),
+                (None, None),
+            )
 
         target, target_idx = (None, None)
         if target_hash is not None:
@@ -586,11 +610,13 @@ def rewrite_plan(*,
         target to `squash`, so the target's content is absorbed into the
         (empty) reassign commit and adopts its authorship. An orphaned
         reassign is silently discarded."""
-        target, target_idx = find_marker_target(reassign,
-                                                reassign.reassign_target_hash)
+        target, target_idx = find_marker_target(
+            reassign, reassign.reassign_target_hash
+        )
         if target is None:
-            logging.warning('Dropping orphaned reassignment: %s',
-                            reassign.out.strip())
+            logging.warning(
+                'Dropping orphaned reassignment: %s', reassign.out.strip()
+            )
             return
 
         # The `target` becomes `squash` so its message/authorship is
@@ -601,15 +627,48 @@ def rewrite_plan(*,
         all_others.insert(target_idx, reassign)
 
     def drop_with_target(drop: EntryLine) -> None:
-        """Removes the `drop` marker's target from the plan. The marker itself
-        is dropped by the caller -- it's never appended to `all_others`. An
-        orphaned drop is silently discarded, leaving the plan untouched."""
+        """Removes the `drop` marker's target from the plan, with the
+        autosquash markers git attached to it. The marker itself is dropped by
+        the caller -- it's never appended to `all_others`. An orphaned drop is
+        silently discarded, leaving the plan untouched."""
         target, target_idx = find_marker_target(drop, drop.drop_target_hash)
+        entries = all_others
         if target is None:
+            # A pinned commit (a `Version CodeHealth tracker`, say) sits in
+            # its group rather than in `all_others`.
+            entries, target_idx = find_pinned_target(drop)
+        if target_idx is None:
             logging.warning('Dropping orphaned drop: %s', drop.out.strip())
             return
 
-        del all_others[target_idx]
+        # Git places a target's `fixup`/`fixup -C`/`squash` lines right after
+        # it. Left behind, they would squash into the preceding commit, and an
+        # `amend!` would replace its message.
+        end = target_idx + 1
+        while end < len(entries) and entries[end].is_attached_autosquash:
+            end += 1
+        del entries[target_idx:end]
+        # A group's first commit is the one the rest squash into.
+        if entries is not all_others and entries and target_idx == 0:
+            entries[0].command = 'pick'
+
+    def find_pinned_target(
+        marker: EntryLine,
+    ) -> tuple[list[EntryLine], int | None]:
+        """A marker's target among the pinned groups, and its index there.
+        Only by hash: a group's commits share one subject, so the subject
+        can't tell them apart. Either side may be the shorter abbreviation."""
+        target_hash = marker.drop_target_hash
+        if not target_hash:
+            return all_others, None
+        for group in pinned_groups.values():
+            for index, entry in enumerate(group):
+                if not entry.is_attached_autosquash and (
+                    entry.hash.startswith(target_hash)
+                    or target_hash.startswith(entry.hash)
+                ):
+                    return group, index
+        return all_others, None
 
     for line in todo_file.read_bytes().decode('utf-8').splitlines():
         entry_line = EntryLine.parse(line)
@@ -630,29 +689,131 @@ def rewrite_plan(*,
                 continue
             if entry_line.pinned_group is not None:
                 # First commit in the group becomes `pick`; subsequent
-                # ones become `squash`. The setter keeps `out` in sync.
-                entry_line.command = (
-                    'pick' if not pinned_groups[entry_line.pinned_group] else
-                    'squash')
-                pinned_groups[entry_line.pinned_group].append(entry_line)
+                # ones become `squash`. Attached autosquash markers keep
+                # git's command, so a `fixup` body is still discarded and
+                # `fixup -C` still replaces the message. The setter keeps
+                # `out` in sync.
+                group = pinned_groups[entry_line.pinned_group]
+                if not group:
+                    entry_line.command = 'pick'
+                elif not entry_line.is_attached_autosquash:
+                    entry_line.command = 'squash'
+                group.append(entry_line)
                 continue
 
         all_others.append(entry_line)
 
-    new_plan = [
-        *(c.out for group in pinned_groups.values() for c in group),
-        *(c.out for c in all_others)
-    ]
+    def hoist_tooling() -> list[EntryLine]:
+        """Moves the units (a commit and the lines folding into it) whose
+        commit is tagged `[brockit]` or `[git-cr]` out of `all_others`, in
+        order, and returns them. A unit stays when it changes a path that a
+        unit staying before it changes."""
 
-    todo_file.write_text('\n'.join(new_plan) + '\n',
-                         encoding='utf-8',
-                         newline='')
+        def is_tooling(entry: EntryLine) -> bool:
+            tags = _LEADING_TAGS.match(entry.message)
+            return tags is not None and not _TOOLING_TAGS.isdisjoint(
+                re.findall(r'\[([^\]]+)\]', tags.group())
+            )
+
+        units: list[list[EntryLine]] = []
+        for entry in all_others:
+            if units and entry.command in _FOLDING_COMMANDS:
+                units[-1].append(entry)
+            else:
+                units.append([entry])
+
+        def paths_of(entries: list[EntryLine]) -> set[str]:
+            return {path for e in entries for path in changed_paths(e.hash)}
+
+        blocked: set[str] = set()
+        hoisted: list[EntryLine] = []
+        kept: list[EntryLine] = []
+        for unit in units:
+            paths = paths_of(unit)
+            if is_tooling(unit[0]) and not paths & blocked:
+                hoisted.extend(unit)
+            else:
+                kept.extend(unit)
+                blocked |= paths
+        all_others[:] = kept
+        return hoisted
+
+    tooling = (
+        hoist_tooling() if pinned_squashed and changed_paths is not None else []
+    )
+
+    new_plan = []
+    # The commits folded into the one the plan is building, which keeps the
+    # first Change-Id among them, whether that commit is pinned or
+    # recyclable, whose Change-Id is derived from the branch, and whether it
+    # gets a Change-Id should none of them have one.
+    folded: list[str] = []
+    derived = False
+    adds_id = False
+    retagged = False
+
+    def carry() -> None:
+        # Also corrects a commit picked from another branch with that
+        # branch's derived Change-Id, which no squash may come to fix.
+        if not folded or new_plan[-1].startswith('exec '):
+            return
+        if (
+            derived
+            or retagged
+            or (adds_id and not any(map(has_change_id, folded)))
+        ):
+            new_plan.append(carry_change_id(folded))
+
+    for entry in [
+        *pinned_groups['version'],
+        *tooling,
+        *(
+            c
+            for name, group in pinned_groups.items()
+            if name != 'version'
+            for c in group
+        ),
+        *all_others,
+    ]:
+        if entry.command not in _FOLDING_COMMANDS:
+            carry()
+            folded = [entry.hash]
+            derived = carry_change_id is not None and (
+                entry.is_pinned or entry.is_recyclable
+            )
+            # A `fixup!`, `amend!` or `squash!` left on a `pick` folds into
+            # its target at the next rebase, which takes no Change-Id from it.
+            adds_id = (
+                pinned_squashed
+                and carry_change_id is not None
+                and has_change_id is not None
+                and not entry.is_orphan
+            )
+            retagged = (
+                pinned_squashed
+                and carry_change_id is not None
+                and foreign_cr_tag is not None
+                and foreign_cr_tag(entry.message)
+            )
+        new_plan.append(entry.out)
+        if entry.command in _REPLACING_COMMANDS:
+            # An `amend!` replaces the message, Change-Id included.
+            if carry_change_id is not None:
+                new_plan.append(carry_change_id(folded))
+        elif entry.command == 'squash':
+            folded.append(entry.hash)
+    carry()
+
+    todo_file.write_text(
+        '\n'.join(new_plan) + '\n', encoding='utf-8', newline=''
+    )
 
 
 _COMMIT_MSG_HEADER_GUARDS = re.compile(
     r'^# (This is the (?:1st|\d+(?:st|nd|rd|th)) commit message:|'
     r'This is the commit message #\d+:|'
-    r'The commit message #\d+ will be skipped:)$')
+    r'The commit message #\d+ will be skipped:)$'
+)
 
 
 class MsgBlock:
@@ -712,14 +873,17 @@ class MsgBlock:
             `None` otherwise (e.g. a plain content line)."""
             match = _AUTOSQUASH_NOTE_RE.match(line)
             if match:
-                return MsgBlock.OriginalCommitNote(command=match.group(1),
-                                                   first_line=match.group(2))
+                return MsgBlock.OriginalCommitNote(
+                    command=match.group(1), first_line=match.group(2)
+                )
             return None
 
-    def __init__(self,
-                 *,
-                 full_message: str,
-                 note: 'MsgBlock.OriginalCommitNote | None' = None):
+    def __init__(
+        self,
+        *,
+        full_message: str,
+        note: 'MsgBlock.OriginalCommitNote | None' = None,
+    ):
 
         # The commit body for this block with `#`-comment lines removed
         # and leading / trailing blanks trimmed.
@@ -786,7 +950,8 @@ class MsgBlock:
             # enough lines are present.
             if len(block_lines) < 3:
                 raise EditorRecoverableFailure(
-                    f'Unexpected block format: {block_lines}')
+                    f'Unexpected block format: {block_lines}'
+                )
 
             # `will be skipped` blocks aren't relevant for commit
             # messages -- git already commented out their content.
@@ -815,29 +980,36 @@ class MsgBlock:
                 # header and empty line.
                 message_lines = block_lines[2:]
 
-            msg = "\n".join(line.strip() for line in message_lines).strip()
-            if (note is not None and note.command == "squash!" and msg
-                    and blocks):
+            # Only trailing whitespace goes: quoted culprit messages are
+            # indented, and must not read as the commit's own trailers.
+            msg = "\n".join(line.rstrip() for line in message_lines).strip()
+            if note is not None and note.command == "fixup!":
+                # Git discards a `fixup!` commit's message, body included
+                # (stacked `# fixup! fixup! …` markers too). Treat it the
+                # same as a `will be skipped:` block.
+                continue
+            if (
+                note is not None
+                and note.command == "squash!"
+                and msg
+                and blocks
+            ):
                 if not blocks[-1].full_message:
                     raise EditorRecoverableFailure(
                         'Unexpected empty message in previous block when '
                         'processing a squash! block with a note. Previous '
-                        f'block lines: {blocks[-1].full_message}')
+                        f'block lines: {blocks[-1].full_message}'
+                    )
                 # For `# squash!`, append to the previous block's body
                 # and discard this block.
                 blocks[-1]._extend_message(msg)
             elif msg:
                 blocks.append(MsgBlock(full_message=msg, note=note))
-            elif note is not None and note.command == "fixup!":
-                # A bare `# fixup!` block carries no message of its own
-                # -- git is just echoing the marker for context (this
-                # also happens with stacked `# fixup! fixup! …` markers).
-                # Treat it the same as a `will be skipped:` block.
-                continue
             else:
                 raise EditorRecoverableFailure(
                     f'Unexpected empty message in block. Block lines: '
-                    f'{block_lines}')
+                    f'{block_lines}'
+                )
 
         return blocks
 
@@ -871,37 +1043,101 @@ class MessageWriter:
 
     # The set of first-block entry types we know how to rewrite. Other
     # classifications (RECYCLABLE, DEFAULT) are punted to the editor.
-    _HANDLED_ENTRY_TYPES = frozenset(
-        {EntryType.PINNED, EntryType.REASSIGNMENT})
+    _HANDLED_ENTRY_TYPES = frozenset({EntryType.PINNED, EntryType.REASSIGNMENT})
 
-    def rewrite_with_last_message(self) -> None:
+    # The `[cr<N>]` tag the commit hook gives commits on a `cr<N>` branch, or
+    # on a `cr<N>+<topic>` one. Channel bumps' `cr<N>.x` and
+    # `cr<N>.x-on-<channel>` branches get none.
+    _CR_TAG = re.compile(r'\[cr\d+\]')
+    _CR_BRANCH = re.compile(r'cr\d+')
+    _CHANNEL_BUMP_BRANCH = re.compile(r'cr\d+\.x(?:-on-.+)?')
+
+    def rewrite_with_last_message(self, branch: str = '') -> None:
         """Writes the trailing block's `full_message` (with a trailing
         newline) back to `todo_file`. Always valid:
         `MessageWriter.parse` only returns instances with at least one
         block whose first-block content classifies as PINNED or
-        REASSIGNMENT."""
-        self.todo_file.write_text(self.blocks[-1].full_message + '\n',
-                                  encoding='utf-8',
-                                  newline='')
+        REASSIGNMENT.
+
+        On a `cr<N>` `branch`, a pinned squash takes the group's derived
+        Change-Id, which also gives one to commits made before there were
+        any. Otherwise the message keeps the first Change-Id of the blocks,
+        so the squashed commit stays the Gerrit change its first commit
+        started. A `reassign!` block has none, so a reassignment keeps its
+        target's.
+
+        A pinned squash's subject also takes `branch`'s own `[cr<N>]` tag in
+        place of the trailing block's, which a pick from a newer branch gives
+        its own: none on a channel bump branch, whose commits get none, and
+        left as it is on a branch the commit hook gives no such tag.
+        """
+        # A culprit quoted without its indentation would lend the squash its
+        # Change-Id.
+        messages = [chromium_changes.fixed(b.full_message) for b in self.blocks]
+        message = messages[-1]
+        first_subject = messages[0].split('\n', 1)[0]
+        if branch and (
+            get_entry_type_for_subject(first_subject) is EntryType.PINNED
+        ):
+            message = self.with_branch_tag(message, branch)
+        change_id = derived_change_id(branch, first_subject) or next(
+            filter(None, map(change_id_of, messages)), None
+        )
+        if change_id:
+            message = with_change_id(message, change_id)
+        self.todo_file.write_text(message + '\n', encoding='utf-8', newline='')
+
+    @classmethod
+    def with_branch_tag(cls, message: str, branch: str) -> str:
+        """`message` with the `[cr<M>]` tag among its subject's leading tags
+        replaced by `branch`'s own, or dropped on a channel bump branch. A
+        subject without one, such as a version bump's, is left as it is."""
+        topic_parts = branch.split('+')[:-1]
+        own_branch = next(
+            (
+                part
+                for part in [branch, *topic_parts]
+                if cls._CR_BRANCH.fullmatch(part)
+            ),
+            None,
+        )
+        if own_branch is not None:
+            own = f'[{own_branch}]'
+        elif cls._CHANNEL_BUMP_BRANCH.fullmatch(branch):
+            own = ''
+        else:
+            return message
+        subject, newline, body = message.partition('\n')
+        leading = _LEADING_TAGS.match(subject)
+        if leading is None or not cls._CR_TAG.search(leading.group()):
+            return message
+        tags = cls._CR_TAG.sub(own, leading.group(), count=1)
+        rest = subject[leading.end() :]
+        subject = tags + rest if tags else rest.lstrip()
+        return subject + newline + body
 
     @staticmethod
-    def parse(todo_file: Path) -> 'MessageWriter':
+    def parse(todo_file: Path) -> 'MessageWriter | None':
         """Reads `todo_file` and returns a `MessageWriter` provided the
         first commit-message block's subject classifies as one of
         `MessageWriter._HANDLED_ENTRY_TYPES` (currently `PINNED` and
         `REASSIGNMENT`).
 
+        Returns `None` when the file is not a squash at all, e.g. the
+        message of a commit that `git rebase --continue` makes once a
+        conflict is resolved. That message is kept as it is.
+
         Any other first-block classification (RECYCLABLE, DEFAULT) and
-        any file that fails to parse / yields no blocks raises
-        `EditorRecoverableFailure`. The exception message names the
-        rejected `EntryType` so the user sees, in the editor, why the
-        rewrite was punted.
+        any file that fails to parse raises `EditorRecoverableFailure`.
+        The exception message names the rejected `EntryType` so the user
+        sees, in the editor, why the rewrite was punted.
         """
         blocks = MsgBlock.parse(todo_file.read_bytes().decode('utf-8'))
 
         if not blocks:
-            raise EditorRecoverableFailure(
-                'No commit-message blocks were parsed from the editor file.')
+            # Only a squash has git's `# This is …` headers to split it into
+            # blocks.
+            return None
 
         first_msg_line = blocks[0].full_message.splitlines()[0]
         entry_type = get_entry_type_for_subject(first_msg_line)
@@ -909,5 +1145,6 @@ class MessageWriter:
             raise EditorRecoverableFailure(
                 f'Cannot rewrite a squash commit message classified as '
                 f'{entry_type.value!r}. First content line: '
-                f'{first_msg_line!r}')
+                f'{first_msg_line!r}'
+            )
         return MessageWriter(todo_file=todo_file, blocks=blocks)

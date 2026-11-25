@@ -104,9 +104,9 @@ extension Preferences {
       default: false
     )
 
-    /// Used to track whether Meld APIs agreetment has been shown and agreed
-    static let meldAPIAgreementShownAndAgreed = Option<Bool>(
-      key: "wallet.meld-api-agreement-shown-and-agreed",
+    /// Used to track whether to prune all dApps permissions
+    public static let pruneDAppsPermissionsCompleted = Option<Bool>(
+      key: "wallet.prune-dapps-permissions-completed",
       default: false
     )
   }

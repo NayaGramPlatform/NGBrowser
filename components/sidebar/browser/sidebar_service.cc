@@ -6,7 +6,6 @@
 #include "brave/components/sidebar/browser/sidebar_service.h"
 
 #include <algorithm>
-#include <codecvt>
 #include <iterator>
 #include <optional>
 #include <utility>
@@ -24,20 +23,16 @@
 #include "brave/components/brave_news/common/buildflags/buildflags.h"
 #include "brave/components/brave_talk/buildflags/buildflags.h"
 #include "brave/components/brave_wallet/common/buildflags/buildflags.h"
-#include "brave/components/constants/pref_names.h"
 #include "brave/components/constants/webui_url_constants.h"
-#include "brave/components/l10n/common/locale_util.h"
 #include "brave/components/playlist/core/common/buildflags/buildflags.h"
 #include "brave/components/sidebar/browser/constants.h"
 #include "brave/components/sidebar/browser/pref_names.h"
 #include "brave/components/sidebar/browser/sidebar_item.h"
-#include "brave/components/sidebar/common/features.h"
 #include "components/grit/brave_components_strings.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
 #include "components/prefs/scoped_user_pref_update.h"
 #include "ui/base/l10n/l10n_util.h"
-#include "ui/base/resource/resource_bundle.h"
 
 #if BUILDFLAG(ENABLE_BRAVE_TALK)
 #include "brave/components/brave_talk/pref_names.h"
@@ -103,7 +98,9 @@ SidebarItem::BuiltInItemType GetBuiltInItemTypeForLegacyURL(
 
 bool SidebarItemUpdate::operator==(const SidebarItemUpdate& update) const {
   return index == update.index && title_updated == update.title_updated &&
-         url_updated == update.url_updated;
+         url_updated == update.url_updated &&
+         panel_type_updated == update.panel_type_updated &&
+         use_mobile_user_agent_updated == update.use_mobile_user_agent_updated;
 }
 
 // static
@@ -399,37 +396,45 @@ void SidebarService::MoveItem(size_t from, size_t to) {
   UpdateSidebarItemsToPrefStore();
 }
 
-void SidebarService::UpdateItem(const GURL& old_url,
-                                const GURL& new_url,
-                                std::u16string_view old_title,
-                                std::u16string_view new_title) {
-  DCHECK(old_url.is_valid() && new_url.is_valid());
-  DCHECK(!old_title.empty() && !new_title.empty());
+void SidebarService::UpdateItem(const SidebarItem& old_item,
+                                const SidebarItem& new_item) {
+  DCHECK(old_item.url.is_valid() && new_item.url.is_valid());
+  DCHECK(!old_item.title.empty() && !new_item.title.empty());
 
-  if (old_url == new_url && old_title == new_title) {
+  if (old_item == new_item) {
     return;
   }
 
-  // Check any existing items doen't use |new_url| if |old_url| and |new_url|
-  // is different. If both are same, only title will be updated.
-  // Sidebar can't have two items with same url.
-  if (old_url != new_url &&
-      std::ranges::contains(items_, new_url, &SidebarItem::url)) {
+  const bool url_updated = old_item.url != new_item.url;
+  const bool title_updated = old_item.title != new_item.title;
+  const bool panel_type_updated = old_item.panel_type != new_item.panel_type;
+  const bool use_mobile_user_agent_updated =
+      old_item.use_mobile_user_agent != new_item.use_mobile_user_agent;
+
+  // Sidebar can't have two items with the same url, so reject the update if
+  // the new url collides with a different, existing item.
+  if (url_updated &&
+      std::ranges::contains(items_, new_item.url, &SidebarItem::url)) {
     return;
   }
 
-  auto item_iter = std::ranges::find(items_, old_url, &SidebarItem::url);
-  if (item_iter != items_.end()) {
-    const size_t index = std::distance(items_.begin(), item_iter);
-    DCHECK(IsEditableItemAt(index));
-    item_iter->url = new_url;
-    item_iter->title = new_title;
-    for (Observer& obs : observers_) {
-      obs.OnItemUpdated(*item_iter,
-                        {index, old_title != new_title, old_url != new_url});
-    }
-    UpdateSidebarItemsToPrefStore();
+  auto item_iter = std::ranges::find(items_, old_item.url, &SidebarItem::url);
+  if (item_iter == items_.end()) {
+    return;
   }
+
+  const size_t index = std::distance(items_.begin(), item_iter);
+  DCHECK(IsEditableItemAt(index));
+  item_iter->url = new_item.url;
+  item_iter->title = new_item.title;
+  item_iter->panel_type = new_item.panel_type;
+  item_iter->use_mobile_user_agent = new_item.use_mobile_user_agent;
+
+  observers_.Notify(
+      &Observer::OnItemUpdated, *item_iter,
+      SidebarItemUpdate(index, title_updated, url_updated, panel_type_updated,
+                        use_mobile_user_agent_updated));
+  UpdateSidebarItemsToPrefStore();
 }
 
 void SidebarService::UpdateSidebarItemsToPrefStore() {
@@ -454,7 +459,11 @@ void SidebarService::UpdateSidebarItemsToPrefStore() {
     if (item.type != SidebarItem::Type::kTypeBuiltIn) {
       dict.Set(kSidebarItemURLKey, item.url.spec());
       dict.Set(kSidebarItemTitleKey, base::UTF16ToUTF8(item.title));
-      dict.Set(kSidebarItemOpenInPanelKey, item.open_in_panel);
+      // Store the declared type, not the effective one, so the choice survives
+      // a kSidebarWebPanel toggle.
+      dict.Set(kSidebarItemWebPanelKey,
+               item.panel_type == SidebarItem::PanelType::kWebPanel);
+      dict.Set(kSidebarItemUseMobileUserAgentKey, item.use_mobile_user_agent);
     }
     items.Append(std::move(dict));
   }
@@ -534,7 +543,7 @@ std::optional<SidebarItem> SidebarService::GetDefaultPanelItem() const {
         std::ranges::find(items_, type, &SidebarItem::built_in_item_type);
     if (found_item_iter != items_.end()) {
       default_item = *found_item_iter;
-      DCHECK_EQ(default_item->open_in_panel, true);
+      DCHECK(default_item->is_side_panel_type());
       break;
     }
   }
@@ -601,17 +610,19 @@ void SidebarService::LoadSidebarItems() {
       } else {
         continue;
       }
-      bool open_in_panel = false;
-      if (const auto value = item.FindBool(kSidebarItemOpenInPanelKey)) {
-        open_in_panel = *value;
-      }
+      const bool is_web_panel =
+          item.FindBool(kSidebarItemWebPanelKey).value_or(false);
       std::string title;
       if (const auto* value = item.FindString(kSidebarItemTitleKey)) {
         title = *value;
       }
-      items_.push_back(SidebarItem::Create(
-          GURL(url), base::UTF8ToUTF16(title), type,
-          SidebarItem::BuiltInItemType::kNone, open_in_panel));
+      auto new_item = is_web_panel ? SidebarItem::CreateWebPanelItem(
+                                         GURL(url), base::UTF8ToUTF16(title))
+                                   : SidebarItem::CreateWebTabItem(
+                                         GURL(url), base::UTF8ToUTF16(title));
+      new_item.use_mobile_user_agent =
+          item.FindBool(kSidebarItemUseMobileUserAgentKey).value_or(false);
+      items_.push_back(std::move(new_item));
     }
   }
 
@@ -679,12 +690,10 @@ SidebarItem SidebarService::GetBuiltInItemForType(
 #if BUILDFLAG(ENABLE_BRAVE_TALK)
     case SidebarItem::BuiltInItemType::kBraveTalk:
       if (!prefs_->GetBoolean(brave_talk::prefs::kDisabledByPolicy)) {
-        return SidebarItem::Create(
-            GURL(kBraveTalkURL),
-            l10n_util::GetStringUTF16(IDS_SIDEBAR_BRAVE_TALK_ITEM_TITLE),
-            SidebarItem::Type::kTypeBuiltIn,
+        return SidebarItem::CreateBuiltInItem(
             SidebarItem::BuiltInItemType::kBraveTalk,
-            /* open_in_panel = */ false);
+            l10n_util::GetStringUTF16(IDS_SIDEBAR_BRAVE_TALK_ITEM_TITLE),
+            SidebarItem::PanelType::kWebPanel, GURL(kBraveTalkURL));
       }
       return SidebarItem();
 #endif  // BUILDFLAG(ENABLE_BRAVE_TALK)
@@ -696,47 +705,39 @@ SidebarItem SidebarService::GetBuiltInItemForType(
           // Keep the wallet page URL so IsURLAlreadyAddedToSidebar() /
           // HiddenDefaultSidebarItemsContains() match brave://wallet and the
           // + bubble does not offer a duplicate web-type shortcut.
-          return SidebarItem::Create(
-              GURL(kBraveUIWalletPageURL),
-              l10n_util::GetStringUTF16(IDS_SIDEBAR_WALLET_ITEM_TITLE),
-              SidebarItem::Type::kTypeBuiltIn,
+          return SidebarItem::CreateBuiltInItem(
               SidebarItem::BuiltInItemType::kWallet,
-              /* open_in_panel = */ true);
+              l10n_util::GetStringUTF16(IDS_SIDEBAR_WALLET_ITEM_TITLE),
+              SidebarItem::PanelType::kSidePanel, GURL(kBraveUIWalletPageURL));
         }
-        return SidebarItem::Create(
-            GURL(kBraveUIWalletPageURL),
-            l10n_util::GetStringUTF16(IDS_SIDEBAR_WALLET_ITEM_TITLE),
-            SidebarItem::Type::kTypeBuiltIn,
+        return SidebarItem::CreateBuiltInItem(
             SidebarItem::BuiltInItemType::kWallet,
-            /* open_in_panel = */ false);
+            l10n_util::GetStringUTF16(IDS_SIDEBAR_WALLET_ITEM_TITLE),
+            SidebarItem::PanelType::kNone, GURL(kBraveUIWalletPageURL));
       }
       return SidebarItem();
     }
 #endif  // BUILDFLAG(ENABLE_BRAVE_WALLET)
     case SidebarItem::BuiltInItemType::kBookmarks:
-      return SidebarItem::Create(
-          l10n_util::GetStringUTF16(IDS_SIDEBAR_BOOKMARKS_ITEM_TITLE),
-          SidebarItem::Type::kTypeBuiltIn,
+      return SidebarItem::CreateBuiltInItem(
           SidebarItem::BuiltInItemType::kBookmarks,
-          /* open_in_panel = */ true);
+          l10n_util::GetStringUTF16(IDS_SIDEBAR_BOOKMARKS_ITEM_TITLE),
+          SidebarItem::PanelType::kSidePanel);
     case SidebarItem::BuiltInItemType::kReadingList:
-      return SidebarItem::Create(
+      return SidebarItem::CreateBuiltInItem(
+          SidebarItem::BuiltInItemType::kReadingList,
           // TODO(petemill): Have these items created under brave/browser
           // so that we can access common strings, like IDS_READ_LATER_TITLE.
           l10n_util::GetStringUTF16(IDS_SIDEBAR_READING_LIST_ITEM_TITLE),
-          SidebarItem::Type::kTypeBuiltIn,
-          SidebarItem::BuiltInItemType::kReadingList,
-          /* open_in_panel = */ true);
+          SidebarItem::PanelType::kSidePanel);
     case SidebarItem::BuiltInItemType::kHistory: {
       // TODO(sko) When should we show history item?
       constexpr bool kShowHistoryButton = false;
       if constexpr (kShowHistoryButton) {
-        return SidebarItem::Create(
-            GURL("chrome://history/"),
-            l10n_util::GetStringUTF16(IDS_SIDEBAR_HISTORY_ITEM_TITLE),
-            SidebarItem::Type::kTypeBuiltIn,
+        return SidebarItem::CreateBuiltInItem(
             SidebarItem::BuiltInItemType::kHistory,
-            /* open_in_panel = */ true);
+            l10n_util::GetStringUTF16(IDS_SIDEBAR_HISTORY_ITEM_TITLE),
+            SidebarItem::PanelType::kNone, GURL("chrome://history/"));
       } else {
         return SidebarItem();
       }
@@ -744,12 +745,10 @@ SidebarItem SidebarService::GetBuiltInItemForType(
 #if BUILDFLAG(ENABLE_PLAYLIST)
     case SidebarItem::BuiltInItemType::kPlaylist: {
       if (playlist::IsPlaylistAllowed(prefs_)) {
-        return SidebarItem::Create(
-            GURL(kPlaylistURL),
-            l10n_util::GetStringUTF16(IDS_SIDEBAR_PLAYLIST_ITEM_TITLE),
-            SidebarItem::Type::kTypeBuiltIn,
+        return SidebarItem::CreateBuiltInItem(
             SidebarItem::BuiltInItemType::kPlaylist,
-            /* open_in_panel = */ true);
+            l10n_util::GetStringUTF16(IDS_SIDEBAR_PLAYLIST_ITEM_TITLE),
+            SidebarItem::PanelType::kSidePanel, GURL(kPlaylistURL));
       }
 
       return SidebarItem();
@@ -758,10 +757,10 @@ SidebarItem SidebarService::GetBuiltInItemForType(
 #if BUILDFLAG(ENABLE_AI_CHAT)
     case SidebarItem::BuiltInItemType::kChatUI: {
       if (ai_chat::IsAIChatEnabled(prefs_)) {
-        return SidebarItem::Create(l10n_util::GetStringUTF16(IDS_CHAT_UI_TITLE),
-                                   SidebarItem::Type::kTypeBuiltIn,
-                                   SidebarItem::BuiltInItemType::kChatUI,
-                                   /* open_in_panel = */ true);
+        return SidebarItem::CreateBuiltInItem(
+            SidebarItem::BuiltInItemType::kChatUI,
+            l10n_util::GetStringUTF16(IDS_CHAT_UI_TITLE),
+            SidebarItem::PanelType::kSidePanel);
       }
       return SidebarItem();
     }
@@ -773,12 +772,10 @@ SidebarItem SidebarService::GetBuiltInItemForType(
       if (base::FeatureList::IsEnabled(
               brave_news::features::kBraveNewsSidebar) &&
           prefs_->GetBoolean(brave_news::prefs::kBraveNewsOptedIn)) {
-        return SidebarItem::Create(
-            GURL(kBraveNewsURL),
-            l10n_util::GetStringUTF16(IDS_BRAVE_NEWS_TITLE),
-            SidebarItem::Type::kTypeBuiltIn,
+        return SidebarItem::CreateBuiltInItem(
             SidebarItem::BuiltInItemType::kBraveNews,
-            /* open_in_panel = */ true);
+            l10n_util::GetStringUTF16(IDS_BRAVE_NEWS_TITLE),
+            SidebarItem::PanelType::kSidePanel, GURL(kBraveNewsURL));
       }
       return SidebarItem();
     }

@@ -8,7 +8,7 @@ import 'chrome://resources/cr_elements/cr_icon/cr_icon.js'
 import 'chrome://resources/cr_elements/icons.html.js'
 import 'chrome://resources/brave/leo.bundle.js'
 
-import { PrefsMixin } from '/shared/settings/prefs/prefs_mixin.js'
+import { PrefServiceObserverMixin } from '/shared/settings/prefs2/pref_service_observer_mixin.js'
 import { I18nMixin } from 'chrome://resources/cr_elements/i18n_mixin.js'
 import { PolymerElement } from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js'
 
@@ -18,17 +18,15 @@ import { Router } from '../router.js'
 import { SettingsViewMixin } from '../settings_page/settings_view_mixin.js'
 
 import { getTemplate } from './model_list_section.html.js'
-import {
-  BraveLeoAssistantBrowserProxyImpl,
-  OLLAMA_ENDPOINT
-} from './brave_leo_assistant_browser_proxy.js'
+import { OLLAMA_ENDPOINT } from '../ollama.mojom-webui.js'
+import { BraveLeoAssistantBrowserProxyImpl } from './brave_leo_assistant_browser_proxy.js'
 import type {
   BraveLeoAssistantBrowserProxy,
   Model
 } from './brave_leo_assistant_browser_proxy.js'
 
 const ModelListSectionBase =
-  PrefsMixin(I18nMixin(BaseMixin(SettingsViewMixin(PolymerElement))))
+  PrefServiceObserverMixin(I18nMixin(BaseMixin(SettingsViewMixin(PolymerElement))))
 
 class ModelListSection extends ModelListSectionBase {
   static get is() {
@@ -47,7 +45,8 @@ class ModelListSection extends ModelListSectionBase {
       isOllamaConnected_: {
         type: Boolean,
         value: false
-      }
+      },
+      ollamaFetchEnabledPref_: Object,
     }
   }
 
@@ -55,6 +54,14 @@ class ModelListSection extends ModelListSectionBase {
     BraveLeoAssistantBrowserProxyImpl.getInstance()
   declare customModelsList_: Model[]
   declare isOllamaConnected_: boolean
+  private declare ollamaFetchEnabledPref_:
+    chrome.settingsPrivate.PrefObject<boolean> | undefined
+
+  override connectedCallback() {
+    super.connectedCallback()
+    this.mirrorPref('brave.ai_chat.ollama_fetch_enabled',
+                    'ollamaFetchEnabledPref_')
+  }
 
   override ready() {
     super.ready()

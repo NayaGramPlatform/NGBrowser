@@ -5,6 +5,55 @@
 
 import("//build/config/ozone.gni")
 
+import("//brave/components/tabs//buildflags/buildflags.gni")
+
+# Tree tab hooks for Chromium's tab strip views. The chromium_src overrides of
+# //chrome/browser/ui/views/tabs/common forward-declare these, and
+# //brave/browser:core links them.
+if (enable_brave_tree_tabs) {
+  source_set("tree_tab_view_utils") {
+    sources = [
+      "tree_tab_view_utils.cc",
+      "tree_tab_view_utils.h",
+    ]
+
+    public_deps = [ "//components/tabs:public" ]
+    deps = [
+      "//base",
+      "//brave/app:brave_generated_resources_grit",
+      "//brave/browser/ui/tabs:tab_strip",
+      "//brave/browser/ui/tabs:tree_tab",
+      "//brave/components/tabs",
+      "//chrome/browser/ui:layout_constants",
+      "//chrome/browser/ui/browser_window",
+      "//chrome/browser/ui/tabs:tab_strip",
+      "//chrome/browser/ui/views/tabs/common",
+      "//chrome/browser/ui/views/tabs/common:impl",
+      "//ui/views",
+    ]
+  }
+}
+
+# Vertical tab strip scroll bar which follows the "show scroll bar" pref. The
+# chromium_src override of
+# //chrome/browser/ui/views/tabs/common/tab_strip_view.cc forward-declares the
+# hooks, and //brave/browser/ui links them.
+source_set("brave_vertical_tab_strip_scrollbar") {
+  sources = [
+    "brave_vertical_tab_strip_scrollbar.cc",
+    "brave_vertical_tab_strip_scrollbar.h",
+  ]
+
+  deps = [
+    "//base",
+    "//brave/browser/ui:brave_tab_prefs",
+    "//chrome/browser/ui/views/tabs/vertical",
+    "//components/prefs",
+    "//ui/base/metadata",
+    "//ui/views",
+  ]
+}
+
 source_set("browser_tests") {
   testonly = true
   defines = [ "HAS_OUT_OF_PROC_TEST_RUNNER" ]
@@ -18,23 +67,29 @@ source_set("browser_tests") {
   deps = [
     "//base",
     "//base/test:test_support",
+    "//brave/browser/ui",
     "//brave/browser/ui:brave_tab_prefs",
     "//brave/browser/ui/tabs:tabs_public",
     "//brave/browser/ui/views/frame/vertical_tabs",
     "//chrome:resources",
     "//chrome:strings",
     "//chrome/browser",
-    "//chrome/browser/ui",
+    "//chrome/browser/ui:browser_tabstrip",
     "//chrome/browser/ui:ui_features",
     "//chrome/browser/ui/tabs:features",
     "//chrome/browser/ui/thumbnails",
+    "//chrome/browser/ui/views/frame:browser_view_header",
+    "//chrome/browser/ui/views/frame:horizontal_tab_strip_region_view",
     "//chrome/browser/ui/views/tabs:tab_strip_button",
+    "//chrome/browser/ui/views/tabs/hovercard:hovercard_helpers",
     "//chrome/common",
     "//chrome/test",
     "//chrome/test:test_support",
     "//components/prefs",
+    "//ui/accessibility:ax_base",
     "//ui/base:test_support",
     "//ui/events:test_support",
+    "//ui/views",
   ]
 
   if (use_ozone) {
@@ -66,13 +121,13 @@ source_set("unit_tests") {
   deps = [
     "//base",
     "//base/test:test_support",
+    "//brave/browser/ui",
     "//brave/browser/ui:brave_tab_prefs",
     "//brave/browser/ui/focus_mode",
     "//brave/browser/ui/tabs:tabs_public",
     "//brave/common",
     "//brave/components/tabs",
     "//brave/components/vector_icons",
-    "//chrome/browser/ui",
     "//chrome/browser/ui:layout_constants",
     "//chrome/browser/ui/browser_window",
     "//chrome/browser/ui/tabs:features",

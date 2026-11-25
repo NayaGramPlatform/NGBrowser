@@ -9,14 +9,12 @@
 #include <utility>
 #include <vector>
 
-#include "base/test/gtest_util.h"
 #include "base/test/values_test_util.h"
 #include "brave/components/brave_wallet/browser/solana_account_meta.h"
 #include "brave/components/brave_wallet/browser/solana_compiled_instruction.h"
 #include "brave/components/brave_wallet/browser/solana_instruction_data_decoder.h"
 #include "brave/components/brave_wallet/browser/solana_message_address_table_lookup.h"
 #include "brave/components/brave_wallet/browser/solana_message_header.h"
-#include "brave/components/brave_wallet/common/brave_wallet_constants.h"
 #include "brave/components/brave_wallet/common/solana_address.h"
 
 namespace {
@@ -70,6 +68,7 @@ TEST(SolanaInstructionUnitTest, FromToCompiledInstruction) {
 
   auto ins = SolanaInstruction::FromCompiledInstruction(
       compiled_ins, message_header, static_accounts, lookups, 3, 1);
+  ASSERT_TRUE(ins.has_value());
   EXPECT_EQ(*ins, expected_ins);
 
   EXPECT_EQ(ins->GetProgramId(), expected_ins.GetProgramId());
@@ -127,6 +126,7 @@ TEST(SolanaInstructionUnitTest, FromToCompiledInstruction) {
 
   auto ins2 = SolanaInstruction::FromCompiledInstruction(
       compiled_ins2, message_header2, static_accounts2, lookups2, 3, 3);
+  ASSERT_TRUE(ins2.has_value());
   EXPECT_EQ(*ins2, expected_ins2);
 
   EXPECT_EQ(ins2->GetProgramId(), expected_ins2.GetProgramId());

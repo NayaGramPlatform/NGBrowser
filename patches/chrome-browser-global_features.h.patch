@@ -1,0 +1,26 @@
+diff --git a/chrome/browser/global_features.h b/chrome/browser/global_features.h
+index 71c24f2345ab2c2dd4a59af4d23441a6090dbe8f..925c813f2115068f814008923664b17b136d3073 100644
+--- a/chrome/browser/global_features.h
++++ b/chrome/browser/global_features.h
+@@ -15,6 +15,8 @@
+ #include "net/net_buildflags.h"
+ #include "ui/base/unowned_user_data/user_data_factory.h"
+ 
++class BraveGlobalFeatures;
++
+ #if !BUILDFLAG(IS_ANDROID)
+ namespace infobars {
+ class BrowserInfoBarManager;
+@@ -285,7 +287,12 @@ class GlobalFeatures {
+ #endif
+ #endif
+ 
++  BraveGlobalFeatures* brave_global_features() {
++    return brave_global_features_.get();
++  }
++
+  protected:
++  std::unique_ptr<BraveGlobalFeatures> brave_global_features_;
+   GlobalFeatures();
+ 
+   // Override these methods to stub out individual feature controllers for

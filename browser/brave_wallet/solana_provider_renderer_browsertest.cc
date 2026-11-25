@@ -28,7 +28,6 @@
 #include "brave/components/constants/brave_paths.h"
 #include "build/build_config.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_commands.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
@@ -47,6 +46,7 @@
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "third_party/abseil-cpp/absl/strings/str_format.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/mojom/window_open_disposition.mojom.h"
 
 // IDR_BRAVE_WALLET_SOLANA_WEB3_JS_FOR_TEST is excluded from Android build to
 // save space. Ensure this test is not build on Android. If it will be required
@@ -288,7 +288,7 @@ std::string SignMessageScript(std::string_view args) {
       args, expected_result);
 }
 
-std ::string RequestScript(std::string_view args) {
+std::string RequestScript(std::string_view args) {
   const std::string expected_result = content::JsReplace(
       R"({ publicKey: $1, signature: $2})", kTestPublicKey, kTestSignature);
   return absl::StrFormat(
@@ -339,17 +339,6 @@ class TestSolanaProvider final : public brave_wallet::mojom::SolanaProvider {
     } else {
       events_listener_->AccountChangedEvent(kTestPublicKey);
     }
-  }
-  void IsConnected(IsConnectedCallback callback) override {
-    if (error_ == SolanaProviderError::kSuccess) {
-      std::move(callback).Run(true);
-    } else {
-      std::move(callback).Run(false);
-      ClearError();
-    }
-  }
-  void GetPublicKey(GetPublicKeyCallback callback) override {
-    std::move(callback).Run(kTestPublicKey);
   }
   void SignTransaction(brave_wallet::mojom::SolanaSignTransactionParamPtr param,
                        SignTransactionCallback callback) override {
@@ -585,7 +574,7 @@ class SolanaProviderRendererTest : public InProcessBrowserTest {
   }
 
   void ReloadAndWaitForLoadStop(BrowserWindowInterface* browser) {
-    chrome::Reload(browser, WindowOpenDisposition::CURRENT_TAB);
+    chrome::Reload(browser, ui::mojom::WindowOpenDisposition::kCurrentTab);
     ASSERT_TRUE(content::WaitForLoadStop(web_contents(browser)));
   }
 
@@ -760,25 +749,43 @@ IN_PROC_BROWSER_TEST_F(SolanaProviderRendererTest, OnConnect) {
 }
 
 IN_PROC_BROWSER_TEST_F(SolanaProviderRendererTest, IsConnected) {
+  // The page is not connected until it calls connect().
   auto result =
       EvalJs(web_contents(browser()), "window.braveSolana.isConnected");
-  EXPECT_EQ(base::Value(true), result);
+  EXPECT_EQ(base::Value(false), result);
+
+  auto result2 = EvalJs(web_contents(browser()),
+                        R"(async function connect() {
+                  await window.braveSolana.connect();
+                  return window.braveSolana.isConnected;
+                }
+                connect();)");
+  EXPECT_EQ(base::Value(true), result2);
 
   TestSolanaProvider* provider = test_content_browser_client_.GetProvider(
       web_contents(browser())->GetPrimaryMainFrame());
   ASSERT_TRUE(provider);
+  // Disconnect emits an empty account, otherwise the mock would reconnect the
+  // page with kTestPublicKey.
+  provider->SetEmitEmptyAccountChanged(true);
 
-  // just make TestSolanaProvider::IsConnected to return false
-  provider->SetError(SolanaProviderError::kUserRejectedRequest, "");
-
-  auto result2 =
-      EvalJs(web_contents(browser()), "window.braveSolana.isConnected");
-  EXPECT_EQ(base::Value(false), result2);
+  auto result3 = EvalJs(web_contents(browser()),
+                        R"(async function disconnect() {
+                  await window.braveSolana.disconnect();
+                  return window.braveSolana.isConnected;
+                }
+                disconnect();)");
+  EXPECT_EQ(base::Value(false), result3);
 }
 
 IN_PROC_BROWSER_TEST_F(SolanaProviderRendererTest, GetPublicKey) {
+  // publicKey is only set once the page is connected.
   auto result = EvalJs(web_contents(browser()),
-                       "window.braveSolana.publicKey.toString()");
+                       R"(async function getPublicKey() {
+                  await window.braveSolana.connect();
+                  return window.braveSolana.publicKey.toString();
+                }
+                getPublicKey();)");
   EXPECT_EQ(base::Value(kTestPublicKey), result);
 }
 
@@ -1095,110 +1102,42 @@ IN_PROC_BROWSER_TEST_F(SolanaProviderRendererTest, Iframe3P) {
     GURL iframe_url;
   } solana_undefined_cases[] =
       {{// 3p iframe
-        "true", secure_top_url, iframe_url_3p},
-       {// 1st party iframe with allow="solana 'none'"
-        R"(
-        document.querySelector('iframe').setAttribute('allow', 'solana \'none\'');
-        true
-        )",
-        secure_top_url, iframe_url_1p},
+        "", secure_top_url, iframe_url_3p},
        {// 1st party iframe with sandbox="allow-scripts"
         R"(
-        document.querySelector('iframe').removeAttribute('allow');
         document.querySelector('iframe').setAttribute('sandbox', 'allow-scripts');
-        true
         )",
         secure_top_url, iframe_url_1p},
        {// 3p iframe with sandbox="allow-scripts allow-same-origin"
         R"(
-        document.querySelector('iframe').removeAttribute('allow');
         document.querySelector('iframe')
           .setAttribute('sandbox', 'allow-scripts allow-same-origin');
-        true
         )",
         secure_top_url, iframe_url_3p},
-       {// 3p iframe with allow="ethereum"
-        R"(
-        document.querySelector('iframe').removeAttribute('sandbox');
-        document.querySelector('iframe').setAttribute('allow', 'ethereum');
-        true
-        )",
-        secure_top_url, iframe_url_3p},
-
-       {// 3p iframe with allow="solana; ethereum" but insecure top level
-        R"(
-      document.querySelector('iframe').removeAttribute('sandbox');
-      document.querySelector('iframe')
-          .setAttribute('allow', 'solana; ethereum');
-      true
-      )",
-        insecure_top_url, iframe_url_3p},
-
-       {// 3p iframe with allow="solana; ethereum" but insecure top level (data
-        // URI)
-        R"(
-      document.querySelector('iframe').removeAttribute('sandbox');
-      document.querySelector('iframe')
-          .setAttribute('allow', 'solana; ethereum');
-      true
-      )",
-        data_top_url, iframe_url_3p},
-
-       {// 3p iframe with allow="solana; ethereum" but insecure iframe
-        R"(
-      document.querySelector('iframe').removeAttribute('sandbox');
-      document.querySelector('iframe')
-          .setAttribute('allow', 'solana; ethereum');
-      true
-      )",
-        secure_top_url, data_simple_url},
-       {// insecure top level and insecure iframe allow="solana; ethereum"
-        R"(
-      document.querySelector('iframe').removeAttribute('sandbox');
-      document.querySelector('iframe')
-          .setAttribute('allow', 'solana; ethereum');
-      true
-      )",
-        data_top_url, data_simple_url}},
+       {// 3p iframe with insecure top level
+        "", insecure_top_url, iframe_url_3p},
+       {// 3p iframe with insecure top level (data URI)
+        "", data_top_url, iframe_url_3p},
+       {// insecure iframe
+        "", secure_top_url, data_simple_url},
+       {// insecure top level and insecure iframe
+        "", data_top_url, data_simple_url}},
     solana_defined_cases[] = {
         {// 1st party iframe
-         "true", secure_top_url, iframe_url_1p},
+         "", secure_top_url, iframe_url_1p},
         {// 1st party iframe sandbox="allow-scripts allow-same-origin"
          R"(
-      document.querySelector('iframe').removeAttribute('allow');
       document.querySelector('iframe')
           .setAttribute('sandbox', 'allow-scripts allow-same-origin');
-      true
       )",
-         secure_top_url, iframe_url_1p},
-        {// 3p iframe with allow="solana"
-         R"(
-      document.querySelector('iframe').removeAttribute('sandbox');
-      document.querySelector('iframe').setAttribute('allow', 'solana');
-      true
-      )",
-         secure_top_url, iframe_url_3p},
-        {// 3p iframe with allow="ethereum; solana"
-         R"(
-      document.querySelector('iframe').removeAttribute('sandbox');
-      document.querySelector('iframe').setAttribute('allow', 'ethereum; solana');
-      true
-      )",
-         secure_top_url, iframe_url_3p},
-        {// 3rd party iframe with sandbox="allow-scripts" allow="solana"
-         R"(
-      document.querySelector('iframe').setAttribute('allow', 'solana');
-      document.querySelector('iframe').setAttribute('sandbox', 'allow-scripts');
-      true
-      )",
-         secure_top_url, iframe_url_3p}};
+         secure_top_url, iframe_url_1p}};
 
   for (auto& c : solana_undefined_cases) {
     SCOPED_TRACE(testing::Message() << c.script << c.iframe_url);
     ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), c.top_url));
     content::RenderFrameHost* main_frame =
         web_contents(browser())->GetPrimaryMainFrame();
-    EXPECT_TRUE(content::EvalJs(main_frame, c.script).ExtractBool());
+    EXPECT_TRUE(content::ExecJs(main_frame, c.script));
     EXPECT_TRUE(
         NavigateIframeToURL(web_contents(browser()), "test", c.iframe_url));
     EXPECT_TRUE(
@@ -1210,7 +1149,7 @@ IN_PROC_BROWSER_TEST_F(SolanaProviderRendererTest, Iframe3P) {
     ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), c.top_url));
     content::RenderFrameHost* main_frame =
         web_contents(browser())->GetPrimaryMainFrame();
-    EXPECT_TRUE(content::EvalJs(main_frame, c.script).ExtractBool());
+    EXPECT_TRUE(content::ExecJs(main_frame, c.script));
     EXPECT_TRUE(
         NavigateIframeToURL(web_contents(browser()), "test", c.iframe_url));
     EXPECT_FALSE(

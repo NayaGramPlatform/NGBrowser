@@ -39,6 +39,8 @@ class QuickViewController: UIViewController {
     estimatedTransitionDistance: 110
   )
   private var toolbarVisibilityCancellable: AnyCancellable?
+  /// The in-flight task preparing the share sheet, if any
+  private var shareTask: Task<Void, Never>?
   private let onOpenInNewTab: ((URLRequest, Bool) -> Void)?
   private let onOpenInNewWindow: ((URL, Bool) -> Void)?
   private let onAttachTab: ((any TabState) -> Void)?
@@ -160,6 +162,7 @@ class QuickViewController: UIViewController {
       self?.showReaderModeBar()
     }
     tab.historyTabHelper = .init(tab: tab, historyAPI: historyAPI)
+    tab.shareableDocumentHelper = .init(tab: tab)
     tab.addPolicyDecider(self)
     tab.createWebView()
     tab.delegate = self
@@ -209,14 +212,37 @@ class QuickViewController: UIViewController {
           self?.promoteCurrentTabToBrowserTab()
         }
       case .share:
-        guard let self, let visibleURL = self.currentTab?.visibleURL
-        else { return }
+        self?.openShareSheet()
+      case .sslStatus:
+        self?.presentSSLStatusView()
+      case .playlist, .translate:
+        break
+      }
+    }
+    toolbarViewModel.onTappedCollapsedBarTopArea = { [weak self] in
+      guard let self else { return }
+      if self.isKeyboardVisible {
+        self.view.endEditing(true)
+      } else {
+        self.toolbarVisibilityViewModel.toolbarState = .expanded
+      }
+    }
+  }
+
+  private func openShareSheet() {
+    guard let tab = currentTab, let visibleURL = tab.visibleURL else { return }
+
+    // Cancel any previous request that has not yet presented its share sheet
+    shareTask?.cancel()
+    shareTask = Task { [weak self, weak tab] in
+      guard let self, let tab else { return }
+      @MainActor func share(url: URL, document: ShareableDocument? = nil) {
         let anchorView = self.toolbarHostingController.rootView.shareBackgroundView.uiView
         self.presentShareActivity(
-          url: visibleURL,
-          tab: currentTab,
-          syncAPI: syncAPI,
-          sendTabAPI: sendTabAPI,
+          url: url,
+          tab: url.isFileURL ? nil : tab,
+          syncAPI: self.syncAPI,
+          sendTabAPI: self.sendTabAPI,
           feedDataSource: nil,
           isBraveNewsAvailable: false,
           source: .init(
@@ -230,21 +256,34 @@ class QuickViewController: UIViewController {
             },
             onShowSubmitReport: { [weak self] url in
               self?.showSubmitReportView(for: url)
+            },
+            onCleanUp: {
+              // Retain the document until the share sheet is dismissed which deletes the file
+              _ = document
             }
           )
         )
-      case .sslStatus:
-        self?.presentSSLStatusView()
-      case .playlist, .translate:
-        break
       }
-    }
-    toolbarViewModel.onTappedCollapsedBarTopArea = { [weak self] in
-      guard let self else { return }
-      if self.isKeyboardVisible {
-        self.view.endEditing(true)
-      } else {
-        self.toolbarVisibilityViewModel.toolbarState = .expanded
+
+      guard let document = tab.shareableDocumentHelper?.document else {
+        share(url: visibleURL)
+        return
+      }
+      // The user may have navigated or dismissed while the document was downloading
+      @MainActor func isStillCurrent() -> Bool {
+        !Task.isCancelled && self.viewIfLoaded?.window != nil && self.currentTab === tab
+          && tab.shareableDocumentHelper?.document === document
+      }
+      do {
+        let fileURL = try await document.fileURL()
+        guard isStillCurrent() else { return }
+        share(url: fileURL, document: document)
+      } catch is CancellationError {
+        return
+      } catch {
+        guard isStillCurrent() else { return }
+        // Fallback to sharing the web URL if the document could not be downloaded
+        share(url: visibleURL)
       }
     }
   }
@@ -336,6 +375,8 @@ class QuickViewController: UIViewController {
         self.changedShieldSettings()
       case .shredSiteData:  // not available in quickview mode
         break
+      case .blockElement, .clearBlockedElements:  // not available in quickview mode
+        break
       case .openURLInNewTab(let url):
         self.openNewTab(with: URLRequest(url: url), inPrivateMode: currentTab?.isPrivate ?? false)
       }
@@ -379,7 +420,6 @@ class QuickViewController: UIViewController {
           rootViewController: LegacyShieldsPanelViewController(
             url: url,
             tab: tab,
-            domain: Domain.getOrCreate(forUrl: url, persistent: !tab.isPrivate),
             callback: shieldsPanelActionHandler
           )
         ),
@@ -480,6 +520,7 @@ class QuickViewController: UIViewController {
     )
 
     viewController.modalPresentationStyle = .popover
+    viewController.preferredContentSize = CGSize(width: 400, height: 600)
 
     if let popover = viewController.popoverPresentationController {
       popover.sourceView = toolbarHostingController.rootView.shieldBackgroundView.uiView
@@ -489,7 +530,6 @@ class QuickViewController: UIViewController {
       sheet.largestUndimmedDetentIdentifier = .medium
       sheet.prefersEdgeAttachedInCompactHeight = true
       sheet.widthFollowsPreferredContentSizeWhenEdgeAttached = true
-      sheet.detents = [.medium(), .large()]
       sheet.prefersGrabberVisible = true
     }
     if UIDevice.current.userInterfaceIdiom != .pad {
@@ -647,7 +687,7 @@ extension QuickViewController: TabDelegate {
     }
     return nil
   }
-
+  @MainActor
   func tab(
     _ tab: some TabState,
     contextMenuConfigurationForLinkURL linkURL: URL?
@@ -737,17 +777,18 @@ extension QuickViewController: TabDelegate {
         copyAction.accessibilityLabel = "linkContextMenu.copyLink"
         actions.append(copyAction)
 
-        let copyCleanLinkAction = UIAction(
-          title: Strings.copyCleanLink,
-          image: UIImage(braveSystemNamed: "leo.copy.clean"),
-          handler: UIAction.deferredActionHandler { _ in
-            let service = URLSanitizerServiceFactory.get(privateMode: currentTab.isPrivate)
-            let cleanedURL = service?.sanitize(url: url) ?? url
-            UIPasteboard.general.url = cleanedURL
-          }
-        )
-        copyCleanLinkAction.accessibilityLabel = "linkContextMenu.copyCleanLink"
-        actions.append(copyCleanLinkAction)
+        if let service = URLSanitizerServiceFactory.get(profile: currentTab.profile) {
+          let copyCleanLinkAction = UIAction(
+            title: Strings.copyCleanLink,
+            image: UIImage(braveSystemNamed: "leo.copy.clean"),
+            handler: UIAction.deferredActionHandler { _ in
+              let cleanedURL = service.sanitize(url: url) ?? url
+              UIPasteboard.general.url = cleanedURL
+            }
+          )
+          copyCleanLinkAction.accessibilityLabel = "linkContextMenu.copyCleanLink"
+          actions.append(copyCleanLinkAction)
+        }
 
         let shareAction = UIAction(
           title: Strings.shareLinkActionTitle,
@@ -852,6 +893,23 @@ extension QuickViewController: TabObserver {
       hideReaderModeBar()
     }
     toolbarVisibilityViewModel.toolbarState = .expanded
+  }
+
+  func tab(_ tab: some TabState, didFailNavigationWithError error: any Error) {
+    let error = error as NSError
+    // Only a real network-level failure qualifies. A navigation that one of our policy
+    // deciders cancelled in order to load an interstitial (blocked domain, strict-mode
+    // HTTPS upgrade) also lands here, reported as a cancellation/interrupted load.
+    guard error.domain == NSURLErrorDomain, error.code != NSURLErrorCancelled,
+      let failedURL = error.userInfo[NSURLErrorFailingURLErrorKey] as? URL
+    else { return }
+    Task { [weak self, weak tab] in
+      guard let self, let tab else { return }
+      guard tab.httpsUpgradeHelper?.pendingUpgrade == nil, !tab.isLoading,
+        InternalURL(tab.visibleURL ?? failedURL) == nil
+      else { return }
+      self.handleUnsupportedRequest(URLRequest(url: failedURL), tab.isPrivate)
+    }
   }
 
   func tabDidUpdateURL(_ tab: some TabState) {
@@ -1013,6 +1071,7 @@ extension QuickViewController: KeyboardHelperDelegate {
 }
 
 extension QuickViewController: TabPolicyDecider {
+  @MainActor
   func tab(
     _ tab: some TabState,
     shouldAllowRequest request: URLRequest,

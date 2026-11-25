@@ -57,7 +57,7 @@ class WalletTabHelper: NSObject, TabObserver {
     ]
 
     DispatchQueue.main.async {
-      // Reference inside to retain it, supress warnings by reading/writing
+      // Reference inside to retain it, suppress warnings by reading/writing
       _ = mojoObjects
       mojoObjects = []
     }
@@ -72,14 +72,12 @@ class WalletTabHelper: NSObject, TabObserver {
   }
 
   func tabDidCommitNavigation(_ tab: some TabState) {
-    clearSolanaConnectedAccounts()
     createProviders()
   }
 
   func tabDidFinishNavigation(_ tab: some TabState) {
     Task {
       await updateEthereumProperties()
-      await updateSolanaProperties()
     }
 
     if walletEthProvider != nil {
@@ -182,7 +180,7 @@ extension WalletTabHelper: BraveWalletProviderDelegate {
     completion: @escaping RequestPermissionsCallback
   ) {
     guard let tab else { return }
-    Task { @MainActor in
+    Task { @MainActor [self] in
       let permissionRequestManager = WalletProviderPermissionRequestsManager.shared
 
       if permissionRequestManager.hasPendingRequest(for: origin, coinTypes: [coinType]) {
@@ -280,7 +278,7 @@ extension WalletTabHelper: BraveWalletProviderDelegate {
     // For Ethereum, locked status is checked in `EthereumProviderImpl::GetAllowedAccounts`
     // For Solana, locked status is checked in `SolanaProviderImpl::Connect` before
     // calling `IsAccountAllowed` delegate method.
-    guard let originURL = tab?.visibleURL?.origin.url,
+    guard let originURL = tab?.lastCommittedURL?.origin.url,
       let permittedAccountAddresses = Domain.walletPermissions(forUrl: originURL, coin: type)
     else {
       return []
@@ -335,13 +333,11 @@ extension WalletTabHelper: BraveWalletProviderDelegate {
   }
 
   func showAccountCreation(_ coin: BraveWallet.CoinType, origin: URLOrigin) {
-    guard let tab else { return }
-    let privateMode = tab.isPrivate
-    guard let keyringService = BraveWallet.KeyringServiceFactory.get(privateMode: privateMode)
+    guard let tab, let keyringService = BraveWallet.KeyringServiceFactory.get(profile: tab.profile)
     else {
       return
     }
-    Task { @MainActor in
+    Task { @MainActor [self] in
       // check if we receive account creation request without a wallet setup
       let isWalletCreated = await keyringService.isWalletCreated()
       if !isWalletCreated {
@@ -366,29 +362,6 @@ extension WalletTabHelper: BraveWalletProviderDelegate {
       delegate?.updateURLBarWalletButton()
     }
   }
-
-  func isSolanaAccountConnected(_ account: String) -> Bool {
-    tabDappStore.solConnectedAddresses.contains(account)
-  }
-
-  func addSolanaConnectedAccount(_ account: String) {
-    Task { @MainActor in
-      tabDappStore.solConnectedAddresses.insert(account)
-    }
-  }
-
-  func removeSolanaConnectedAccount(_ account: String) {
-    Task { @MainActor in
-      tabDappStore.solConnectedAddresses.remove(account)
-    }
-  }
-
-  func clearSolanaConnectedAccounts() {
-    Task { @MainActor in
-      tabDappStore.solConnectedAddresses = .init()
-      await updateSolanaProperties()
-    }
-  }
 }
 
 extension WalletTabHelper: BraveWalletEventsListener {
@@ -406,7 +379,9 @@ extension WalletTabHelper: BraveWalletEventsListener {
       arguments.append(eventArgs)
     }
     tab.evaluateJavaScript(
-      functionName: "window.ethereum.emit",
+      // Optional chaining: the provider is only defined in secure contexts and
+      // once a wallet exists
+      functionName: "window.ethereum?.emit",
       args: arguments,
       contentWorld: EthereumProviderScriptHandler.scriptSandbox,
       completionHandler: nil
@@ -430,7 +405,7 @@ extension WalletTabHelper: BraveWalletEventsListener {
       emitEthereumEvent(.ethereumChainChanged(chainId: chainId))
       await updateEthereumProperties()
       // don't need to reload if it's a brave wallet webui
-      if tab.visibleURL?.isWalletWebUIURL == true { return }
+      if tab.lastCommittedURL?.isWalletWebUIURL == true { return }
       tab.reload()
     }
   }
@@ -449,7 +424,7 @@ extension WalletTabHelper: BraveWalletEventsListener {
   func updateEthereumProperties() async {
     guard let tab, !tab.isPrivate,
       !FeatureList.kUseProfileWebViewConfiguration.enabled,
-      let keyringService = BraveWallet.KeyringServiceFactory.get(privateMode: false),
+      let keyringService = BraveWallet.KeyringServiceFactory.get(profile: tab.profile),
       tab.profile.prefs.integer(forPath: kDefaultEthereumWallet)
         != BraveWallet.DefaultWallet.none.rawValue
     else {
@@ -474,7 +449,8 @@ extension WalletTabHelper: BraveWalletEventsListener {
 
     let chainId = await provider.chainId()
     _ = try? await tab.evaluateJavaScript(
-      functionName: "window.ethereum.chainId = \(valueOrUndefined(chainId))",
+      functionName:
+        "if (window.ethereum) { window.ethereum.chainId = \(valueOrUndefined(chainId)) }",
       contentWorld: EthereumProviderScriptHandler.scriptSandbox,
       asFunction: false
     )
@@ -483,7 +459,8 @@ extension WalletTabHelper: BraveWalletEventsListener {
       Int(chainId.removingHexPrefix, radix: 16).map { String($0) }
     )
     _ = try? await tab.evaluateJavaScript(
-      functionName: "window.ethereum.networkVersion = \(networkVersion)",
+      functionName:
+        "if (window.ethereum) { window.ethereum.networkVersion = \(networkVersion) }",
       contentWorld: EthereumProviderScriptHandler.scriptSandbox,
       asFunction: false
     )
@@ -509,7 +486,8 @@ extension WalletTabHelper: BraveWalletEventsListener {
       }
     }
     _ = try? await tab.evaluateJavaScript(
-      functionName: "window.ethereum.selectedAddress = \(selectedAccount)",
+      functionName:
+        "if (window.ethereum) { window.ethereum.selectedAddress = \(selectedAccount) }",
       contentWorld: EthereumProviderScriptHandler.scriptSandbox,
       asFunction: false
     )
@@ -531,13 +509,14 @@ extension WalletTabHelper: BraveWalletSolanaEventsListener {
   func accountChangedEvent(account: String?) {
     guard let tab else { return }
     Task { @MainActor in
+      await updateSolanaPageState(publicKey: account)
       if tab.isWebViewCreated {
         let script: String
         if let account = account {
           script =
-            "if (\(UserScriptManager.walletSolanaNameSpace).solanaWeb3) { window.solana.emit('accountChanged', new \(UserScriptManager.walletSolanaNameSpace).solanaWeb3.PublicKey('\(account.htmlEntityEncodedString)')) }"
+            "if (typeof \(UserScriptManager.walletSolanaNameSpace) !== 'undefined' && \(UserScriptManager.walletSolanaNameSpace).solanaWeb3) { window.solana?.emit('accountChanged', new \(UserScriptManager.walletSolanaNameSpace).solanaWeb3.PublicKey('\(account.htmlEntityEncodedString)')) }"
         } else {
-          script = "window.solana.emit('accountChanged')"
+          script = "window.solana?.emit('accountChanged')"
         }
         _ = try? await tab.evaluateJavaScript(
           functionName: script,
@@ -545,12 +524,14 @@ extension WalletTabHelper: BraveWalletSolanaEventsListener {
           asFunction: false
         )
       }
-      await updateSolanaProperties()
     }
   }
 
   func disconnectEvent() {
-    emitSolanaEvent(.disconnect)
+    Task { @MainActor in
+      await updateSolanaPageState(publicKey: nil)
+      emitSolanaEvent(.disconnect)
+    }
   }
 
   func emitSolanaEvent(_ event: Web3ProviderEvent) {
@@ -561,54 +542,56 @@ extension WalletTabHelper: BraveWalletSolanaEventsListener {
     else {
       return
     }
-    Task {
+    _ = Task {
       var arguments: [Any] = [event.name]
       if let eventArgs = event.arguments {
         arguments.append(eventArgs)
       }
       try await tab.evaluateJavaScript(
-        functionName: "window.solana.emit",
+        functionName: "window.solana?.emit",
         args: arguments,
         contentWorld: .page
       )
     }
   }
 
-  @MainActor func updateSolanaProperties() async {
+  /// Sets `isConnected` and `publicKey` on the page the way the desktop renderer does: they change
+  /// only on connect, disconnect and account change.
+  @MainActor func updateSolanaPageState(publicKey: String?) async {
     guard let tab,
       !FeatureList.kUseProfileWebViewConfiguration.enabled,
       tab.profile.prefs.integer(forPath: kDefaultSolanaWallet)
         != BraveWallet.DefaultWallet.none.rawValue,
-      tab.isWebViewCreated,
-      let provider = walletSolProvider
+      tab.isWebViewCreated
     else {
       return
     }
-    let isConnected = await provider.isConnected()
     _ = try? await tab.evaluateJavaScript(
-      functionName: "window.solana.isConnected = \(isConnected)",
+      functionName: "if (window.solana) { window.solana.isConnected = \(publicKey != nil) }",
       contentWorld: .page,
       asFunction: false
     )
-    // publicKey
-    if let keyringService = walletKeyringService,
-      let publicKey = await keyringService.allAccounts().solDappSelectedAccount?.address,
-      self.isSolanaAccountConnected(publicKey)
-    {
+    guard let publicKey else {
       _ = try? await tab.evaluateJavaScript(
-        functionName: """
-          if (\(UserScriptManager.walletSolanaNameSpace).solanaWeb3) {
-            window.__firefox__.execute(function($) {
-              window.solana.publicKey = $.deepFreeze(
-                new \(UserScriptManager.walletSolanaNameSpace).solanaWeb3.PublicKey('\(publicKey.htmlEntityEncodedString)')
-              );
-            });
-          }
-          """,
+        functionName: "if (window.solana) { window.solana.publicKey = null }",
         contentWorld: .page,
         asFunction: false
       )
+      return
     }
+    _ = try? await tab.evaluateJavaScript(
+      functionName: """
+        if (window.solana && typeof \(UserScriptManager.walletSolanaNameSpace) !== 'undefined' && \(UserScriptManager.walletSolanaNameSpace).solanaWeb3) {
+          window.__firefox__.execute(function($) {
+            window.solana.publicKey = $.deepFreeze(
+              new \(UserScriptManager.walletSolanaNameSpace).solanaWeb3.PublicKey('\(publicKey.htmlEntityEncodedString)')
+            );
+          });
+        }
+        """,
+      contentWorld: .page,
+      asFunction: false
+    )
   }
 }
 
@@ -628,12 +611,11 @@ extension WalletTabHelper: BraveWalletKeyringServiceObserver {
   func locked() {
     Task { @MainActor in
       await updateEthereumProperties()
-      await updateSolanaProperties()
     }
   }
 
   func unlocked() {
-    guard let origin = tab?.visibleURL?.origin,
+    guard let origin = tab?.lastCommittedURL?.origin,
       let keyringService = walletKeyringService
     else { return }
     Task { @MainActor in

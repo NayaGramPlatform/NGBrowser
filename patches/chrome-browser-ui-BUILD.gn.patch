@@ -1,52 +1,25 @@
 diff --git a/chrome/browser/ui/BUILD.gn b/chrome/browser/ui/BUILD.gn
-index 82f397571fefaff0096247d0e98c28c20db709bd..57954585dbb821f98bf9ceabee5dd28971042c36 100644
+index 9469400d339f8bedf5d60617fbd0b3a84d3305d8..bf083c1756666f5364ff71dbee3f4dba772a7beb 100644
 --- a/chrome/browser/ui/BUILD.gn
 +++ b/chrome/browser/ui/BUILD.gn
-@@ -2,6 +2,7 @@
- # Use of this source code is governed by a BSD-style license that can be
- # found in the LICENSE file.
+@@ -1096,6 +1096,7 @@ source_set("accelerator_table") {
+   sources = [ "accelerator_table.cc" ]
+   public_deps = [ "//ui/actions:actions_headers" ]
+   deps = [
++    "//brave/components/commander/common/buildflags",
+     "//build:branding_buildflags",
+     "//chrome/app:command_ids",
+     "//chrome/browser/ui/actions:command_id_to_action_id",
+@@ -1503,9 +1504,12 @@ source_set("layout_constants") {
  
-+import("//brave/browser/sources.gni")
- import("//build/config/buildflags_paint_preview.gni")
- import("//build/config/chrome_build.gni")
- import("//build/config/compiler/compiler.gni")
-@@ -811,6 +812,7 @@ static_library("ui") {
-     ":simple_message_box_headers",
-     ":tab_dialogs",
-     ":tab_modal_confirm_dialog",
-+    "//brave/browser/ui",
-     "//chrome/browser:browser_public_dependencies",
-     "//chrome/browser/feedback",
-     "//chrome/browser/headless",
-@@ -1087,6 +1089,8 @@ static_library("ui") {
-     "//ui/strings",
-     "//ui/webui",
+   deps = [
+     "//base",
++    "//brave/browser/ui:brave_tab_prefs",
++    "//brave/browser/ui:ui_features",
+     "//chrome/browser/ui:ui_features",
+     "//chrome/common:chrome_features",
+     "//components/omnibox/common",
++    "//components/prefs",
+     "//ui/base",
+     "//ui/base:features",
    ]
-+  deps += brave_chrome_browser_ui_allow_circular_includes_from
-+  deps += brave_chrome_browser_ui_deps
- 
-   allow_circular_includes_from = [
-     # page_load_metrics's :impl includes headers from //chrome/browser/ui that
-@@ -1110,6 +1114,8 @@ static_library("ui") {
-     # - c/b/ui/views/frame/browser_view.h
-     "//chrome/browser/ui/views/file_system_access:impl",
-   ]
-+  allow_circular_includes_from +=
-+      brave_chrome_browser_ui_allow_circular_includes_from
- 
-   # Desktop-Android-only dependencies.
-   if (is_desktop_android) {
-@@ -3802,11 +3808,13 @@ static_library("ui") {
- group("ui_public_dependencies") {
-   visibility = [ "//chrome/browser:browser_public_dependencies" ]
-   public_deps = [
-+    "//brave/browser/ui:ui_public_dependencies",
-     "//components/cross_device/logging",
-     "//components/dom_distiller/core",
-     "//components/enterprise/buildflags",
-     "//components/paint_preview/buildflags",
-     "//components/safe_browsing:buildflags",
-+    "//components/saved_tab_groups/public",
-     "//components/segmentation_platform/public",
-     "//components/sync",
-     "//components/sync_user_events",

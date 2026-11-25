@@ -1,0 +1,29 @@
+// Copyright (c) 2026 The Brave Authors. All rights reserved.
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this file,
+// You can obtain one at https://mozilla.org/MPL/2.0/.
+
+syntax = "proto3";
+
+package recipe_modules.brave.brave_core_checkout;
+
+message InputProperties {
+  // A brave-core git ref fully qualified (e.g `refs/heads/1.80.x`
+  // Defaults to `refs/heads/master`
+  string brave_core_ref = 1;
+
+  // Build with remote execution. Feeds the `USE_REMOTEEXEC` config variable.
+  bool use_remoteexec = 2;
+
+  // Siso's cache directory; empty leaves it to the build's own default.
+  string siso_cache_dir = 3;
+
+  // Fail a build without a builder, rather than composing its whole `.env`,
+  // to try builds without the deprecated mode before it is removed.
+  bool disable_deprecated_dotenv = 4;
+
+  // A file with the values of the builder's secrets, in `.env` form, which
+  // the checkout gets as `.internal/.env` for `bots gen`. It is only copied,
+  // never read, so that no value reaches the build's logs.
+  string secrets_dotenv = 5;
+}

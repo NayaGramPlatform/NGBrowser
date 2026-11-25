@@ -6,21 +6,21 @@
 import { createRoot } from 'react-dom/client'
 import * as React from 'react'
 import styled, { StyleSheetManager } from 'styled-components'
-import Icon, { setIconBasePath } from '@brave/leo/react/icon'
-import Button from '@brave/leo/react/button'
+import Icon, { setIconBasePath } from '@brave/nala/react/icon'
+import Button from '@brave/nala/react/button'
 import {
   color,
   font,
   spacing,
   radius,
   typography,
-} from '@brave/leo/tokens/css/variables'
+} from '@brave/nala/tokens/css/variables'
 import {
   EmailAliasesServiceObserverInterface,
   EmailAliasesServiceObserverReceiver,
   EmailAliasesPromoHandlerInterface,
   EmailAliasesPromoHandler,
-} from 'gen/brave/components/email_aliases/email_aliases.mojom.m'
+} from 'gen/brave/components/email_aliases/email_aliases.mojom-webui.js'
 import Col from './content/styles/Col'
 import Row from './content/styles/Row'
 import NytIcon from './content/assets/nyt-logo.svg'

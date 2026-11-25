@@ -36,6 +36,7 @@
 #include "brave/components/commander/common/buildflags/buildflags.h"
 #include "brave/components/containers/buildflags/buildflags.h"
 #include "brave/components/email_aliases/buildflags/buildflags.h"
+#include "brave/components/local_ai/buildflags/buildflags.h"
 #include "brave/components/playlist/core/common/buildflags/buildflags.h"
 #include "brave/components/psst/buildflags/buildflags.h"
 #include "brave/components/request_otr/common/buildflags/buildflags.h"
@@ -65,7 +66,6 @@
 #endif
 
 #if !BUILDFLAG(IS_ANDROID)
-#include "brave/browser/ui/bookmark/bookmark_prefs_service_factory.h"
 #include "brave/browser/ui/commands/accelerator_service_factory.h"
 #include "brave/browser/ui/tabs/shared_pinned_tab_service_factory.h"
 #include "brave/browser/workspaces/workspace_service_factory.h"
@@ -74,6 +74,10 @@
 #else
 #include "brave/browser/brave_shields/filter_list_service_factory.h"
 #include "brave/browser/ntp_background/android/ntp_background_images_bridge.h"
+#endif
+
+#if BUILDFLAG(ENABLE_LOCAL_AI)
+#include "brave/browser/history_embeddings/history_embeddings_service_factory.h"
 #endif
 
 #if BUILDFLAG(ENABLE_TOR)
@@ -102,6 +106,10 @@
 #endif
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
+#include "brave/browser/extensions/extension_malware_blocklist_enforcer_factory.h"
+#endif
+
+#if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
 #include "brave/browser/extensions/manifest_v2/brave_extensions_manifest_v2_migrator.h"
 #endif
 
@@ -114,6 +122,7 @@
 #endif
 
 #if BUILDFLAG(ENABLE_PSST)
+#include "brave/browser/psst/psst_log_service_factory.h"
 #include "brave/browser/psst/psst_reporter_service_factory.h"
 #include "brave/browser/psst/psst_settings_service_factory.h"
 #endif
@@ -159,9 +168,7 @@ void EnsureBrowserContextKeyedServiceFactoriesBuilt() {
   SearchEngineTrackerFactory::GetInstance();
   ntp_background_images::ViewCounterServiceFactory::GetInstance();
 
-#if !BUILDFLAG(IS_ANDROID)
-  BookmarkPrefsServiceFactory::GetInstance();
-#else
+#if BUILDFLAG(IS_ANDROID)
   brave_shields::FilterListServiceFactory::GetInstance();
   ntp_background_images::NTPBackgroundImagesBridgeFactory::GetInstance();
 #endif
@@ -239,6 +246,10 @@ void EnsureBrowserContextKeyedServiceFactoriesBuilt() {
 
   brave_search::BackupResultsServiceFactory::GetInstance();
 
+#if BUILDFLAG(ENABLE_LOCAL_AI)
+  history_embeddings::HistoryEmbeddingsServiceFactory::GetInstance();
+#endif
+
 #if BUILDFLAG(ENABLE_WEB_DISCOVERY_NATIVE)
   web_discovery::WebDiscoveryServiceFactory::GetInstance();
 #endif
@@ -254,6 +265,10 @@ void EnsureBrowserContextKeyedServiceFactoriesBuilt() {
 #endif
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
+  extensions::ExtensionMalwareBlocklistEnforcerFactory::GetInstance();
+#endif
+
+#if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
   extensions_mv2::ExtensionsManifestV2MigratorFactory::GetInstance();
 #endif
   BraveShieldsSettingsServiceFactory::GetInstance();
@@ -261,6 +276,7 @@ void EnsureBrowserContextKeyedServiceFactoriesBuilt() {
 #if BUILDFLAG(ENABLE_PSST)
   PsstSettingsServiceFactory::GetInstance();
   PsstReporterServiceFactory::GetInstance();
+  PsstLogServiceFactory::GetInstance();
 #endif  // BUILDFLAG(ENABLE_PSST)
 
   serp_metrics::SerpMetricsServiceFactory::GetInstance();

@@ -6,11 +6,13 @@
 import '$test-utils/disable_custom_elements'
 
 import * as React from 'react'
-import { render, screen, act, waitFor } from '@testing-library/react'
+import { render, screen, act, waitFor, within } from '@testing-library/react'
 import { MockContext } from '../../state/mock_context'
+import { ActiveChatContext } from '../../state/active_chat_context'
 import { clearAllDataForTesting } from '$web-common/api'
 import ConversationsList from './index'
 import * as Mojom from '../../../common/mojom'
+import { ConversationGenerationState as CG } from '../../../common/mojom'
 
 const mockConversations: Mojom.Conversation[] = [
   {
@@ -56,6 +58,90 @@ async function renderConversationsList(
     result = render(...args)
   })
   return result!
+}
+
+function makeConversation(
+  uuid: string,
+  title: string,
+  workspaceUuids: string[] = [],
+): Mojom.Conversation {
+  return {
+    uuid,
+    title,
+    updatedTime: { internalValue: BigInt(0) },
+    hasContent: true,
+    modelKey: undefined,
+    totalTokens: BigInt(0),
+    trimmedTokens: BigInt(0),
+    temporary: false,
+    associatedContent: workspaceUuids.map((workspaceUuid) => ({
+      uuid: `${uuid}-${workspaceUuid}`,
+      contentType: Mojom.ContentType.Workspace,
+      title: 'Workspace',
+      contentId: 0,
+      url: { url: `workspace://${workspaceUuid}` },
+      contentUsedPercentage: 100,
+      conversationTurnUuid: 'turn-uuid',
+      toolsAttached: true,
+    })),
+  }
+}
+
+function renderWithConversations(
+  conversations: Mojom.Conversation[],
+  isWorkspaceToolsEnabled = true,
+) {
+  return renderConversationsList(
+    <MockContext
+      service={{
+        getConversations: () => Promise.resolve({ conversations }),
+      }}
+      initialState={{
+        serviceState: { isStoragePrefEnabled: true },
+      }}
+      aiChatOverrides={{ isWorkspaceToolsEnabled }}
+    >
+      <ConversationsList />
+    </MockContext>,
+  )
+}
+
+// Renders |list| with |activeUuid| bound and the given generation states, and
+// waits for the conversations to show.
+async function renderWithGeneration(
+  activeUuid: string,
+  generationStates: { [uuid: string]: Mojom.ConversationGenerationState },
+  list: React.ReactNode = <ConversationsList />,
+) {
+  await renderConversationsList(
+    <MockContext
+      service={{
+        getConversations: () =>
+          Promise.resolve({ conversations: mockConversations }),
+      }}
+      initialState={{
+        serviceState: { isStoragePrefEnabled: true },
+        conversationState: { conversationUuid: activeUuid },
+        conversationGenerationState: generationStates,
+      }}
+    >
+      {list}
+    </MockContext>,
+  )
+  await waitFor(() => {
+    expect(screen.getByText('How to use TypeScript')).toBeInTheDocument()
+  })
+}
+
+async function expectIndicators(generating: number, completed: number) {
+  await waitFor(() => {
+    expect(document.querySelectorAll('.generatingIndicator').length).toBe(
+      generating,
+    )
+    expect(document.querySelectorAll('.completedIndicator').length).toBe(
+      completed,
+    )
+  })
 }
 
 describe('ConversationsList', () => {
@@ -347,6 +433,265 @@ describe('ConversationsList', () => {
           screen.queryByText('AI_CHAT_CONVERSATION_LIST_FILTER_NO_RESULTS'),
         ).not.toBeInTheDocument()
       })
+    })
+  })
+
+  describe('Recent workspaces', () => {
+    // Sorted most recently updated first, as provided by the service.
+    const workspaceConversations = [
+      makeConversation('c-1', 'Latest in workspace A', ['ws-a']),
+      makeConversation('c-2', 'No workspace'),
+      makeConversation('c-3', 'Only in workspace B', ['ws-b']),
+      makeConversation('c-4', 'Created workspace A', ['ws-a']),
+    ]
+
+    it.each([
+      ['workspace tools are disabled', workspaceConversations, false],
+      ['no conversations have a workspace', mockConversations, true],
+    ])('is not shown when %s', async (_, conversations, isEnabled) => {
+      await renderWithConversations(conversations, isEnabled)
+
+      await waitFor(() => {
+        expect(screen.getAllByTestId('conversation-title').length).toBe(
+          conversations.length,
+        )
+      })
+      expect(screen.queryByTestId('recent-workspaces')).not.toBeInTheDocument()
+    })
+
+    it('lists the 5 most recent workspaces, labelled by their first conversation', async () => {
+      const conversations = [
+        ...Array.from({ length: 6 }, (_, i) =>
+          makeConversation(`c-${i}`, `Conversation ${i}`, [`ws-${i}`]),
+        ),
+        makeConversation('c-6', 'Created workspace 0', ['ws-0']),
+      ]
+      await renderWithConversations(conversations)
+
+      await waitFor(() => {
+        expect(screen.getAllByTestId('workspace-item')).toHaveLength(5)
+      })
+      expect(
+        screen.getAllByTestId('workspace-title').map((el) => el.textContent),
+      ).toEqual([
+        'Created workspace 0',
+        'Conversation 1',
+        'Conversation 2',
+        'Conversation 3',
+        'Conversation 4',
+      ])
+    })
+
+    it('collapses the section and each workspace', async () => {
+      await renderWithConversations(workspaceConversations)
+
+      // The section starts expanded.
+      const sectionToggle = await screen.findByTestId(
+        'recent-workspaces-toggle',
+      )
+      expect(sectionToggle).toHaveAttribute('aria-expanded', 'true')
+      const workspaceA = screen.getAllByTestId('workspace-item')[0]
+      const workspaceToggle = within(workspaceA).getByTestId('workspace-toggle')
+
+      // Workspaces start collapsed, and expand to show their conversations.
+      expect(workspaceToggle).toHaveAttribute('aria-expanded', 'false')
+      expect(
+        within(workspaceA).queryAllByTestId('conversation-title'),
+      ).toHaveLength(0)
+      act(() => workspaceToggle.click())
+      expect(workspaceToggle).toHaveAttribute('aria-expanded', 'true')
+      expect(
+        within(workspaceA)
+          .getAllByTestId('conversation-title')
+          .map((el) => el.textContent),
+      ).toEqual(['Latest in workspace A', 'Created workspace A'])
+
+      act(() => sectionToggle.click())
+      expect(sectionToggle).toHaveAttribute('aria-expanded', 'false')
+      expect(screen.queryByTestId('workspace-item')).not.toBeInTheDocument()
+    })
+
+    it('renaming from the workspace section only shows one rename input', async () => {
+      const { container } = await renderWithConversations(
+        workspaceConversations,
+      )
+
+      const workspaceB = (await screen.findAllByTestId('workspace-item'))[1]
+      act(() => within(workspaceB).getByTestId('workspace-toggle').click())
+      const link = within(workspaceB)
+        .getByTestId('conversation-title')
+        .closest('a')!
+      act(() => {
+        link.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
+      })
+
+      await waitFor(() => {
+        expect(container.querySelectorAll('input[type=text]')).toHaveLength(1)
+      })
+      expect(workspaceB.querySelector('input[type=text]')).toBeInTheDocument()
+    })
+
+    it('new button creates a conversation with the workspace', async () => {
+      const createNewConversationWithWorkspace = jest.fn()
+      const setIsConversationsListOpen = jest.fn()
+      await renderConversationsList(
+        <MockContext
+          service={{
+            getConversations: () =>
+              Promise.resolve({ conversations: workspaceConversations }),
+          }}
+          aiChatOverrides={{ isWorkspaceToolsEnabled: true }}
+        >
+          <ActiveChatContext.Provider
+            value={{
+              api: undefined!,
+              selectedConversationId: undefined,
+              updateSelectedConversationId: () => {},
+              createNewConversation: () => {},
+              createNewConversationWithWorkspace,
+              isMainConversation: false,
+              openMainConversation: () => {},
+            }}
+          >
+            <ConversationsList
+              setIsConversationsListOpen={setIsConversationsListOpen}
+            />
+          </ActiveChatContext.Provider>
+        </MockContext>,
+      )
+
+      const workspaceB = (await screen.findAllByTestId('workspace-item'))[1]
+      act(() =>
+        within(workspaceB).getByTestId('workspace-new-conversation').click(),
+      )
+
+      expect(createNewConversationWithWorkspace).toHaveBeenCalledWith({
+        url: 'workspace://ws-b',
+      })
+      expect(setIsConversationsListOpen).toHaveBeenCalledWith(false)
+    })
+
+    it('is hidden while filtering', async () => {
+      const { container } = await renderWithConversations(
+        workspaceConversations,
+      )
+      await screen.findByTestId('recent-workspaces')
+
+      act(() => {
+        container.querySelector('leo-input')!.dispatchEvent(
+          Object.assign(new Event('input', { bubbles: true }), {
+            value: 'workspace',
+          }),
+        )
+      })
+
+      await waitFor(() => {
+        expect(
+          screen.queryByTestId('recent-workspaces'),
+        ).not.toBeInTheDocument()
+      })
+    })
+  })
+
+  describe('Generation indicators', () => {
+    it('shows ProgressRing when generating and not active', async () => {
+      await renderWithGeneration('uuid-2', { 'uuid-1': CG.kGenerating })
+      await expectIndicators(1, 0)
+    })
+
+    it('hides ProgressRing when generating but active', async () => {
+      await renderWithGeneration('uuid-1', { 'uuid-1': CG.kGenerating })
+      await expectIndicators(0, 0)
+    })
+
+    it('shows completed dot when completedNotViewed and not active', async () => {
+      await renderWithGeneration('uuid-2', {
+        'uuid-1': CG.kCompletedNotViewed,
+      })
+      await expectIndicators(0, 1)
+    })
+
+    it('hides completed dot when completedNotViewed but active', async () => {
+      await renderWithGeneration('uuid-1', {
+        'uuid-1': CG.kCompletedNotViewed,
+      })
+      await expectIndicators(0, 0)
+    })
+
+    it('shows nothing when idle (no entry)', async () => {
+      await renderWithGeneration('uuid-99', {})
+      await expectIndicators(0, 0)
+    })
+
+    it('shows each conversation its own indicator', async () => {
+      await renderWithGeneration('other', {
+        'uuid-1': CG.kGenerating,
+        'uuid-3': CG.kCompletedNotViewed,
+      })
+      await expectIndicators(1, 1)
+    })
+
+    it('keeps the states it was sent while the list is closed', async () => {
+      jest.useFakeTimers()
+      try {
+        function OpenLater() {
+          const [isOpen, setIsOpen] = React.useState(false)
+          return isOpen ? (
+            <ConversationsList />
+          ) : (
+            <button onClick={() => setIsOpen(true)}>open list</button>
+          )
+        }
+        await renderConversationsList(
+          <MockContext
+            service={{
+              getConversations: () =>
+                Promise.resolve({ conversations: mockConversations }),
+            }}
+            initialState={{
+              serviceState: { isStoragePrefEnabled: true },
+              conversationState: { conversationUuid: 'uuid-2' },
+              conversationGenerationState: { 'uuid-1': CG.kCompletedNotViewed },
+            }}
+          >
+            <OpenLater />
+          </MockContext>,
+        )
+        // Long past the query cache's default garbage collection time.
+        await act(async () => {
+          jest.advanceTimersByTime(60 * 60 * 1000)
+        })
+        await act(async () => {
+          screen.getByText('open list').click()
+        })
+        await expectIndicators(0, 1)
+      } finally {
+        jest.useRealTimers()
+      }
+    })
+
+    it('treats the bound conversation as active on the tab route', async () => {
+      await renderWithGeneration(
+        'uuid-1',
+        { 'uuid-1': CG.kGenerating },
+        <ActiveChatContext.Provider
+          value={{
+            api: undefined!,
+            selectedConversationId: 'tab',
+            updateSelectedConversationId: () => {},
+            createNewConversation: () => {},
+            createNewConversationWithWorkspace: () => {},
+            isMainConversation: false,
+            openMainConversation: () => {},
+          }}
+        >
+          <ConversationsList />
+        </ActiveChatContext.Provider>,
+      )
+      await waitFor(() => {
+        expect(document.querySelectorAll('.navItemActive').length).toBe(1)
+      })
+      await expectIndicators(0, 0)
     })
   })
 })

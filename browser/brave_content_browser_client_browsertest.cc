@@ -22,7 +22,6 @@
 #include "chrome/browser/extensions/component_loader.h"
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_window.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_features.h"
 #include "chrome/common/buildflags.h"
@@ -42,6 +41,7 @@
 #include "extensions/common/constants.h"
 #include "extensions/common/manifest_handlers/background_info.h"
 #include "net/dns/mock_host_resolver.h"
+#include "ui/base/mojom/window_open_disposition.mojom.h"
 #include "url/origin.h"
 
 #if BUILDFLAG(ENABLE_TOR)
@@ -91,7 +91,7 @@ class BraveContentBrowserClientTest : public InProcessBrowserTest {
     ui_test_utils::UrlLoadObserver load_complete(final_url);
     browser()->OpenURL(
         content::OpenURLParams(original_url, content::Referrer(),
-                               WindowOpenDisposition::CURRENT_TAB,
+                               ui::mojom::WindowOpenDisposition::kCurrentTab,
                                ui::PAGE_TRANSITION_TYPED, false),
         /*navigation_handle_callback=*/{});
     load_complete.Wait();
@@ -124,10 +124,8 @@ IN_PROC_BROWSER_TEST_F(BraveContentBrowserClientTest, CanLoadChromeURL) {
           ui_test_utils::NavigateToURL(browser(), GURL(scheme + page + "/")));
       ASSERT_TRUE(WaitForLoadStop(contents));
 
-      EXPECT_EQ(base::UTF16ToUTF8(browser()
-                                      ->GetFeatures()
-                                      .location_bar_model()
-                                      ->GetFormattedFullURL()),
+      EXPECT_EQ(base::UTF16ToUTF8(
+                    LocationBarModel::From(browser())->GetFormattedFullURL()),
                 ("brave://" + page));
       EXPECT_EQ(contents->GetController()
                     .GetLastCommittedEntry()
@@ -159,10 +157,8 @@ IN_PROC_BROWSER_TEST_F(BraveContentBrowserClientTest, CanLoadCustomBravePages) {
           ui_test_utils::NavigateToURL(browser(), GURL(scheme + page + "/")));
       ASSERT_TRUE(WaitForLoadStop(contents));
 
-      EXPECT_EQ(base::UTF16ToUTF8(browser()
-                                      ->GetFeatures()
-                                      .location_bar_model()
-                                      ->GetFormattedFullURL()),
+      EXPECT_EQ(base::UTF16ToUTF8(
+                    LocationBarModel::From(browser())->GetFormattedFullURL()),
                 ("brave://" + page));
       EXPECT_EQ(contents->GetController()
                     .GetLastCommittedEntry()
@@ -189,10 +185,8 @@ IN_PROC_BROWSER_TEST_F(BraveContentBrowserClientTest, CanLoadAboutHost) {
         ui_test_utils::NavigateToURL(browser(), GURL(scheme + "about/")));
     ASSERT_TRUE(WaitForLoadStop(contents));
 
-    EXPECT_EQ(base::UTF16ToUTF8(browser()
-                                    ->GetFeatures()
-                                    .location_bar_model()
-                                    ->GetFormattedFullURL()),
+    EXPECT_EQ(base::UTF16ToUTF8(
+                  LocationBarModel::From(browser())->GetFormattedFullURL()),
               "brave://about");
     EXPECT_EQ(contents->GetController()
                   .GetLastCommittedEntry()
@@ -217,10 +211,8 @@ IN_PROC_BROWSER_TEST_F(BraveContentBrowserClientTest, RewriteChromeSync) {
                                     GURL(scheme + chrome::kBraveUISyncHost),
                                     GURL("chrome://sync"));
 
-    EXPECT_EQ(base::UTF16ToUTF8(browser()
-                                    ->GetFeatures()
-                                    .location_bar_model()
-                                    ->GetFormattedFullURL()),
+    EXPECT_EQ(base::UTF16ToUTF8(
+                  LocationBarModel::From(browser())->GetFormattedFullURL()),
               "brave://sync");
     EXPECT_EQ(
         contents->GetController().GetLastCommittedEntry()->GetVirtualURL(),
@@ -241,12 +233,10 @@ IN_PROC_BROWSER_TEST_F(BraveContentBrowserClientTest, RewriteAdblock) {
         browser()->tab_strip_model()->GetActiveWebContents();
     NavigateToURLAndWaitForRewrites(contents, GURL(scheme + "adblock"),
                                     GURL("chrome://settings/shields/filters"));
-    EXPECT_EQ(base::UTF16ToUTF8(browser()
-                                    ->GetFeatures()
-                                    .location_bar_model()
-                                    ->GetFormattedFullURL()),
+    EXPECT_EQ(base::UTF16ToUTF8(
+                  LocationBarModel::From(browser())->GetFormattedFullURL()),
               "brave://settings/shields/filters");
-    EXPECT_EQ(browser()->GetFeatures().location_bar_model()->GetURL(),
+    EXPECT_EQ(LocationBarModel::From(browser())->GetURL(),
               GURL("chrome://settings/shields/filters"));
     EXPECT_EQ(
         contents->GetController().GetLastCommittedEntry()->GetVirtualURL(),
@@ -461,6 +451,7 @@ IN_PROC_BROWSER_TEST_F(BraveContentBrowserClientTest, CheckExpectedExtensions) {
 
   const auto* brave_extension =
       registry->GetInstalledExtension(brave_extension_id);
+  ASSERT_TRUE(brave_extension);
 
   // Brave Extension background page should be disabled by default.
   EXPECT_FALSE(extensions::BackgroundInfo::HasBackgroundPage(brave_extension));

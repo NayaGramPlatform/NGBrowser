@@ -3,18 +3,14 @@
 <translationbundle lang="ca">
 <translation id="1751249301761991853">Personal</translation>
 <translation id="3333887201479867589">Recompenses de Brave</translation>
-<translation id="7561196759112975576">Sempre</translation>
-<translation id="7961015016161918242">Mai</translation>
 <translation id="8507663778530179003">Mostra el botó "Totes les adreces d'interès"</translation>
 <translation id="9018648632047670921">Mostra el botó de totes les adreces d'interès</translation>
 <translation id="7630214457764713113">Copia l'enllaç net</translation>
 <translation id="7973394300052703468">Nova &amp;Finestra d'incògnit</translation>
 <translation id="4615489450165434530">Informa d'una pàgina web inexistent</translation>
 <translation id="8097438084542431276">Copia l'enllaç net</translation>
-<translation id="4678672101289648246">Només a la pàgina Pestanya nova</translation>
 <translation id="6516243500644829484">Nova &amp;finestra d'incògnit</translation>
 <translation id="1209739344687072997">Informa d'una pàgina web inexistent</translation>
-<translation id="8294286161128352783">Només a la pàgina Pestanya nova</translation>
 <translation id="6406506848690869874">Sincronització</translation>
 <translation id="1544192797660353713">Cartera</translation>
 <translation id="2361906291514218784">IA Leo</translation>
@@ -54,6 +50,7 @@
 <translation id="4931114810905682683"><ph name="LEARN_MORE_ABOUT_WIDEVINE"/>.
 O canvia més tard a <ph name="SETTINGS_EXTENIONS_LINK"/>.</translation>
 <translation id="6229752134959014186">Més informació sobre Widevine</translation>
+<translation id="3318169548229684688">Baixar un model de reconeixement de veu (<ph name="DOWNLOAD_SIZE"/>) per processar la parla en aquest aparell</translation>
 <translation id="6061083111980694767"><ph name="SITE_NAME"/> et demana que</translation>
 <translation id="3218385319396786393">Reproducció automàtica bloquejada en aquesta pàgina</translation>
 <translation id="4988333904713528597">Permet sempre la reproducció automàtica a <ph name="HOST"/></translation>
@@ -121,6 +118,8 @@ O canvia més tard a <ph name="SETTINGS_EXTENIONS_LINK"/>.</translation>
 <translation id="2162109630536601963">Si aquesta extensió fa sol·licituds de xarxes, aquestes no faran servir Tor o el mode incògnit.</translation>
 <translation id="2725327089319971976">Per a deshabilitar aquesta extensió en el mode incògnit i en el mode Tor, desselecciona aquesta opció.</translation>
 <translation id="438106944087726695">Allotjat per Brave</translation>
+<translation id="2265651566599167057">Marcat com a programari maliciós per Socket.</translation>
+<translation id="2607395470596637070">Més informació sobre com Socket a Brave et protegeix</translation>
 <translation id="3371343170427636147">Aplicacions nocturnes del navegador de Brave</translation>
 <translation id="4097979995947147464">Aplicacions beta del navegador de Brave</translation>
 <translation id="8303432794159193481">Aplicacions de desenvolupament del navegador de Brave</translation>
@@ -195,7 +194,9 @@ O canvia més tard a <ph name="SETTINGS_EXTENIONS_LINK"/>.</translation>
 <translation id="5977931179408079967">Posició</translation>
 <translation id="3790384768741064842">Mou a la dreta</translation>
 <translation id="7444424316576061724">Mou a l'esquerra</translation>
+<translation id="7561196759112975576">Sempre</translation>
 <translation id="7060352228894039151">En passar-hi el cursor per sobre</translation>
+<translation id="7961015016161918242">Mai</translation>
 <translation id="8981254605840444865">Mostra la configuració</translation>
 <translation id="59174027418879706">Activat</translation>
 <translation id="4176463684765177261">Desactivat</translation>
@@ -221,6 +222,7 @@ O canvia més tard a <ph name="SETTINGS_EXTENIONS_LINK"/>.</translation>
 <translation id="4515057635283480525">L'Internet Archive desa versions anteriors de moltes pàgines web. Voleu cercar aquesta pàgina a l'Archive?</translation>
 <translation id="8252977752585110703">Ho sentim, hem consultat l'Internet Archive i no té cap versió arxivada d'aquesta pàgina.</translation>
 <translation id="8748778103033196270">Cerca a l'Archive</translation>
+<translation id="7369915833843501413">S'està cercant a l'Archive</translation>
 <translation id="191143826155037518">Pots accedir a Brave a través de <ph name="BEGIN_LINK_MPL"/>la llicència pública de Mozilla 2.0<ph name="END_LINK_MPL"/> (MPL) i inclou <ph name="BEGIN_LINK_OSS"/>programari de codi obert<ph name="END_LINK_OSS"/> sota una varietat d'altres llicències.
 Pots llegir <ph name="BEGIN_LINK_BUILD_INSTRUCTIONS"/>instruccions de com descarregar i crear per a tu mateix<ph name="END_LINK_BUILD_INSTRUCTIONS"/> l'específic <ph name="BEGIN_LINK_SOURCE_CODE"/>codi font usat per crear aquesta còpia<ph name="END_LINK_SOURCE_CODE"/>.</translation>
 <translation id="4474155171896946103">Afegeix totes les pestanyes a les adreces d'interès...</translation>
@@ -371,7 +373,7 @@ Pots llegir <ph name="BEGIN_LINK_BUILD_INSTRUCTIONS"/>instruccions de com descar
 <translation id="7985042437720138349">Aquesta funció envia informació sobre les pestanyes que tens obertes a Leo, l'assistent de navegació Impulsat per IA de Brave.</translation>
 <translation id="6165508094623778733">Saber més</translation>
 <translation id="7557539689487606886">Canvia a Premium</translation>
-<translation id="1035309871698658326">En obrir-se, enviarà automàticament els títols i l'origen de totes les pestanyes no privades a Leo perquè pugui classificar-les.</translation>
+<translation id="7103144720752576727">En obrir-se, això enviarà automàticament els títols i l'origin de totes les pestanyes que no siguin d'incògnit a Leo per classificar-les. Si també activeu l'enviament del contingut de la pàgina, també s'enviaran fragments breus del text de cada pestanya.</translation>
 <translation id="3435896845095436175">Activa</translation>
 <translation id="9031526219709160683">Brave pot ajudar-te a optimitzar la configuració de privacitat d'aquest lloc. Vols revisar els suggeriments de Brave?</translation>
 <translation id="5739953050957336013">Suggeriments de cerca</translation>
@@ -386,8 +388,6 @@ Pots llegir <ph name="BEGIN_LINK_BUILD_INSTRUCTIONS"/>instruccions de com descar
 <translation id="8570228839666486945">IA en dispositiu</translation>
 <translation id="7447041379556102185">Reconeixement de veu al dispositiu</translation>
 <translation id="3456536577668402695">Les vostres cerques i el contingut de les pàgines es processen en aquest aparell. No s'envia res a Brave ni ho veuen revisors humans.</translation>
-<translation id="4751537843966994505">Cerca semàntica a l'historial</translation>
-<translation id="6175973371938222040">Indexa localment les pàgines que visites perquè puguis cercar el teu historial per significat. Tot el processament es manté en aquest aparell.</translation>
 <translation id="9156965752763025780">Els canvis s'aplicaran la pròxima vegada que reiniciïs Brave.</translation>
 <translation id="7179921470347911571">Rellança ara</translation>
 <translation id="1426410128494586442">Sí</translation>
@@ -425,6 +425,7 @@ Pots llegir <ph name="BEGIN_LINK_BUILD_INSTRUCTIONS"/>instruccions de com descar
 <translation id="4328541188421002379">Dona-li al teu espai de treball un nom com ara Feina o Personal</translation>
 <translation id="4976989127264491396">Error: <ph name="ERROR_MESSAGE"/></translation>
 <translation id="5436069931267876389">No s'ha trobat l'espai de treball</translation>
+<translation id="5831840958001766835">Reordena l'element. Utilitza les tecles de fletxa per moure'l.</translation>
 <translation id="6055154402239241620">Control del trànsit</translation>
 <translation id="8134521925475508805">Configura llocs específics perquè s'obrin automàticament en un context concret, creant separació entre les teves sessions de navegació. <ph name="BEGIN_LINK"/>Més informació<ph name="END_LINK"/></translation>
 <translation id="6944848312867106540">Activa el control del trànsit</translation>
@@ -477,10 +478,6 @@ Pots llegir <ph name="BEGIN_LINK_BUILD_INSTRUCTIONS"/>instruccions de com descar
 <translation id="7310387888625228830">Assistent d'IA Leo</translation>
 <translation id="5222974844674487962">Mostra el botó de Notícies de Brave</translation>
 <translation id="2085436423511121572">Mostra el botó d'IA Leo</translation>
-<translation id="6156323911414505561">Mostra la barra d'adreces d'interès</translation>
-<translation id="4054323497808446566">La barra d'adreces d'interès és visible a totes les pàgines</translation>
-<translation id="8693858092251192712">La barra d'adreces d'interès és oculta a totes les pàgines, excepte a la pàgina Pestanya nova</translation>
-<translation id="7158817046543187970">La barra d'adreces d'interès és oculta a totes les pàgines</translation>
 <translation id="3416468988018290825">Mostra sempre les URL completes</translation>
 <translation id="5529693968082667490">Mostra el botó de cerca de pestanyes</translation>
 <translation id="1013121820689882118">Lector de velocitat</translation>
@@ -612,6 +609,10 @@ Pots llegir <ph name="BEGIN_LINK_BUILD_INSTRUCTIONS"/>instruccions de com descar
 <translation id="5825943197137337319">Només interfície pública predeterminada</translation>
 <translation id="1689062823386843231">Desactiva UDP que no sigui a través de proxy</translation>
 <translation id="3540231253392253941">Utilitza els serveis de Google per a la missatgeria push</translation>
+<translation id="2224032129673914306">Cerca semàntica a l'historial</translation>
+<translation id="6045998903985162478">Indexa les pàgines que visites perquè les puguis trobar fàcilment a l'historial, a les pestanyes obertes i a Leo.</translation>
+<translation id="3962946446120925966">Reconeixement de veu a l'aparell</translation>
+<translation id="6408242130028978631">Baixeu un model de reconeixement de veu (<ph name="DOWNLOAD_SIZE"/>) perquè els llocs puguin processar la veu en aquest aparell. Desactiveu aquesta opció per eliminar el model.</translation>
 <translation id="5813105074916486721">Retenció de l'historial local</translation>
 <translation id="5671611745062206644">Durant quant de temps Brave emmagatzema el teu historial de navegació localment</translation>
 <translation id="7184510058087008090">1 dia</translation>
@@ -727,7 +728,7 @@ Pots llegir <ph name="BEGIN_LINK_BUILD_INSTRUCTIONS"/>instruccions de com descar
 <translation id="4432071071853308688">Aquest codi és buit</translation>
 <translation id="955848693465029904">Error intern de la configuració de sincronització</translation>
 <translation id="7456398316301207582">Error intern en suprimir el compte</translation>
-<translation id="859506441384380749">Aquest codi s'ha generat amb una versió obsoleta de Brave, actualitza primer l'altre dispositiu</translation>
+<translation id="4002014583969312635">Sembla que s'ha creat aquest codi en un aparell amb una versió més antiga de Brave. Actualitzeu l'altre aparell amb la versió més recent de Brave i, a continuació, creeu un codi de sincronització nou.</translation>
 <translation id="3132642509209154999">Aquest codi ha caducat. Genera'n un de nou a l'altre dispositiu i torna-ho a provar.</translation>
 <translation id="2859229680945501779">Aquest codi no és vàlid. Comprova que l'hora i la zona horària s'han establert correctament al teu dispositiu.</translation>
 <translation id="2339730291919608488">Deixa la cadena de sincronització</translation>
@@ -876,6 +877,7 @@ Segur que vols continuar?</translation>
 <translation id="2618193846561624884">Vols actualtzar la xarxa existent?</translation>
 <translation id="1643029991199044105">Cerca per les pestanyes més utilitzades recentment amb Ctrl-Tab</translation>
 <translation id="2775956301559569472">Mostra el missatge de la Wayback Machine a 404 pàgines</translation>
+<translation id="8485716275262929774">Carrega automàticament les versions desades de Wayback Machine a les pàgines 404</translation>
 <translation id="3095201688102519917">Avisa abans de tancar una finestra amb múltiples pestanyes</translation>
 <translation id="7120553802660696133">Tanca la finestra amb el tancament de l'última pestanya</translation>
 <translation id="3394171693948989253">Mostra un recordatori a pantalla completa per prémer Esc en sortir</translation>
@@ -885,6 +887,8 @@ Segur que vols continuar?</translation>
 <translation id="1529674267267221673">Leo es mostrarà al menú contextual quan cliquis amb el botó dret en un lloc web. D'aquesta manera, s'enviarà context a Leo des d'aquesta pàgina web.</translation>
 <translation id="5226020406479918122">Mode Classificació de pestanyes</translation>
 <translation id="3705539672403311123">Activa l'organització de pestanyes a la pàgina de Cerca de pestanyes. En obrir-se, enviarà automàticament els títols i l'origen de totes les pestanyes no privades a Leo perquè pugui classificar-les. <ph name="BEGIN_LINK"/>Més informació<ph name="END_LINK"/></translation>
+<translation id="2002238795517052616">Envia el contingut de la pàgina per al focus de pestanyes</translation>
+<translation id="2276823422122514441">Envia també extractes breus del text de cada pestanya, de manera que les pestanyes s'agrupin pel que tracta una pàgina en lloc del seu títol. Els extractes van a Leo, o al teu propi model si n'has triat un per al focus de pestanyes. Això necessita <ph name="BEGIN_LINK"/><ph name="SEMANTIC_HISTORY_SEARCH"/><ph name="END_LINK"/>, que construeix els extractes al teu aparell.</translation>
 <translation id="9049433973274198706">Model predeterminal per a l'enfocament de pestanyes</translation>
 <translation id="2161546758719933059">El model utilitzat per organitzar les vostres pestanyes en el mode d'enfocament de pestanyes. <ph name="BEGIN_LINK"/>Més informació<ph name="END_LINK"/></translation>
 <translation id="8172263161008556851">Mostra suggeriments de missatges en la conversa</translation>
@@ -966,9 +970,6 @@ Segur que vols continuar?</translation>
 <translation id="1838374766361614909">Esborra la cerca</translation>
 <translation id="5126255551970171328">Cerca una memòria</translation>
 <translation id="7402116145895962069">Sincronitza els teus models locals d’Ollama</translation>
-<translation id="5985516785067818307">Participant a la enquesta</translation>
-<translation id="8347743943525229984">Permetre les enquestes de Brave</translation>
-<translation id="3204080538332044581">Permet que Brave et mostri enllaços a enquestes privades a la pàgina de nova pestanya. Les enquestes ens ajuden a desenvolupar millors característiques i mesurar l'efectivitat de les campanyes publicitàries basades en el navegador. <ph name="BEGIN_LINK"/>Més informació<ph name="END_LINK"/></translation>
 <translation id="349846214503465941">Activa la llista de reproducció</translation>
 <translation id="7903608716704052878">Afegeix automàticament arxius per a veure'ls sense connexió</translation>
 <translation id="384666453982355633">Aquesta opció emmagatzemarà automàticament a la memòria cau els arxius multimèdia perquè puguis reproduir-los sense connexió a Internet</translation>

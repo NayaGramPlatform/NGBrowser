@@ -80,6 +80,7 @@
 <translation id="8982438328166986164">Hiermee worden websitesuggesties weergegeven op basis van uw bladwijzers en browsegeschiedenis.</translation>
 <translation id="924029461438529367">Zoeksuggesties weergeven</translation>
 <translation id="9148058034647219655">Sluiten</translation>
+<translation id="2139186145475833000">Toevoegen aan startscherm</translation>
 <translation id="7534079972563542000">Unstoppable Domains</translation>
 <translation id="6486983549008741930">Contentfilter</translation>
 <translation id="2398817776566547893">Schakel aangepaste filters in die regionale en taalspecifieke trackers en storende elementen blokkeren</translation>
@@ -193,9 +194,6 @@
 <translation id="5668852698659986622">Schakel gesponsorde Ads in</translation>
 <translation id="431194936581466649">Help Brave's missie ondersteunen om een onafhankelijk, gebruikersgericht web te bouwen met gesponsorde Ads. We meten advertentieprestaties privé, zonder je te identificeren.</translation>
 <translation id="1939813747486101115">Meer informatie over gesponsorde advertenties</translation>
-<translation id="8347743943525229984">Brave-enquêtes toestaan</translation>
-<translation id="6022939994702081659">Hiermee sta je toe dat Brave links naar privé-enquêtes weergeeft op het nieuwe tabblad. Deze enquêtes helpen ons betere functies te ontwikkelen en de effectiviteit van advertentiecampagnes in de browser te meten.</translation>
-<translation id="7746496306508543965">Meer informatie over Brave-enquêtes</translation>
 <translation id="410351446219883937">Automatisch afspelen</translation>
 <translation id="7445411102860286510">Sites toestaan gedempte video's automatisch af te spelen (aanbevolen)</translation>
 <translation id="7837721118676387834">Automatisch afspelen van gedempte video's toestaan voor een specifieke site.</translation>
@@ -292,7 +290,7 @@
 <translation id="2569646144216067185">Aantal woorden: <ph name="WORD_COUNT"/></translation>
 <translation id="7507533586185621084">Verkeerde synchronisatiecode</translation>
 <translation id="8284063834901328650">Verkeerde synchronisatie QR-code</translation>
-<translation id="859506441384380749">Deze code is gegenereerd door een verouderde versie van Brave; upgrade eerst je andere apparaat</translation>
+<translation id="4002014583969312635">Zo te zien is deze code gecreëerd op een apparaat met een oudere versie van Brave. Werk bij naar de nieuwste versie van Brave op uw andere apparaat en maak dan een nieuwe synchronisatiecode.</translation>
 <translation id="3132642509209154999">Deze code is verlopen. Genereer een nieuwe code op je andere apparaat en probeer het opnieuw.</translation>
 <translation id="2859229680945501779">Deze code is ongeldig. Controleer of de tijd en tijdzone correct zijn ingesteld op uw apparaat.</translation>
 <translation id="3149880132460839085">Brave Sync</translation>
@@ -338,8 +336,6 @@
 <translation id="8185825081026121627">Verdien Basic Attention Token door privacyvriendelijke Brave Rewards advertenties te bekijken.</translation>
 <translation id="5321518976657560663">Resetfout</translation>
 <translation id="4114170343590425996">Er is een fout opgetreden bij het opnieuw instellen van Brave Rewards. Start Brave opnieuw en probeer het opnieuw.</translation>
-<translation id="6417420737057016607">Brave Advertenties</translation>
-<translation id="5611966874859284786">Melding van advertenties weergeven wanneer Brave niet in gebruik is</translation>
 <translation id="5717636703619499822"><ph name="BEGIN_LINK1"/>Brave Rewards-gegevens resetten…<ph name="END_LINK1"/></translation>
 <translation id="1830919318137227284"><ph name="BEGIN_LINK1"/>Brave Ads-gegevens wissen…<ph name="END_LINK1"/></translation>
 <translation id="8293206222192510085">Voeg Bladwijzer toe</translation>
@@ -398,6 +394,13 @@ Weet je zeker dat je dit wilt doen?</translation>
 <translation id="8793108040181436796">Widgets</translation>
 <translation id="8643377320501056697">Topsites Weergeven</translation>
 <translation id="7275773481201277457">Brave Statistieken Weergeven</translation>
+<translation id="8516804522688861636">Toon veel bezochte sites</translation>
+<translation id="4546260624932151782">Toon favorieten</translation>
+<translation id="5313967007315987356">Site toevoegen</translation>
+<translation id="1773147648972887693">Toon veel bezocht</translation>
+<translation id="7134741506051403308">Widget verbergen</translation>
+<translation id="1247759249260562308">Wijzig favoriet</translation>
+<translation id="6387214885349500492">Deze favoriet vastzetten</translation>
 <translation id="7462178177755090262">Startscherm</translation>
 <translation id="5365434987337264071">Laatst geopend tabblad</translation>
 <translation id="6019856124237323989">{HOURS, plural, =1 {Nieuw tabblad na <ph name="HOURS_ONE"/> uur inactiviteit} other {Nieuw tabblad na <ph name="HOURS_MANY"/> uur inactiviteit}}</translation>
@@ -972,6 +975,7 @@ Als je dit verzoek niet accepteert, maakt VPN niet opnieuw verbinding en is je i
 <translation id="6365389672683343144">Uw Brave VPN-abonnement kan tot 5 apparaten beschermen op Android, iOS en desktop. U hoeft alleen uw Google Play-abonnement te koppelen aan uw Brave-account.</translation>
 <translation id="6610899852831463073">Kan veilig browsen niet inschakelen</translation>
 <translation id="7954263306665462056">Veilig browsen is uitgeschakeld op uw apparaat. Zorg ervoor dat Google Play Services is geïnstalleerd om veilig browsen in te schakelen en houd het up-to-date.</translation>
+<translation id="6417420737057016607">Brave Advertenties</translation>
 <translation id="7748944510530490017">Primaire netwerken</translation>
 <translation id="2781668117338732220">Secundaire netwerken</translation>
 <translation id="282560918037172384">Testnetwerken</translation>
@@ -998,6 +1002,13 @@ Als je dit verzoek niet accepteert, maakt VPN niet opnieuw verbinding en is je i
 <translation id="7530313002494358590">Het in- of uitschakelen van een Brave-functie vereist dat de browser opnieuw wordt gestart om wijzigingen toe te passen. Tik op <ph name="BEGIN_BOLD"/>Nu opnieuw starten<ph name="END_BOLD"/> zodra Brave Origin klaar is met bijwerken.</translation>
 <translation id="1028940738207645746">Weet je zeker dat je alle instellingen op standaard wilt herstellen?</translation>
 <translation id="5939518447894949180">Resetten</translation>
+<translation id="3222790865318305905">Activeringslimiet bereikt</translation>
+<translation id="3787857711016546034">Om fraude te voorkomen, zijn Origin-activeringen gelimiteerd. Maar je kunt altijd meer activeringen aanvragen om je Origin-licentie op meer devices te gebruiken. Klik gewoon op de optie Meer activeringen aanvragen, of <ph name="CONTACT_SUPPORT"/> voor hulp.</translation>
+<translation id="6760819753412779585">contact opnemen met ondersteuning</translation>
+<translation id="571697836019670200">Meer activeringen aanvragen</translation>
+<translation id="9019545131475425538">Verwerken…</translation>
+<translation id="7242700630179071243">Klaar om te activeren</translation>
+<translation id="5463918917265356202">Brave Origin is nu actief op dit device. Om de functie te gaan gebruiken, moet je de browser opnieuw opstarten. Wil je nu opnieuw opstarten?</translation>
 <translation id="8554205386170195281">Aankoop</translation>
 <translation id="8613144770663526433">Inloggen bij Brave Wallet</translation>
 <translation id="3696514931437952995">U logt in bij <ph name="ORIGIN"/>. Brave-wallet deelt uw wallet-adres met <ph name="ORIGIN"/>.</translation>

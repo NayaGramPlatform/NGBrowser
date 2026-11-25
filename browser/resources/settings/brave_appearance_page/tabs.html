@@ -8,9 +8,10 @@
 <!-- Vertical Tab strip -->
 <settings-toggle-button
   class="cr-row first"
-  pref-key="brave.tabs.vertical_tabs_enabled"
+  pref-key="[[verticalTabsEnabledPrefKey_]]"
   label="$i18n{appearanceSettingsTabsUseVerticalTabs}"
-  disabled="[[!verticalTabsToggleEnabled_]]">
+  no-set-pref
+  on-settings-boolean-control-change="onVerticalTabsToggleChange_">
 </settings-toggle-button>
 <template
   is="dom-if"
@@ -43,8 +44,15 @@
     <template is="dom-if" if="[[!shouldForceFloatOnMouseOver_(verticalTabsHideCompletelyWhenCollapsedPref_.value, verticalTabsShowToggleButtonPref_.value)]]">
       <settings-checkbox
         class="list-item"
-        pref-key="brave.tabs.vertical_tabs_floating_enabled"
+        pref-key="[[floatingModePrefKey_]]"
         label="$i18n{appearanceSettingsTabsFloatOnMouseOver}">
+      </settings-checkbox>
+    </template>
+    <template is="dom-if" if="[[showEverythingMenuToggle_()]]">
+      <settings-checkbox
+        class="list-item"
+        pref-key="everything_menu.pinned_to_tabstrip"
+        label="$i18n{showEverythingMenuButton}">
       </settings-checkbox>
     </template>
     <settings-checkbox
@@ -85,6 +93,16 @@
     </settings-radio-group>
   </div>
 </template> <!-- vertical_tabs_enabled.value -->
+
+<!-- Shared Pinned Tabs -->
+<template is="dom-if" if="[[isSharedPinnedTabsEnabled_()]]">
+  <settings-toggle-button
+    pref-key="brave.tabs.shared_pinned_tab"
+    class="cr-row"
+    label="$i18n{appearanceSettingsSharedPinnedTab}"
+    sub-label="$i18n{appearanceSettingsSharedPinnedTabSubLabel}">
+  </settings-toggle-button>
+</template>
 
 <!-- Tab speaker icons function  -->
 <settings-toggle-button
@@ -143,15 +161,6 @@
     menu-options="[[tabTooltipModes_]]">
   </settings-dropdown-menu>
 </div>
-
-<!-- Shared Pinned Tabs -->
-<template is="dom-if" if="[[isSharedPinnedTabsEnabled_()]]">
-  <settings-toggle-button
-    pref-key="brave.tabs.shared_pinned_tab"
-    class="cr-row"
-    label="$i18n{appearanceSettingsSharedPinnedTab}">
-  </settings-toggle-button>
-</template>
 
 <!-- Tab memory usage -->
 <settings-toggle-button id="hoverCardMemoryUsageToggle"

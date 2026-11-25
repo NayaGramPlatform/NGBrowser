@@ -10,7 +10,9 @@
 #include "base/functional/callback_helpers.h"
 #include "base/i18n/base_i18n_switches.h"
 #include "base/i18n/rtl.h"
+#include "base/location.h"
 #include "base/memory/raw_ptr.h"
+#include "base/test/run_until.h"
 #include "base/test/scoped_feature_list.h"
 #include "brave/browser/ui/tabs/brave_split_tab_menu_model.h"
 #include "brave/browser/ui/tabs/brave_tab_prefs.h"
@@ -22,6 +24,7 @@
 #include "brave/browser/ui/views/toolbar/side_panel_button.h"
 #include "brave/browser/workspaces/features.h"
 #include "brave/components/ai_chat/core/common/buildflags/buildflags.h"
+#include "brave/components/brave_vpn/common/buildflags/buildflags.h"
 #include "brave/components/brave_wallet/common/buildflags/buildflags.h"
 #include "brave/components/constants/pref_names.h"
 #include "brave/components/constants/webui_url_constants.h"
@@ -35,7 +38,6 @@
 #include "chrome/browser/profiles/profile_test_util.h"
 #include "chrome/browser/profiles/profile_window.h"
 #include "chrome/browser/search_engines/template_url_service_factory.h"
-#include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_commands.h"
 #include "chrome/browser/ui/browser_tabstrip.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_features.h"
@@ -50,10 +52,12 @@
 #include "chrome/browser/ui/views/frame/custom_corners_background.h"
 #include "chrome/browser/ui/views/frame/toolbar_button_provider.h"
 #include "chrome/browser/ui/views/profiles/avatar_toolbar_button.h"
+#include "chrome/browser/ui/views/side_panel/side_panel.h"
 #include "chrome/browser/ui/views/side_panel/side_panel_coordinator.h"
 #include "chrome/browser/ui/views/toolbar/browser_app_menu_button.h"
 #include "chrome/browser/ui/views/toolbar/split_tabs_button.h"
 #include "chrome/browser/ui/views/toolbar/toolbar_view.h"
+#include "chrome/common/pref_names.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/search_test_utils.h"
 #include "chrome/test/base/ui_test_utils.h"
@@ -63,6 +67,7 @@
 #include "components/policy/core/common/policy_map.h"
 #include "components/policy/policy_constants.h"
 #include "components/prefs/pref_service.h"
+#include "content/public/browser/web_contents.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/test_utils.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -74,10 +79,13 @@
 #endif
 
 #if BUILDFLAG(ENABLE_AI_CHAT)
+#include "brave/browser/ui/side_panel/ai_chat/ai_chat_side_panel_utils.h"
 #include "brave/browser/ui/views/toolbar/ai_chat_button.h"
 #include "brave/components/ai_chat/core/browser/utils.h"
 #include "brave/components/ai_chat/core/common/features.h"
 #include "brave/components/ai_chat/core/common/pref_names.h"
+#include "ui/views/animation/ink_drop.h"
+#include "ui/views/animation/ink_drop_state.h"
 #endif
 
 #if BUILDFLAG(ENABLE_TOR)
@@ -85,6 +93,7 @@
 #endif
 
 #if BUILDFLAG(ENABLE_BRAVE_VPN)
+#include "brave/browser/ui/brave_vpn/brave_vpn_controller.h"
 #include "brave/browser/ui/views/toolbar/brave_vpn_button.h"
 #include "brave/components/brave_vpn/common/brave_vpn_utils.h"
 #include "brave/components/brave_vpn/common/features.h"
@@ -245,13 +254,13 @@ IN_PROC_BROWSER_TEST_F(BraveToolbarViewTest_VPNEnabled, VPNButtonVisibility) {
   // Button is visible by default.
   EXPECT_TRUE(prefs->GetBoolean(brave_vpn::prefs::kBraveVPNShowButton));
   EXPECT_TRUE(toolbar->brave_vpn_button()->GetVisible());
-  EXPECT_EQ(browser_view->GetAnchorViewForBraveVPNPanel(),
+  EXPECT_EQ(BraveVPNController::From(browser())->GetAnchorViewForTesting(),
             toolbar->brave_vpn_button());
 
   // Hide button.
   prefs->SetBoolean(brave_vpn::prefs::kBraveVPNShowButton, false);
   EXPECT_FALSE(toolbar->brave_vpn_button()->GetVisible());
-  EXPECT_EQ(browser_view->GetAnchorViewForBraveVPNPanel(),
+  EXPECT_EQ(BraveVPNController::From(browser())->GetAnchorViewForTesting(),
             static_cast<views::View*>(toolbar->app_menu_button()));
   // Show button.
   prefs->SetBoolean(brave_vpn::prefs::kBraveVPNShowButton, true);
@@ -308,6 +317,91 @@ IN_PROC_BROWSER_TEST_F(BraveToolbarViewTest_AIChatEnabled,
 }
 
 IN_PROC_BROWSER_TEST_F(BraveToolbarViewTest_AIChatEnabled,
+                       AIChatButtonHighlightFollowsSidebar) {
+  auto* prefs = browser()->GetProfile()->GetPrefs();
+  ASSERT_FALSE(prefs->GetBoolean(
+      ai_chat::prefs::kBraveAIChatToolbarButtonOpensFullPage));
+
+  BrowserView* browser_view = BrowserView::GetBrowserViewForBrowser(browser());
+  auto* toolbar_view_ = static_cast<BraveToolbarView*>(browser_view->toolbar());
+  AIChatButton* button = toolbar_view_->ai_chat_button();
+  ASSERT_TRUE(button);
+
+  auto* ink_drop = views::InkDrop::Get(button)->GetInkDrop();
+  auto is_highlighted = [&]() {
+    return ink_drop->GetTargetInkDropState() == views::InkDropState::ACTIVATED;
+  };
+
+  SidePanelEntryKey ai_chat_key =
+      SidePanelEntry::Key(SidePanelEntryId::kChatUI);
+  SidePanelEntryKey bookmarks_key =
+      SidePanelEntry::Key(SidePanelEntryId::kBookmarks);
+  auto* side_panel_coordinator = SidePanelCoordinator::From(browser());
+  // Show() waits for panel contents to load; skip that delay and animations so
+  // entry switches are observable without racing WaitForEntry.
+  side_panel_coordinator->SetNoDelaysForTesting(true);
+  side_panel_coordinator->DisableAnimationsForTesting();
+  ASSERT_FALSE(side_panel_coordinator->IsSidePanelShowing());
+  EXPECT_FALSE(is_highlighted());
+
+  auto wait_for_entry = [&](const SidePanelEntryKey& key, bool showing,
+                            const base::Location& loc = FROM_HERE) {
+    SCOPED_TRACE(loc.ToString());
+    ASSERT_TRUE(base::test::RunUntil([&]() {
+      return side_panel_coordinator->IsSidePanelEntryShowing(key) == showing;
+    }));
+  };
+
+  button->ButtonPressed();
+  wait_for_entry(ai_chat_key, true);
+  EXPECT_TRUE(is_highlighted());
+
+  // Switching to another sidebar panel should clear the highlight.
+  side_panel_coordinator->Show(bookmarks_key);
+  wait_for_entry(bookmarks_key, true);
+  EXPECT_FALSE(side_panel_coordinator->IsSidePanelEntryShowing(ai_chat_key));
+  EXPECT_FALSE(is_highlighted());
+
+  button->ButtonPressed();
+  wait_for_entry(ai_chat_key, true);
+  EXPECT_TRUE(is_highlighted());
+
+  button->ButtonPressed();
+  wait_for_entry(ai_chat_key, false);
+  EXPECT_FALSE(is_highlighted());
+
+  // Opening Leo from the side panel (not the toolbar button) should still
+  // highlight the button.
+  side_panel_coordinator->Show(ai_chat_key);
+  wait_for_entry(ai_chat_key, true);
+  EXPECT_TRUE(is_highlighted());
+
+  // The toolbar open-target pref is only consulted on click. Changing it does
+  // not open, close, or convert the current Leo panel, so highlight stays.
+  prefs->SetBoolean(ai_chat::prefs::kBraveAIChatToolbarButtonOpensFullPage,
+                    true);
+  EXPECT_TRUE(side_panel_coordinator->IsSidePanelEntryShowing(ai_chat_key));
+  EXPECT_TRUE(is_highlighted());
+
+  // OpenConversationFullPage() moves the live panel into a tab and closes it.
+  content::WebContents* panel_contents = nullptr;
+  ASSERT_TRUE(base::test::RunUntil([&]() {
+    panel_contents = ai_chat::GetSidePanelWebContents(browser());
+    return panel_contents != nullptr;
+  }));
+  ASSERT_TRUE(ai_chat::MaybeMoveSidePanelChatToTab(panel_contents));
+  wait_for_entry(ai_chat_key, false);
+  EXPECT_FALSE(is_highlighted());
+
+  // Full-page mode should not highlight when the toolbar button is pressed.
+  button->ButtonPressed();
+  EXPECT_EQ(
+      GURL(kAIChatUIURL),
+      browser()->tab_strip_model()->GetActiveWebContents()->GetVisibleURL());
+  EXPECT_FALSE(is_highlighted());
+}
+
+IN_PROC_BROWSER_TEST_F(BraveToolbarViewTest_AIChatEnabled,
                        AIChatButtonVisibility) {
   auto* prefs = browser()->GetProfile()->GetPrefs();
 
@@ -341,7 +435,6 @@ IN_PROC_BROWSER_TEST_F(BraveToolbarViewTest_AIChatEnabled,
   EXPECT_EQ(1U, GlobalBrowserCollection::GetInstance()->GetSize());
   ui_test_utils::BrowserCreatedObserver browser_creation_observer;
   profiles::SwitchToGuestProfile(base::DoNothing());
-  base::RunLoop().RunUntilIdle();
   browser_creation_observer.Wait();
   EXPECT_EQ(2U, GlobalBrowserCollection::GetInstance()->GetSize());
 
@@ -351,7 +444,7 @@ IN_PROC_BROWSER_TEST_F(BraveToolbarViewTest_AIChatEnabled,
 
   // Access the browser with the Guest profile and re-init test for it.
   BrowserWindowInterface* browser = ui_test_utils::FindAnyBrowser(guest, true);
-  EXPECT_TRUE(browser);
+  ASSERT_TRUE(browser);
   Init(browser);
   EXPECT_EQ(false, is_ai_chat_button_shown(browser));
 }
@@ -472,7 +565,6 @@ IN_PROC_BROWSER_TEST_F(BraveToolbarViewTest, AvatarButtonIsShownGuestProfile) {
   EXPECT_EQ(1U, GlobalBrowserCollection::GetInstance()->GetSize());
   ui_test_utils::BrowserCreatedObserver browser_creation_observer;
   profiles::SwitchToGuestProfile(base::DoNothing());
-  base::RunLoop().RunUntilIdle();
   browser_creation_observer.Wait();
   EXPECT_EQ(2U, GlobalBrowserCollection::GetInstance()->GetSize());
 
@@ -482,7 +574,7 @@ IN_PROC_BROWSER_TEST_F(BraveToolbarViewTest, AvatarButtonIsShownGuestProfile) {
 
   // Access the browser with the Guest profile and re-init test for it.
   BrowserWindowInterface* browser = ui_test_utils::FindAnyBrowser(guest, true);
-  EXPECT_TRUE(browser);
+  ASSERT_TRUE(browser);
   Init(browser);
   EXPECT_EQ(true, is_avatar_button_shown());
 }
@@ -512,14 +604,13 @@ IN_PROC_BROWSER_TEST_F(BraveToolbarViewTest,
       base::DoNothing(),
       /*always_create=*/false,
       /*is_new_profile=*/true, /*open_command_line_urls=*/false, &new_profile);
-  base::RunLoop().RunUntilIdle();
   browser_creation_observer.Wait();
   EXPECT_EQ(2U, GlobalBrowserCollection::GetInstance()->GetSize());
 
   // Check it's shown in second profile
   BrowserWindowInterface* browser =
       ui_test_utils::FindAnyBrowser(&new_profile, true);
-  EXPECT_TRUE(browser);
+  ASSERT_TRUE(browser);
   Init(browser);
   EXPECT_EQ(true, is_avatar_button_shown());
 
@@ -529,8 +620,11 @@ IN_PROC_BROWSER_TEST_F(BraveToolbarViewTest,
   ASSERT_TRUE(!!avatar);
   views::View* app_menu = toolbar_view_->app_menu_button();
   ASSERT_TRUE(!!app_menu);
-  EXPECT_EQ(toolbar_view_->GetIndexOf(avatar).value(),
-            toolbar_view_->GetIndexOf(app_menu).value() - 1ul);
+  const auto avatar_index = toolbar_view_->GetIndexOf(avatar);
+  const auto app_menu_index = toolbar_view_->GetIndexOf(app_menu);
+  ASSERT_TRUE(avatar_index.has_value());
+  ASSERT_TRUE(app_menu_index.has_value());
+  EXPECT_EQ(*avatar_index + 1, *app_menu_index);
 
   // Check avatar button's size.
   const int avatar_size =
@@ -827,8 +921,18 @@ class BraveToolbarViewTest_WorkspacesEnabled : public BraveToolbarViewTest {
   base::test::ScopedFeatureList scoped_feature_list_;
 };
 
+class BraveToolbarViewTest_WorkspacesDisabled : public BraveToolbarViewTest {
+ public:
+  BraveToolbarViewTest_WorkspacesDisabled() {
+    scoped_feature_list_.InitAndDisableFeature(features::kWorkspaces);
+  }
+
+ protected:
+  base::test::ScopedFeatureList scoped_feature_list_;
+};
+
 // Without kWorkspaces the button is never created.
-IN_PROC_BROWSER_TEST_F(BraveToolbarViewTest,
+IN_PROC_BROWSER_TEST_F(BraveToolbarViewTest_WorkspacesDisabled,
                        WorkspacesButtonAbsentWhenFeatureDisabled) {
   EXPECT_EQ(toolbar_view_->workspaces_button_for_testing(), nullptr);
 }

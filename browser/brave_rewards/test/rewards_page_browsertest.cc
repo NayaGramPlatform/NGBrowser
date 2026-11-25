@@ -31,8 +31,6 @@
 #include "build/build_config.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/browser.h"
-#include "chrome/browser/ui/browser_window/public/browser_window_features.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/os_crypt/async/browser/os_crypt_async.h"
@@ -179,10 +177,9 @@ class RewardsPageBrowserTest : public InProcessBrowserTest {
   }
 
   void StartRewardsEngine() {
-    base::RunLoop run_loop;
-    GetRewardsService().StartProcessForTesting(
-        base::BindLambdaForTesting([&]() { run_loop.Quit(); }));
-    run_loop.Run();
+    base::test::TestFuture<void> future;
+    GetRewardsService().StartProcessForTesting(future.GetCallback());
+    ASSERT_TRUE(future.Wait());
   }
 
   void RunTests() {
@@ -202,7 +199,7 @@ class RewardsPageBrowserTest : public InProcessBrowserTest {
   void OpenRewardsPanel() {
     content::CreateAndLoadWebContentsObserver popup_observer;
 
-    auto* coordinator = browser()->GetFeatures().rewards_panel_coordinator();
+    auto* coordinator = brave_rewards::RewardsPanelCoordinator::From(browser());
     ASSERT_TRUE(coordinator);
     ASSERT_TRUE(coordinator->OpenRewardsPanel());
 
@@ -260,11 +257,10 @@ class RewardsPageBrowserTest : public InProcessBrowserTest {
     publisher->name = id;
     publisher->url = id;
     publisher->status = mojom::PublisherStatus::UPHOLD_VERIFIED;
-    base::RunLoop run_loop;
-    GetRewardsService().SavePublisherInfo(
-        0, std::move(publisher),
-        base::BindLambdaForTesting([&](mojom::Result) { run_loop.Quit(); }));
-    run_loop.Run();
+    base::test::TestFuture<mojom::Result> future;
+    GetRewardsService().SavePublisherInfo(0, std::move(publisher),
+                                          future.GetCallback());
+    ASSERT_TRUE(future.Wait());
   }
 
  private:

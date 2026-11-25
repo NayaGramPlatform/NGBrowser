@@ -5,7 +5,6 @@
 
 #include "brave/components/brave_shields/core/browser/brave_shields_utils.h"
 
-#include <optional>
 #include <string>
 #include <utility>
 
@@ -14,7 +13,6 @@
 #include "base/strings/strcat.h"
 #include "brave/components/brave_shields/core/browser/brave_shields_p3a.h"
 #include "brave/components/brave_shields/core/common/brave_shield_utils.h"
-#include "brave/components/brave_shields/core/common/brave_shields_panel.mojom-data-view.h"
 #include "brave/components/brave_shields/core/common/features.h"
 #include "brave/components/brave_shields/core/common/pref_names.h"
 #include "brave/components/constants/url_constants.h"
@@ -23,13 +21,13 @@
 #include "components/content_settings/core/browser/cookie_settings.h"
 #include "components/content_settings/core/browser/host_content_settings_map.h"
 #include "components/content_settings/core/common/content_settings.h"
-#include "components/content_settings/core/common/content_settings_enums.mojom-data-view.h"
 #include "components/content_settings/core/common/content_settings_pattern.h"
 #include "components/content_settings/core/common/content_settings_utils.h"
 #include "components/content_settings/core/common/pref_names.h"
 #include "components/prefs/pref_service.h"
 #include "net/base/features.h"
 #include "url/gurl.h"
+#include "url/url_constants.h"
 
 namespace brave_shields {
 
@@ -648,7 +646,8 @@ void SetHttpsUpgradeControlType(HostContentSettingsMap* map,
   if (url.is_empty()) {
     map->ClearSettingsForOneType(ContentSettingsType::HTTP_ALLOWED);
   } else {
-    const GURL& secure_url = GURL(base::StrCat({"https://", url.host()}));
+    const GURL& secure_url = GURL(base::StrCat(
+        {url::kHttpsScheme, url::kStandardSchemeSeparator, url.host()}));
     map->SetWebsiteSettingDefaultScope(
         secure_url, GURL(), ContentSettingsType::HTTP_ALLOWED, base::Value());
   }
@@ -744,6 +743,71 @@ ControlType GetNoScriptControlType(HostContentSettingsMap* map,
 
   return setting == CONTENT_SETTING_ALLOW ? ControlType::ALLOW
                                           : ControlType::BLOCK;
+}
+
+void ResetShieldsSettingsForSite(HostContentSettingsMap* map,
+                                 const GURL& url,
+                                 PrefService* local_state) {
+  if (!url.SchemeIsHTTPOrHTTPS()) {
+    return;
+  }
+
+  auto host_pattern = GetPatternFromURL(url);
+  if (!host_pattern.IsValid() || host_pattern.MatchesAllHosts()) {
+    // Not a valid per-site pattern -- nothing to reset.
+    return;
+  }
+
+  map->SetContentSettingCustomScope(
+      host_pattern, ContentSettingsPattern::Wildcard(),
+      ContentSettingsType::BRAVE_SHIELDS, CONTENT_SETTING_DEFAULT);
+
+  map->SetContentSettingCustomScope(
+      host_pattern, ContentSettingsPattern::Wildcard(),
+      ContentSettingsType::BRAVE_ADS, CONTENT_SETTING_DEFAULT);
+  map->SetContentSettingCustomScope(
+      host_pattern, ContentSettingsPattern::Wildcard(),
+      ContentSettingsType::BRAVE_TRACKERS, CONTENT_SETTING_DEFAULT);
+
+  // Cosmetic filtering is a base::Value website setting, not a plain
+  // ContentSetting, so it's cleared with base::Value() rather than
+  // CONTENT_SETTING_DEFAULT.
+  map->SetWebsiteSettingCustomScope(
+      host_pattern, ContentSettingsPattern::Wildcard(),
+      CosmeticFilteringSetting::kContentSettingsType, base::Value());
+
+  // Cookie blocking: clear every entry SetCookieControlType can create for
+  // this site (the general rule plus the first-party exception).
+  auto cookie_patterns = content_settings::CreateShieldsCookiesPatterns(url);
+  map->SetContentSettingCustomScope(
+      cookie_patterns.host_pattern, ContentSettingsPattern::Wildcard(),
+      ContentSettingsType::BRAVE_REFERRERS, CONTENT_SETTING_DEFAULT);
+  map->SetContentSettingCustomScope(
+      ContentSettingsPattern::Wildcard(), cookie_patterns.host_pattern,
+      ContentSettingsType::BRAVE_COOKIES, CONTENT_SETTING_DEFAULT);
+  map->SetContentSettingCustomScope(
+      cookie_patterns.domain_pattern, cookie_patterns.host_pattern,
+      ContentSettingsType::BRAVE_COOKIES, CONTENT_SETTING_DEFAULT);
+
+  map->SetContentSettingCustomScope(
+      host_pattern, ContentSettingsPattern::Wildcard(),
+      ContentSettingsType::BRAVE_FINGERPRINTING_V2, CONTENT_SETTING_DEFAULT);
+
+  map->SetContentSettingCustomScope(
+      host_pattern, ContentSettingsPattern::Wildcard(),
+      ContentSettingsType::BRAVE_HTTPS_UPGRADE, CONTENT_SETTING_DEFAULT);
+  // Also clear the HTTP_ALLOWED fallback entry SetHttpsUpgradeControlType
+  // maintains alongside BRAVE_HTTPS_UPGRADE for this host.
+  map->SetWebsiteSettingDefaultScope(
+      GURL(base::StrCat(
+          {url::kHttpsScheme, url::kStandardSchemeSeparator, url.host()})),
+      GURL(), ContentSettingsType::HTTP_ALLOWED, base::Value());
+
+  map->SetContentSettingCustomScope(
+      host_pattern, ContentSettingsPattern::Wildcard(),
+      ContentSettingsType::JAVASCRIPT, CONTENT_SETTING_DEFAULT);
+
+  RecordShieldsSettingChanged(local_state);
 }
 
 void SetWebcompatEnabled(HostContentSettingsMap* map,

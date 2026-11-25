@@ -10,6 +10,8 @@
 
 #include "base/functional/bind.h"
 #include "brave/browser/ui/color/brave_color_id.h"
+#include "brave/browser/ui/toolbars_small_icons.h"
+#include "brave/browser/ui/views/frame/brave_browser_view.h"
 #include "brave/common/pref_names.h"
 #include "brave/components/vector_icons/vector_icons.h"
 #include "brave/grit/brave_generated_resources.h"
@@ -32,7 +34,9 @@
 namespace {
 
 constexpr int kHeaderTitleFontSize = 16;
-constexpr int kHeaderButtonSize = 20;
+int GetHeaderButtonSize() {
+  return brave::GetToolbarsIconSize().value_or(20);
+}
 
 std::unique_ptr<views::ImageButton> CreateHeaderImageButton(
     views::Button::PressedCallback callback,
@@ -43,11 +47,11 @@ std::unique_ptr<views::ImageButton> CreateHeaderImageButton(
   button->SetImageModel(
       views::Button::STATE_NORMAL,
       ui::ImageModel::FromVectorIcon(icon, kColorSidebarPanelHeaderButton,
-                                     kHeaderButtonSize));
+                                     GetHeaderButtonSize()));
   button->SetImageModel(
       views::Button::STATE_HOVERED,
       ui::ImageModel::FromVectorIcon(
-          icon, kColorSidebarPanelHeaderButtonHovered, kHeaderButtonSize));
+          icon, kColorSidebarPanelHeaderButtonHovered, GetHeaderButtonSize()));
   return button;
 }
 
@@ -61,6 +65,9 @@ std::u16string GetEntryTitle(SidePanelEntry::Id id) {
       break;
     case SidePanelEntry::Id::kBookmarks:
       message_id = IDS_BOOKMARK_MANAGER_TITLE;
+      break;
+    case SidePanelEntry::Id::kReadAnything:
+      message_id = IDS_READING_MODE_TITLE;
       break;
     default:
       return std::u16string();
@@ -123,12 +130,12 @@ BraveSidePanelHeaderController::CreateCloseButton() {
 }
 
 int BraveSidePanelHeaderController::GetTopRadius() const {
-  if (!browser_window_->GetProfile()->GetPrefs()->GetBoolean(
-          kWebViewRoundedCorners)) {
+  if (!BraveBrowserView::ShouldUseBraveWebViewRoundedCornersForContents(
+          base::to_address(browser_window_))) {
     return 0;
   }
-  return views::LayoutProvider::Get()->GetDistanceMetric(
-      ChromeDistanceMetric::DISTANCE_SIDE_PANEL_CONTENT_RADIUS);
+  return views::LayoutProvider::Get()->GetCornerRadiusMetric(
+      ChromeShapeContextTokens::kSidePanelContentRadius);
 }
 
 void BraveSidePanelHeaderController::SetUpdateHeaderCallback(

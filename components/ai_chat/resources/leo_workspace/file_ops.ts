@@ -9,6 +9,9 @@
 // single path segment and reject '..' and separators, and the handle is scoped
 // to the picked folder, so there is no way to escape the workspace root.
 
+// Type-only: JSZip itself is loaded on demand by zipWorkspace().
+import type JSZip from 'jszip'
+
 // Caps to keep tool output within reason for the model.
 const kMaxGrepMatches = 200
 const kMaxGlobResults = 500
@@ -24,6 +27,12 @@ function splitPath(rel: string): string[] {
     }
   }
   return parts
+}
+
+// |rel| with empty and '.' segments removed, e.g. './a//b' -> 'a/b'. Throws
+// for a path that would escape the workspace.
+export function normalizePath(rel: string): string {
+  return splitPath(rel).join('/')
 }
 
 function basename(rel: string): string {
@@ -85,18 +94,26 @@ export async function isDirectory(
   }
 }
 
+// Returns the file itself (a Blob) rather than decoded text, so that callers
+// can handle arbitrary binary content.
+export async function readFile(
+  root: FileSystemDirectoryHandle,
+  rel: string,
+): Promise<File> {
+  return (await getFile(root, rel)).getFile()
+}
+
 async function readText(
   root: FileSystemDirectoryHandle,
   rel: string,
 ): Promise<string> {
-  const fh = await getFile(root, rel)
-  return (await fh.getFile()).text()
+  return (await readFile(root, rel)).text()
 }
 
-async function writeText(
+async function writeContents(
   root: FileSystemDirectoryHandle,
   rel: string,
-  content: string,
+  content: string | Uint8Array<ArrayBuffer>,
 ): Promise<void> {
   const fh = await getFile(root, rel, true)
   const writable = await fh.createWritable()
@@ -157,6 +174,34 @@ async function* walkFiles(
       yield { path: rel, handle: handle as FileSystemFileHandle }
     }
   }
+}
+
+// Builds a zip archive of every file and folder in the workspace. Empty folders
+// are kept so the archive mirrors the workspace tree. JSZip (~100KB) is only
+// needed when the user downloads the workspace, so it loads as its own chunk
+// rather than sitting in the workspace's initial bundle.
+export async function zipWorkspace(
+  root: FileSystemDirectoryHandle,
+): Promise<JSZip> {
+  const { default: JSZipImpl } = await import('jszip')
+  const zip = new JSZipImpl()
+
+  async function recurse(dir: FileSystemDirectoryHandle, folder: JSZip) {
+    for await (const [name, handle] of entriesOf(dir)) {
+      if (handle.kind === 'directory') {
+        await recurse(
+          handle as FileSystemDirectoryHandle,
+          folder.folder(name) as JSZip,
+        )
+      } else {
+        const file = await (handle as FileSystemFileHandle).getFile()
+        folder.file(name, new Uint8Array(await file.arrayBuffer()))
+      }
+    }
+  }
+
+  await recurse(root, zip)
+  return zip
 }
 
 export async function listDir(
@@ -280,8 +325,19 @@ export async function appendFile(
 ): Promise<string> {
   const existed = await fileExists(root, path)
   const previous = existed ? await readText(root, path) : ''
-  await writeText(root, path, previous + content)
+  await writeContents(root, path, previous + content)
   return `Appended ${content.length} bytes to ${path}`
+}
+
+// Writes binary |data| to |path|, creating or overwriting it.
+export async function writeBinaryFile(
+  root: FileSystemDirectoryHandle,
+  path: string,
+  data: Uint8Array<ArrayBuffer>,
+): Promise<string> {
+  const existed = await fileExists(root, path)
+  await writeContents(root, path, data)
+  return `${existed ? 'Overwrote' : 'Created'} ${path} (${data.byteLength} bytes)`
 }
 
 export async function createFile(
@@ -292,8 +348,27 @@ export async function createFile(
   // Matches the text-editor `create` semantics: creates the file, overwriting
   // it if it already exists.
   const existed = await fileExists(root, path)
-  await writeText(root, path, fileText)
+  await writeContents(root, path, fileText)
   return `${existed ? 'Overwrote' : 'Created'} ${path} (${fileText.length} bytes)`
+}
+
+// Deletes the file at |path|. Only files can be deleted: a directory, the
+// workspace root or a missing path is an error, so a mistaken path can't remove
+// a whole tree.
+export async function deleteFile(
+  root: FileSystemDirectoryHandle,
+  path: string,
+): Promise<string> {
+  const parts = splitPath(path)
+  if (parts.length === 0) {
+    throw new Error('empty file path')
+  }
+  const name = parts.pop() as string
+  const dir = await getDir(root, parts.join('/'))
+  // Throws if |name| is missing or is a directory.
+  await dir.getFileHandle(name)
+  await dir.removeEntry(name)
+  return `Deleted ${normalizePath(path)}`
 }
 
 export async function strReplace(
@@ -312,7 +387,7 @@ export async function strReplace(
   }
   const updated =
     text.slice(0, first) + newStr + text.slice(first + oldStr.length)
-  await writeText(root, path, updated)
+  await writeContents(root, path, updated)
   return `Replaced text in ${path}`
 }
 
@@ -327,6 +402,6 @@ export async function insert(
   const at = Math.max(0, Math.min(insertLine, lines.length))
   const inserted = newStr.split('\n')
   lines.splice(at, 0, ...inserted)
-  await writeText(root, path, lines.join('\n'))
+  await writeContents(root, path, lines.join('\n'))
   return `Inserted ${inserted.length} line(s) into ${path} after line ${at}`
 }

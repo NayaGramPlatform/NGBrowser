@@ -40,16 +40,13 @@ OBJC_EXPORT
 @property(class, nonatomic, readonly) Feature* kBraveDebounce;
 @property(class, nonatomic, readonly) Feature* kBraveDomainBlock;
 @property(class, nonatomic, readonly) Feature* kBraveDomainBlock1PES;
-@property(class, nonatomic, readonly) Feature* kBraveNTPBrandedWallpaper;
-@property(class, nonatomic, readonly)
-    Feature* kBraveNTPBrandedWallpaperSurveyPanelist;
+@property(class, nonatomic, readonly) Feature* kBraveNTPNewTabTakeoverWallpaper;
 @property(class, nonatomic, readonly) Feature* kBraveNewsCardPeekFeature;
 @property(class, nonatomic, readonly) Feature* kBraveNewsFeedUpdate;
 @property(class, nonatomic, readonly) Feature* kBraveReduceLanguage;
 @property(class, nonatomic, readonly) Feature* kBraveSearchDefaultAPIFeature;
 @property(class, nonatomic, readonly) Feature* kBraveShredFeature;
 @property(class, nonatomic, readonly) Feature* kBraveShredCacheData;
-@property(class, nonatomic, readonly) Feature* kBraveShieldsContentSettings;
 @property(class, nonatomic, readonly) Feature* kShowUpdatedShieldsPanel;
 @property(class, nonatomic, readonly) Feature* kBraveIOSDebugAdblock;
 @property(class, nonatomic, readonly) Feature* kBraveIOSEnableFarblingPlugins;
@@ -75,6 +72,7 @@ OBJC_EXPORT
 @property(class, nonatomic, readonly) Feature* kVerboseLoggingFeature;
 @property(class, nonatomic, readonly) Feature* kBraveHttpsByDefault;
 @property(class, nonatomic, readonly) Feature* kBlockAllCookiesToggle;
+@property(class, nonatomic, readonly) Feature* kBraveShieldsElementPicker;
 @property(class, nonatomic, readonly) Feature* kBraveTranslateEnabled;
 @property(class, nonatomic, readonly) Feature* kBraveAppleTranslateEnabled;
 @property(class, nonatomic, readonly) Feature* kUseBraveUserAgent;
@@ -97,6 +95,11 @@ OBJC_EXPORT
 @property(class, nonatomic, readonly) Feature* kPlaylist;
 @property(class, nonatomic, readonly) Feature* kPlaylistOfflineCacheEnabled;
 @property(class, nonatomic, readonly) Feature* kPlaylistCacheFirstEnabled;
+@property(class, nonatomic, readonly) Feature* kTopsitesEnabled;
+@property(class, nonatomic, readonly) Feature* kBrowserToolbarRefactorEnabled;
+@property(class, nonatomic, readonly) Feature* kUseChromiumSearchEngines;
+@property(class, nonatomic, readonly) Feature* kTabGroupsEnabled;
+@property(class, nonatomic, readonly) Feature* kBraveSearchVerticalsEnabled;
 @end
 
 NS_ASSUME_NONNULL_END

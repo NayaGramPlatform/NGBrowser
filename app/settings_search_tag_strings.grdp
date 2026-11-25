@@ -1,0 +1,15 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!-- Search synonyms for settings search. Result titles reuse the existing
+     IDS_SETTINGS_* strings, so this file only holds alternate search terms.
+
+     Each setting has a single message holding a comma-separated list of
+     synonyms, split at runtime in SettingsSearchRegistry.
+
+     The messages are marked is_accessibility_with_no_ui because they are never
+     rendered; they are only used as indexing terms for settings search, so no
+     screenshots are required. -->
+<!-- TODO(b/573316647): Remove translateable="false" once search synonyms are
+     finalized. -->
+<!--This file is created by l10nUtil.js. Do not edit manually.-->
+<grit-part>
+</grit-part>

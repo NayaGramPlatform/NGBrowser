@@ -14,7 +14,7 @@
 #include "brave/components/brave_ads/core/mojom/brave_ads.mojom.h"
 #include "brave/components/brave_ads/core/public/ad_units/ad_info.h"
 
-// npm run test -- brave_unit_tests --filter=BraveAds*
+// pnpm test brave_unit_tests --filter=BraveAds*
 
 namespace brave_ads {
 
@@ -175,6 +175,37 @@ TEST_F(BraveAdsConversionsUtilTest, DidAdEventOccurWithinObservationWindow) {
   // Act & Assert
   EXPECT_TRUE(DidAdEventOccurWithinObservationWindow(
       ad_event, /*observation_window=*/base::Days(1)));
+}
+
+TEST_F(BraveAdsConversionsUtilTest, BuildAttemptedAdEventKey) {
+  // Arrange
+  const AdInfo ad = test::BuildAd(mojom::AdType::kNotificationAd,
+                                  /*use_random_uuids=*/true);
+  const AdEventInfo ad_event =
+      BuildAdEvent(ad, mojom::ConfirmationType::kClicked,
+                   /*created_at=*/test::Now());
+  ASSERT_TRUE(ad_event.created_at);
+
+  // Act & Assert
+  EXPECT_EQ(
+      AttemptedAdEventKey(ad_event.placement_id, ad_event.confirmation_type,
+                          *ad_event.created_at),
+      BuildAttemptedAdEventKey(ad_event));
+}
+
+TEST_F(BraveAdsConversionsUtilTest,
+       BuildAttemptedAdEventKeyWithDefaultCreatedAt) {
+  // Arrange
+  const AdInfo ad = test::BuildAd(mojom::AdType::kNotificationAd,
+                                  /*use_random_uuids=*/true);
+  AdEventInfo ad_event = BuildAdEvent(ad, mojom::ConfirmationType::kClicked,
+                                      /*created_at=*/test::Now());
+  ad_event.created_at.reset();
+
+  // Act & Assert
+  EXPECT_EQ(AttemptedAdEventKey(ad_event.placement_id,
+                                ad_event.confirmation_type, base::Time::Now()),
+            BuildAttemptedAdEventKey(ad_event));
 }
 
 TEST_F(BraveAdsConversionsUtilTest, DidAdEventOccurOutsideObservationWindow) {

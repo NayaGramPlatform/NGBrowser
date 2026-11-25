@@ -34,7 +34,7 @@ BraveTalkLauncherJavaScriptFeature::BraveTalkLauncherJavaScriptFeature()
               FeatureScript::ReinjectionBehavior::kReinjectOnDocumentRecreation,
               FeatureScript::PlaceholderReplacementsCallback(),
               web::OriginFilter::kBraveTalk)},
-          /*dependent_feature=*/{},
+          /*dependent_features=*/{},
           web::OriginFilter::kBraveTalk) {}
 
 BraveTalkLauncherJavaScriptFeature::~BraveTalkLauncherJavaScriptFeature() =
@@ -59,13 +59,13 @@ void BraveTalkLauncherJavaScriptFeature::ScriptMessageReceived(
     return;
   }
 
-  const base::DictValue* body =
-      message.legacy_body() ? message.legacy_body()->GetIfDict() : nullptr;
-  if (!body) {
+  const web::ScriptMessageValue& message_body = message.body();
+  if (message_body.type() != base::Value::Type::DICT) {
     return;
   }
+  const web::ScriptMessageDictValue& body = message_body.GetDict();
 
-  const std::string* url_string = body->FindString(kMessageURLKey);
+  std::optional<std::string> url_string = body.FindString(kMessageURLKey);
   if (!url_string) {
     return;
   }

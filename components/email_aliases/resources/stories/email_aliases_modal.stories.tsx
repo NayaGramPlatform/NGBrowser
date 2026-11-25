@@ -11,8 +11,10 @@ import {
 import { StubEmailAliasesService, demoData } from './utils/stubs'
 import {
   Alias,
-  MAX_ALIASES,
-} from 'gen/brave/components/email_aliases/email_aliases.mojom.m'
+  DEFAULT_MAX_ALIASES,
+} from 'gen/brave/components/email_aliases/email_aliases.mojom-webui.js'
+
+const MAX_ALIASES = DEFAULT_MAX_ALIASES
 
 const stubEmailAliasesServiceAccountReadyInstance =
   new StubEmailAliasesService()
@@ -76,8 +78,8 @@ const atLimitAliases: Alias[] = Array.from(
   { length: MAX_ALIASES + Math.round(Math.random() * MAX_ALIASES) },
   (_, i) => ({
     email: `isolating-cubicle${i}@bravealias.com`,
-    note: undefined,
-    domains: undefined,
+    note: null,
+    domains: null,
   }),
 )
 

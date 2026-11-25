@@ -1,5 +1,5 @@
 diff --git a/chrome/browser/ui/toasts/toast_controller_unittest.cc b/chrome/browser/ui/toasts/toast_controller_unittest.cc
-index f0b9a3720f33583f29fc8fc4adc482714ae310b0..f64a09d59d98d082970803b228f1e5d6bafb181b 100644
+index d47562bc840632daa36c0ad13e5be790f1e295c2..9301fc83f5f88d7a6893be51523e03d4ebdbeffb 100644
 --- a/chrome/browser/ui/toasts/toast_controller_unittest.cc
 +++ b/chrome/browser/ui/toasts/toast_controller_unittest.cc
 @@ -72,7 +72,7 @@ class ToastControllerUnitTest : public testing::Test {
@@ -241,3 +241,21 @@ index f0b9a3720f33583f29fc8fc4adc482714ae310b0..f64a09d59d98d082970803b228f1e5d6
    EXPECT_TRUE(controller->IsShowingToast());
    EXPECT_TRUE(controller->GetToastCloseTimerForTesting()->IsRunning());
  
+@@ -344,7 +344,7 @@ TEST_F(ToastControllerUnitTest, ShowToastWithActionButtonCallbackData) {
+   ToastRegistry* const registry = toast_registry();
+   int received_id = 0;
+   registry->RegisterToast(
+-      ToastId::kLinkCopied,
++      ToastId::kLinkToHighlightCopied,
+       ToastSpecification::Builder(features::IsRoundedIconsEnabled()
+                                       ? vector_icons::kMailFilledIcon
+                                       : vector_icons::kEmailOldIcon,
+@@ -368,7 +368,7 @@ TEST_F(ToastControllerUnitTest, ShowToastWithActionButtonCallbackData) {
+         action_callback.Run();
+       });
+ 
+-  ToastParams params(ToastId::kLinkCopied);
++  ToastParams params(ToastId::kLinkToHighlightCopied);
+   params.action_button_callback_data = base::Value(42);
+   EXPECT_TRUE(controller->MaybeShowToast(std::move(params)));
+   EXPECT_EQ(42, received_id);

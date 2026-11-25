@@ -26,7 +26,7 @@ import { DefaultPageWrapper } from '../../components/shared/style'
 
 // Components
 import { WalletPageLayout } from '$wallet/page/components/wallet_page_layout/wallet_page_layout'
-import { ExploreWeb3Header } from '../../components/desktop/card-headers/explorer_web3_header'
+import { ExploreWeb3Header } from '$wallet/page/components/card_headers/explorer_web3_header'
 import {
   EditVisibleAssetsModal, //
 } from '../../components/desktop/popup-modals/edit-visible-assets-modal/index'
@@ -39,7 +39,7 @@ import {
   WalletPageWrapper, //
 } from '$wallet/page/components/wallet_page_wrapper/wallet_page_wrapper'
 import { NftCollection } from '../screens/nfts/nft_collection'
-import { Banners } from '../../components/desktop/banners/banners'
+import { Banners } from '$wallet/page/components/banners/banners'
 import {
   BackupWalletRoutes, //
 } from '../screens/backup-wallet/backup-wallet.routes'

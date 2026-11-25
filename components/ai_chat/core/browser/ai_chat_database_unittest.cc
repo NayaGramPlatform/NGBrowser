@@ -7,6 +7,9 @@
 
 #include <stdint.h>
 
+#include <algorithm>
+#include <array>
+#include <map>
 #include <memory>
 #include <optional>
 #include <string>
@@ -14,11 +17,9 @@
 #include <vector>
 
 #include "base/check.h"
-#include "base/containers/flat_tree.h"
 #include "base/files/file_path.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/path_service.h"
-#include "base/run_loop.h"
 #include "base/strings/strcat.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_future.h"
@@ -34,11 +35,57 @@
 #include "components/sync/protocol/entity_metadata.pb.h"
 #include "sql/init_status.h"
 #include "sql/meta_table.h"
+#include "sql/statement.h"
 #include "sql/test/test_helpers.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/abseil-cpp/absl/strings/str_format.h"
 
 namespace ai_chat {
+
+namespace {
+
+// Every table whose rows belong to a single conversation_entry row.
+constexpr auto kEntryChildTables = std::to_array<const char*>({
+    "associated_content",
+    "conversation_entry_event_completion",
+    "conversation_entry_event_search_queries",
+    "conversation_entry_event_web_sources",
+    "conversation_entry_event_inline_search",
+    "conversation_entry_event_tool_use",
+    "conversation_entry_uploaded_files",
+});
+
+mojom::ConversationEntryEventPtr CreateInlineSearchEvent() {
+  return mojom::ConversationEntryEvent::NewInlineSearchEvent(
+      mojom::InlineSearchEvent::New("inline query", R"({"results": []})"));
+}
+
+mojom::ConversationEntryEventPtr CreateToolUseEvent() {
+  return mojom::ConversationEntryEvent::NewToolUseEvent(
+      mojom::ToolUseEvent::New("test_tool", "tool_id_1", R"({"a": 1})",
+                               std::nullopt, std::nullopt, nullptr, false));
+}
+
+mojom::ConversationEntryEventPtr CreateWebSourcesEvent() {
+  std::vector<mojom::WebSourcePtr> sources;
+  sources.push_back(mojom::WebSource::New("source", GURL("https://a.com"),
+                                          GURL("https://a.com/favicon.ico"),
+                                          std::nullopt, std::nullopt));
+  return mojom::ConversationEntryEvent::NewSourcesEvent(
+      mojom::WebSourcesEvent::New(std::move(sources),
+                                  std::vector<std::string>{}));
+}
+
+std::vector<mojom::UploadedFilePtr> CreateUploadedFile() {
+  std::vector<mojom::UploadedFilePtr> files;
+  files.push_back(
+      mojom::UploadedFile::New("file.png", 3, std::vector<uint8_t>{1, 2, 3},
+                               mojom::UploadedFileType::kImage, std::nullopt));
+  return files;
+}
+
+}  // namespace
+
 class AIChatDatabaseTest : public testing::Test,
                            public testing::WithParamInterface<bool> {
  public:
@@ -74,6 +121,85 @@ class AIChatDatabaseTest : public testing::Test,
 
   base::FilePath db_file_path() {
     return temp_directory_.GetPath().AppendASCII("ai_chat");
+  }
+
+  // Row count of each child table, optionally restricted to the rows owned by
+  // |entry_uuid|. Counted directly because orphaned child rows cannot be
+  // reached through the read API.
+  std::map<std::string, int> CountChildRows(std::string_view entry_uuid = "") {
+    std::map<std::string, int> counts;
+    for (const char* table : kEntryChildTables) {
+      sql::Statement statement(db_->GetDB().GetUniqueStatement(absl::StrFormat(
+          "SELECT COUNT(*) FROM %s%s", table,
+          entry_uuid.empty() ? "" : " WHERE conversation_entry_uuid=?")));
+      CHECK(statement.is_valid());
+      if (!entry_uuid.empty()) {
+        statement.BindString(0, entry_uuid);
+      }
+      CHECK(statement.Step());
+      counts[table] = statement.ColumnInt(0);
+    }
+    return counts;
+  }
+
+  void ExpectNoChildRows(std::string_view entry_uuid = "") {
+    for (const auto& [table, count] : CountChildRows(entry_uuid)) {
+      EXPECT_EQ(count, 0) << table << " for entry '" << entry_uuid << "'";
+    }
+  }
+
+  // Persists a conversation with associated content, an uploaded file, one
+  // event of every persisted kind, and an edit of the response carrying a copy
+  // of those events plus its own uploaded file. Returns the persisted history.
+  std::vector<mojom::ConversationTurnPtr> AddConversationWithEveryChildRow(
+      const std::string& conversation_uuid,
+      const std::string& edit_uuid) {
+    auto history = CreateSampleChatHistory(1u, /*future_hours=*/0,
+                                           /*num_uploaded_files_per_query=*/1u);
+    auto& response = history[1];
+    response->events->push_back(CreateWebSourcesEvent());
+    response->events->push_back(CreateInlineSearchEvent());
+    response->events->push_back(CreateToolUseEvent());
+
+    // The assistant edit path clones the turn's events into the edit.
+    auto edit = response->Clone();
+    edit->uuid = edit_uuid;
+    edit->uploaded_files = CreateUploadedFile();
+    response->edits = std::vector<mojom::ConversationTurnPtr>{};
+    response->edits->push_back(std::move(edit));
+
+    std::vector<mojom::AssociatedContentPtr> associated_content;
+    associated_content.push_back(mojom::AssociatedContent::New(
+        "content", mojom::ContentType::PageContent, "page title", 1,
+        GURL("https://example.com/page"), 62, history[0]->uuid.value(), false));
+    auto metadata = mojom::Conversation::New(
+        conversation_uuid, "title", base::Time::Now(), true, std::nullopt, 0, 0,
+        false, std::move(associated_content));
+
+    CHECK(db_->AddConversation(std::move(metadata), {"Page contents"},
+                               history[0]->Clone()));
+    CHECK(db_->AddConversationEntry(conversation_uuid, response->Clone()));
+    return history;
+  }
+
+  void SetEditingEntryUuid(std::string_view entry_uuid,
+                           std::string_view edit_uuid) {
+    sql::Statement statement(db_->GetDB().GetUniqueStatement(
+        "UPDATE conversation_entry SET editing_entry_uuid=? WHERE uuid=?"));
+    CHECK(statement.is_valid());
+    statement.BindString(0, edit_uuid);
+    statement.BindString(1, entry_uuid);
+    CHECK(statement.Run());
+  }
+
+  // Inserts a completion event row that no conversation_entry row owns.
+  bool InsertOrphanCompletion(std::string_view entry_uuid, int event_order) {
+    sql::Statement statement(db_->GetDB().GetUniqueStatement(
+        "INSERT INTO conversation_entry_event_completion"
+        " (conversation_entry_uuid, event_order, text) VALUES(?, ?, X'00')"));
+    statement.BindString(0, entry_uuid);
+    statement.BindInt(1, event_order);
+    return statement.Run();
   }
 
  protected:
@@ -147,7 +273,7 @@ TEST_P(AIChatDatabaseTest, AddAndGetConversationAndEntries) {
     // Test getting the conversation metadata
     std::vector<mojom::ConversationPtr> conversations =
         db_->GetAllConversations();
-    EXPECT_EQ(conversations.size(), has_content ? 1u : 2u);
+    ASSERT_EQ(conversations.size(), has_content ? 1u : 2u);
     auto& conversation = has_content ? conversations[0] : conversations[1];
     ExpectConversationEquals(FROM_HERE, conversation, metadata);
     EXPECT_EQ(conversation->updated_time, history.front()->created_time);
@@ -158,7 +284,9 @@ TEST_P(AIChatDatabaseTest, AddAndGetConversationAndEntries) {
 
     // Test getting the conversation entries
     mojom::ConversationArchivePtr result = db_->GetConversationData(uuid);
+    ASSERT_TRUE(result);
     ExpectConversationHistoryEquals(FROM_HERE, result->entries, history);
+    ASSERT_EQ(result->entries.size(), history.size());
 
     // Verify skill data was persisted correctly
     ASSERT_TRUE(result->entries[0]->skill);
@@ -170,7 +298,7 @@ TEST_P(AIChatDatabaseTest, AddAndGetConversationAndEntries) {
     ASSERT_TRUE(result->entries[1]->near_verification_status);
     EXPECT_TRUE(result->entries[1]->near_verification_status->verified);
 
-    EXPECT_EQ(result->associated_content.size(), has_content ? 1u : 0u);
+    ASSERT_EQ(result->associated_content.size(), has_content ? 1u : 0u);
     if (has_content) {
       EXPECT_EQ(result->associated_content[0]->content_uuid, content_uuid);
       EXPECT_EQ(result->associated_content[0]->content, expected_contents[0]);
@@ -183,14 +311,16 @@ TEST_P(AIChatDatabaseTest, AddAndGetConversationAndEntries) {
 
     // Verify all entries are returned
     mojom::ConversationArchivePtr result_2 = db_->GetConversationData(uuid);
+    ASSERT_TRUE(result_2);
     for (auto& entry : next_history) {
       history.push_back(std::move(entry));
     }
     ExpectConversationHistoryEquals(FROM_HERE, result_2->entries, history);
+    ASSERT_EQ(result_2->entries.size(), history.size());
 
     // Verify metadata now has new model key
     conversations = db_->GetAllConversations();
-    EXPECT_EQ(conversations.size(), has_content ? 1u : 2u);
+    ASSERT_EQ(conversations.size(), has_content ? 1u : 2u);
     ExpectConversationEquals(
         FROM_HERE, has_content ? conversations[0] : conversations[1], metadata);
 
@@ -203,7 +333,9 @@ TEST_P(AIChatDatabaseTest, AddAndGetConversationAndEntries) {
     // Verify the last entry is gone
     history.pop_back();
     mojom::ConversationArchivePtr result_3 = db_->GetConversationData(uuid);
+    ASSERT_TRUE(result_3);
     ExpectConversationHistoryEquals(FROM_HERE, result_3->entries, history);
+    ASSERT_EQ(result_3->entries.size(), history.size());
 
     // Add an edit to the last query
     {
@@ -224,8 +356,10 @@ TEST_P(AIChatDatabaseTest, AddAndGetConversationAndEntries) {
     }
     // Verify the edit is persisted
     mojom::ConversationArchivePtr result_4 = db_->GetConversationData(uuid);
+    ASSERT_TRUE(result_4);
     ExpectConversationHistoryEquals(FROM_HERE, result_4->entries,
                                     result_3->entries);
+    ASSERT_EQ(result_4->entries.size(), result_3->entries.size());
 
     // Add another edit to test multiple edits for the same turn
     {
@@ -245,6 +379,7 @@ TEST_P(AIChatDatabaseTest, AddAndGetConversationAndEntries) {
     }
     // Verify multiple edits are persisted
     mojom::ConversationArchivePtr result_5 = db_->GetConversationData(uuid);
+    ASSERT_TRUE(result_5);
     ExpectConversationHistoryEquals(FROM_HERE, result_5->entries,
                                     result_4->entries);
   }
@@ -260,7 +395,7 @@ TEST_P(AIChatDatabaseTest, AddAndGetConversationAndEntries) {
   // Verify deleted conversation metadata not returned
   std::vector<mojom::ConversationPtr> conversations =
       db_->GetAllConversations();
-  EXPECT_EQ(conversations.size(), 1u);
+  ASSERT_EQ(conversations.size(), 1u);
   EXPECT_EQ(conversations[0]->uuid, "first");
   // Verify there's still data for other conversations
   mojom::ConversationArchivePtr conversation_data_2 =
@@ -271,6 +406,53 @@ TEST_P(AIChatDatabaseTest, AddAndGetConversationAndEntries) {
   EXPECT_TRUE(db_->DeleteConversation("first"));
   conversations = db_->GetAllConversations();
   EXPECT_EQ(conversations.size(), 0u);
+}
+
+// An edit is a conversation_entry row of its own which owns its own events and
+// uploaded files, so deleting the entry it edits has to delete those too.
+TEST_P(AIChatDatabaseTest, DeleteConversationEntryDeletesEditChildRows) {
+  const std::string conversation_uuid = "delete_entry";
+  const std::string edit_uuid = "edit-uuid";
+  auto history = AddConversationWithEveryChildRow(conversation_uuid, edit_uuid);
+
+  auto edit_rows = CountChildRows(edit_uuid);
+  EXPECT_EQ(edit_rows["conversation_entry_event_completion"], 2);
+  EXPECT_EQ(edit_rows["conversation_entry_event_search_queries"], 1);
+  EXPECT_EQ(edit_rows["conversation_entry_event_web_sources"], 1);
+  EXPECT_EQ(edit_rows["conversation_entry_event_inline_search"], 1);
+  EXPECT_EQ(edit_rows["conversation_entry_event_tool_use"], 1);
+  EXPECT_EQ(edit_rows["conversation_entry_uploaded_files"], 1);
+
+  ASSERT_TRUE(db_->DeleteConversationEntry(history[1]->uuid.value()));
+  ExpectNoChildRows(edit_uuid);
+  ExpectNoChildRows(history[1]->uuid.value());
+
+  // Deleting the only remaining entry should leave nothing behind.
+  ASSERT_TRUE(db_->DeleteConversationEntry(history[0]->uuid.value()));
+  ExpectNoChildRows();
+  EXPECT_EQ(db_->GetConversationData(conversation_uuid)->entries.size(), 0u);
+}
+
+// Entry uuids come from the caller, so a cycle of edit references can't be
+// ruled out. Deleting has to terminate rather than follow it forever.
+TEST_P(AIChatDatabaseTest, DeleteConversationEntryWithCyclicEdit) {
+  const std::string conversation_uuid = "cyclic_edit";
+  const std::string edit_uuid = "edit-uuid";
+  auto history = AddConversationWithEveryChildRow(conversation_uuid, edit_uuid);
+  SetEditingEntryUuid(history[1]->uuid.value(), edit_uuid);
+
+  ASSERT_TRUE(db_->DeleteConversationEntry(history[1]->uuid.value()));
+  ExpectNoChildRows(edit_uuid);
+  ExpectNoChildRows(history[1]->uuid.value());
+}
+
+TEST_P(AIChatDatabaseTest, DeleteConversationDeletesAllChildRows) {
+  const std::string conversation_uuid = "delete_conversation";
+  AddConversationWithEveryChildRow(conversation_uuid, "edit-uuid");
+
+  ASSERT_TRUE(db_->DeleteConversation(conversation_uuid));
+  ExpectNoChildRows();
+  EXPECT_EQ(db_->GetAllConversations().size(), 0u);
 }
 
 TEST_P(AIChatDatabaseTest, ConversationThreadEntries) {
@@ -296,7 +478,7 @@ TEST_P(AIChatDatabaseTest, ConversationThreadEntries) {
 
   auto conversation_data = db_->GetConversationData(uuid);
   ASSERT_TRUE(conversation_data);
-  EXPECT_EQ(conversation_data->entries.size(), 2u);
+  ASSERT_EQ(conversation_data->entries.size(), 2u);
   for (const auto& entry : conversation_data->entries) {
     EXPECT_NE(entry->uuid, history[2]->uuid);
     EXPECT_NE(entry->uuid, history[3]->uuid);
@@ -325,7 +507,9 @@ TEST_P(AIChatDatabaseTest, ConversationThreadEntries) {
 
   // Deleting the conversation also deletes its thread metadata rows
   EXPECT_TRUE(db_->DeleteConversation(uuid));
-  EXPECT_TRUE(db_->GetConversationThreads(uuid).empty());
+  auto deleted_conversation_data = db_->GetConversationData(uuid);
+  ASSERT_TRUE(deleted_conversation_data);
+  EXPECT_TRUE(deleted_conversation_data->threads.empty());
 }
 
 TEST_P(AIChatDatabaseTest, WebSourcesEvent) {
@@ -848,6 +1032,7 @@ TEST_P(AIChatDatabaseTest, UpdateConversationTitle) {
         db_->GetAllConversations();
     // get this conversation
     auto* conversation = GetConversation(FROM_HERE, conversations, uuid);
+    ASSERT_TRUE(conversation);
     EXPECT_EQ(conversation->title, initial_title);
 
     // Update title
@@ -855,6 +1040,7 @@ TEST_P(AIChatDatabaseTest, UpdateConversationTitle) {
     // Verify
     conversations = db_->GetAllConversations();
     conversation = GetConversation(FROM_HERE, conversations, uuid);
+    ASSERT_TRUE(conversation);
     EXPECT_EQ(conversation->title, updated_title);
   }
 }
@@ -886,6 +1072,7 @@ TEST_P(AIChatDatabaseTest, UpdateConversationModelKey) {
     std::vector<mojom::ConversationPtr> conversations =
         db_->GetAllConversations();
     auto* conversation = GetConversation(FROM_HERE, conversations, uuid);
+    ASSERT_TRUE(conversation);
     EXPECT_EQ(conversation->model_key, initial_model_key);
 
     // Update model key
@@ -894,6 +1081,7 @@ TEST_P(AIChatDatabaseTest, UpdateConversationModelKey) {
     // Verify updated model key
     conversations = db_->GetAllConversations();
     conversation = GetConversation(FROM_HERE, conversations, uuid);
+    ASSERT_TRUE(conversation);
     EXPECT_EQ(conversation->model_key, updated_model_key);
   }
 }
@@ -918,6 +1106,7 @@ TEST_P(AIChatDatabaseTest, UpdateConversationTokenInfo) {
       db_->GetAllConversations();
   // get this conversation
   auto* conversation = GetConversation(FROM_HERE, conversations, uuid);
+  ASSERT_TRUE(conversation);
   EXPECT_EQ(conversation->total_tokens, initial_total_tokens);
   EXPECT_EQ(conversation->trimmed_tokens, initial_trimmed_tokens);
 
@@ -928,6 +1117,7 @@ TEST_P(AIChatDatabaseTest, UpdateConversationTokenInfo) {
   // Verify updated token info
   conversations = db_->GetAllConversations();
   conversation = GetConversation(FROM_HERE, conversations, uuid);
+  ASSERT_TRUE(conversation);
   EXPECT_EQ(conversation->total_tokens, updated_total_tokens);
   EXPECT_EQ(conversation->trimmed_tokens, updated_trimmed_tokens);
 }
@@ -1048,11 +1238,12 @@ TEST_P(AIChatDatabaseTest, AddOrUpdateAssociatedContent) {
 
   // Verify data is persisted
   mojom::ConversationArchivePtr result = db_->GetConversationData(uuid);
-  EXPECT_EQ(result->associated_content.size(), 1u);
+  ASSERT_TRUE(result);
+  ASSERT_EQ(result->associated_content.size(), 1u);
   EXPECT_EQ(result->associated_content[0]->content_uuid, content_uuid);
   EXPECT_EQ(result->associated_content[0]->content, expected_contents[0]);
   auto conversations = db_->GetAllConversations();
-  EXPECT_EQ(conversations.size(), 1u);
+  ASSERT_EQ(conversations.size(), 1u);
   ExpectConversationEquals(FROM_HERE, conversations[0], metadata);
 
   // Change data and call AddOrUpdateAssociatedContent
@@ -1065,12 +1256,13 @@ TEST_P(AIChatDatabaseTest, AddOrUpdateAssociatedContent) {
       uuid, std::move(associated_content), expected_contents));
   // Verify data is changed
   result = db_->GetConversationData(uuid);
-  EXPECT_EQ(result->associated_content.size(), 1u);
+  ASSERT_TRUE(result);
+  ASSERT_EQ(result->associated_content.size(), 1u);
   EXPECT_EQ(result->associated_content[0]->content_uuid,
             metadata->associated_content[0]->uuid);
   EXPECT_EQ(result->associated_content[0]->content, expected_contents[0]);
   conversations = db_->GetAllConversations();
-  EXPECT_EQ(conversations.size(), 1u);
+  ASSERT_EQ(conversations.size(), 1u);
   ExpectConversationEquals(FROM_HERE, conversations[0], metadata);
 }
 
@@ -1101,14 +1293,15 @@ TEST_P(AIChatDatabaseTest, AddOrUpdateAssociatedContent_MultiContent) {
 
   // Verify data is persisted
   mojom::ConversationArchivePtr result = db_->GetConversationData(uuid);
-  EXPECT_EQ(result->associated_content.size(), 2u);
+  ASSERT_TRUE(result);
+  ASSERT_EQ(result->associated_content.size(), 2u);
   EXPECT_EQ(result->associated_content[0]->content_uuid, content_1->uuid);
   EXPECT_EQ(result->associated_content[0]->content, expected_contents[0]);
   EXPECT_EQ(result->associated_content[1]->content_uuid, content_2->uuid);
   EXPECT_EQ(result->associated_content[1]->content, expected_contents[1]);
 
   auto conversations = db_->GetAllConversations();
-  EXPECT_EQ(conversations.size(), 1u);
+  ASSERT_EQ(conversations.size(), 1u);
   ExpectConversationEquals(FROM_HERE, conversations[0], metadata);
 
   // Change data and call AddOrUpdateAssociatedContent
@@ -1123,7 +1316,8 @@ TEST_P(AIChatDatabaseTest, AddOrUpdateAssociatedContent_MultiContent) {
       uuid, std::move(associated_content), expected_contents));
   // Verify data is changed
   result = db_->GetConversationData(uuid);
-  EXPECT_EQ(result->associated_content.size(), 2u);
+  ASSERT_TRUE(result);
+  ASSERT_EQ(result->associated_content.size(), 2u);
   EXPECT_EQ(result->associated_content[0]->content_uuid,
             metadata->associated_content[0]->uuid);
   EXPECT_EQ(result->associated_content[0]->content, expected_contents[0]);
@@ -1131,7 +1325,7 @@ TEST_P(AIChatDatabaseTest, AddOrUpdateAssociatedContent_MultiContent) {
             metadata->associated_content[1]->uuid);
   EXPECT_EQ(result->associated_content[1]->content, expected_contents[1]);
   conversations = db_->GetAllConversations();
-  EXPECT_EQ(conversations.size(), 1u);
+  ASSERT_EQ(conversations.size(), 1u);
   ExpectConversationEquals(FROM_HERE, conversations[0], metadata);
 
   // Delete the associated content
@@ -1141,11 +1335,12 @@ TEST_P(AIChatDatabaseTest, AddOrUpdateAssociatedContent_MultiContent) {
 
   // Verify the associated content is deleted
   result = db_->GetConversationData(uuid);
+  ASSERT_TRUE(result);
   EXPECT_EQ(result->associated_content.size(), 0u);
 
   conversations = db_->GetAllConversations();
-  EXPECT_EQ(conversations.size(), 1u);
-  EXPECT_EQ(conversations[0]->associated_content.size(), 2u);
+  ASSERT_EQ(conversations.size(), 1u);
+  ASSERT_EQ(conversations[0]->associated_content.size(), 2u);
   EXPECT_EQ(conversations[0]->associated_content[0]->title, "");
   EXPECT_EQ(conversations[0]->associated_content[0]->url, GURL());
   EXPECT_EQ(conversations[0]->associated_content[1]->title, "");
@@ -1166,10 +1361,12 @@ TEST_P(AIChatDatabaseTest, DeleteAllData) {
   // Verify data is persisted
   {
     mojom::ConversationArchivePtr result = db_->GetConversationData(uuid);
+    ASSERT_TRUE(result);
+    ASSERT_EQ(result->entries.size(), 1u);
 
     ExpectConversationEntryEquals(FROM_HERE, result->entries[0], history[0]);
     auto conversations = db_->GetAllConversations();
-    EXPECT_EQ(conversations.size(), 1u);
+    ASSERT_EQ(conversations.size(), 1u);
     ExpectConversationEquals(FROM_HERE, conversations[0], metadata);
   }
 
@@ -1221,19 +1418,21 @@ TEST_P(AIChatDatabaseTest, DeleteAssociatedWebContent) {
 
   // Verify data is persisted
   auto conversations = db_->GetAllConversations();
-  EXPECT_EQ(conversations.size(), 2u);
+  ASSERT_EQ(conversations.size(), 2u);
   ExpectConversationEquals(FROM_HERE, conversations[0], metadata_first);
   ExpectConversationEquals(FROM_HERE, conversations[1], metadata_second);
 
   mojom::ConversationArchivePtr archive_result =
       db_->GetConversationData("first");
-  EXPECT_EQ(archive_result->associated_content.size(), 1u);
+  ASSERT_TRUE(archive_result);
+  ASSERT_EQ(archive_result->associated_content.size(), 1u);
   EXPECT_EQ(archive_result->associated_content[0]->content_uuid,
             "first-content");
   EXPECT_EQ(archive_result->associated_content[0]->content,
             expected_contents[0]);
   archive_result = db_->GetConversationData("second");
-  EXPECT_EQ(archive_result->associated_content.size(), 1u);
+  ASSERT_TRUE(archive_result);
+  ASSERT_EQ(archive_result->associated_content.size(), 1u);
   EXPECT_EQ(archive_result->associated_content[0]->content_uuid,
             "second-content");
   EXPECT_EQ(archive_result->associated_content[0]->content,
@@ -1252,20 +1451,65 @@ TEST_P(AIChatDatabaseTest, DeleteAssociatedWebContent) {
   // Verify only url, title and content was deleted and only from the second
   // conversation
   conversations = db_->GetAllConversations();
-  EXPECT_EQ(conversations.size(), 2u);
+  ASSERT_EQ(conversations.size(), 2u);
   ExpectConversationEquals(FROM_HERE, conversations[0], metadata_first);
   metadata_second->associated_content[0]->url = GURL();
   metadata_second->associated_content[0]->title = "";
   ExpectConversationEquals(FROM_HERE, conversations[1], metadata_second);
 
   archive_result = db_->GetConversationData("second");
+  ASSERT_TRUE(archive_result);
   EXPECT_TRUE(archive_result->associated_content.empty());
   archive_result = db_->GetConversationData("first");
-  EXPECT_EQ(archive_result->associated_content.size(), 1u);
+  ASSERT_TRUE(archive_result);
+  ASSERT_EQ(archive_result->associated_content.size(), 1u);
   EXPECT_EQ(archive_result->associated_content[0]->content_uuid,
             "first-content");
   EXPECT_EQ(archive_result->associated_content[0]->content,
             expected_contents[0]);
+}
+
+TEST_P(AIChatDatabaseTest, DeleteAssociatedWebContentKeepsWorkspaceContent) {
+  auto history = CreateSampleChatHistory(1u, -1);
+  const std::string entry_uuid = history.front()->uuid.value();
+
+  std::vector<mojom::AssociatedContentPtr> associated_content;
+  associated_content.push_back(mojom::AssociatedContent::New(
+      "page-content", mojom::ContentType::PageContent, "page title", 1,
+      GURL("https://example.com/page"), 62, entry_uuid, false));
+  associated_content.push_back(mojom::AssociatedContent::New(
+      "workspace-content", mojom::ContentType::Workspace, "Workspace", 2,
+      GURL("workspace://abc"), 100, entry_uuid, false));
+  mojom::ConversationPtr metadata = mojom::Conversation::New(
+      "conv", "title", base::Time::Now() - base::Hours(1), true, std::nullopt,
+      0, 0, false, std::move(associated_content));
+  ASSERT_TRUE(db_->AddConversation(
+      metadata->Clone(), {"page text", "workspace text"}, history[0]->Clone()));
+
+  auto cleared = db_->DeleteAssociatedWebContent(std::nullopt, std::nullopt);
+  // Only the page content's entry is reported as cleared; the workspace
+  // content is untouched, so it has nothing to propagate.
+  ASSERT_TRUE(cleared.has_value());
+  ASSERT_EQ(cleared->size(), 1u);
+  EXPECT_EQ((*cleared)[0].conversation_uuid, "conv");
+  EXPECT_EQ((*cleared)[0].entry_uuid, entry_uuid);
+
+  auto conversations = db_->GetAllConversations();
+  ASSERT_EQ(conversations.size(), 1u);
+  metadata->associated_content[0]->url = GURL();
+  metadata->associated_content[0]->title = "";
+  ExpectConversationEquals(FROM_HERE, conversations[0], metadata);
+
+  auto archive = db_->GetConversationData("conv");
+  ASSERT_TRUE(archive);
+  ASSERT_EQ(archive->associated_content.size(), 1u);
+  EXPECT_EQ(archive->associated_content[0]->content_uuid, "workspace-content");
+  EXPECT_EQ(archive->associated_content[0]->content, "workspace text");
+
+  // Clearing again finds nothing left to clear.
+  cleared = db_->DeleteAssociatedWebContent(std::nullopt, std::nullopt);
+  ASSERT_TRUE(cleared.has_value());
+  EXPECT_TRUE(cleared->empty());
 }
 
 TEST_P(AIChatDatabaseTest, DeleteConversationEntryWithAssociatedContent) {
@@ -1336,6 +1580,40 @@ TEST_P(AIChatDatabaseTest, DeleteConversationEntryWithAssociatedContent) {
   EXPECT_EQ(archive_result->entries[0]->uuid.value(), history[1]->uuid.value());
 }
 
+TEST_P(AIChatDatabaseTest, ApplyRemoteEntryFailsOnFailedChildInsert) {
+  // A child row that fails to insert fails the whole apply and leaves the
+  // replaced entry intact, rather than reporting a partial entry as applied.
+  auto make_response = [](std::string_view uuid, std::string_view completion) {
+    auto response = mojom::ConversationTurn::New();
+    response->uuid = std::string(uuid);
+    response->character_type = mojom::CharacterType::ASSISTANT;
+    response->action_type = mojom::ActionType::RESPONSE;
+    response->created_time = base::Time::Now();
+    response->events = std::vector<mojom::ConversationEntryEventPtr>();
+    response->events->push_back(
+        mojom::ConversationEntryEvent::NewCompletionEvent(
+            mojom::CompletionEvent::New(std::string(completion))));
+    return response;
+  };
+
+  auto original = make_response("entry-1", "Original");
+  ASSERT_TRUE(db_->ApplyRemoteEntry("conv", original->Clone(), {}, {}));
+
+  // No entry owns this row, so the replace doesn't delete it, and it collides
+  // with the edit's first event.
+  ASSERT_TRUE(InsertOrphanCompletion("edit-1", /*event_order=*/0));
+
+  auto replacement = make_response("entry-1", "Replaced");
+  replacement->edits.emplace();
+  replacement->edits->push_back(make_response("edit-1", "Edited"));
+  EXPECT_FALSE(db_->ApplyRemoteEntry("conv", std::move(replacement), {}, {}));
+
+  auto data = db_->GetConversationData("conv");
+  ASSERT_TRUE(data);
+  ASSERT_EQ(data->entries.size(), 1u);
+  ExpectConversationEntryEquals(FROM_HERE, data->entries[0], original);
+}
+
 // Sync metadata tests (non-parameterized, use the same fixture setup pattern).
 class AIChatDatabaseSyncTest : public testing::Test {
  public:
@@ -1392,7 +1670,7 @@ TEST_F(AIChatDatabaseSyncTest, ClearEntityMetadata) {
 
   syncer::MetadataBatch batch;
   ASSERT_TRUE(db_->GetAllSyncMetadata(&batch));
-  EXPECT_EQ(batch.GetAllMetadata().size(), 1u);
+  ASSERT_EQ(batch.GetAllMetadata().size(), 1u);
   EXPECT_EQ(batch.GetAllMetadata().begin()->first, "key2");
 }
 
@@ -1435,6 +1713,434 @@ TEST_F(AIChatDatabaseSyncTest, ClearDataTypeState) {
             sync_pb::DataTypeState::INITIAL_SYNC_STATE_UNSPECIFIED);
 }
 
+// Remote-apply path: ApplyRemoteConversationMetadata / ApplyRemoteEntry.
+
+TEST_F(AIChatDatabaseSyncTest, ApplyRemoteConversationMetadataInsertsNew) {
+  auto conversation = mojom::Conversation::New();
+  conversation->uuid = "remote-conv";
+  conversation->title = "Remote title";
+  conversation->model_key = "model-x";
+  conversation->total_tokens = 100;
+  conversation->trimmed_tokens = 5;
+
+  EXPECT_TRUE(db_->ApplyRemoteConversationMetadata(std::move(conversation)));
+
+  auto conversations = db_->GetAllConversations();
+  ASSERT_EQ(conversations.size(), 1u);
+  EXPECT_EQ(conversations[0]->uuid, "remote-conv");
+  EXPECT_EQ(conversations[0]->title, "Remote title");
+  ASSERT_TRUE(conversations[0]->model_key.has_value());
+  EXPECT_EQ(*conversations[0]->model_key, "model-x");
+  EXPECT_EQ(conversations[0]->total_tokens, 100u);
+  EXPECT_EQ(conversations[0]->trimmed_tokens, 5u);
+}
+
+TEST_F(AIChatDatabaseSyncTest,
+       ApplyRemoteConversationMetadataUpsertPreservesEntries) {
+  // Seed a conversation with one entry through the normal local path.
+  {
+    auto conversation = mojom::Conversation::New();
+    conversation->uuid = "conv";
+    conversation->title = "Original";
+    auto entry = mojom::ConversationTurn::New();
+    entry->uuid = "entry-1";
+    entry->character_type = mojom::CharacterType::HUMAN;
+    entry->action_type = mojom::ActionType::QUERY;
+    entry->text = "Hello";
+    entry->created_time = base::Time::Now();
+    ASSERT_TRUE(
+        db_->AddConversation(std::move(conversation), {}, std::move(entry)));
+  }
+
+  // Upsert remote metadata for the same uuid with a changed title/tokens.
+  auto updated = mojom::Conversation::New();
+  updated->uuid = "conv";
+  updated->title = "Updated";
+  updated->total_tokens = 42;
+  EXPECT_TRUE(db_->ApplyRemoteConversationMetadata(std::move(updated)));
+
+  // Metadata is updated...
+  auto conversations = db_->GetAllConversations();
+  ASSERT_EQ(conversations.size(), 1u);
+  EXPECT_EQ(conversations[0]->title, "Updated");
+  EXPECT_EQ(conversations[0]->total_tokens, 42u);
+
+  // ...and the existing entry survives.
+  auto data = db_->GetConversationData("conv");
+  ASSERT_TRUE(data);
+  ASSERT_EQ(data->entries.size(), 1u);
+  EXPECT_EQ(data->entries[0]->uuid, "entry-1");
+}
+
+TEST_F(AIChatDatabaseSyncTest, ApplyRemoteConversationMetadataTwice) {
+  // Replaying this device's own record leaves the row unchanged, which must
+  // still take the update path rather than insert a duplicate uuid.
+  auto conversation = mojom::Conversation::New();
+  conversation->uuid = "conv";
+  conversation->title = "Title";
+  conversation->total_tokens = 42;
+  ASSERT_TRUE(db_->ApplyRemoteConversationMetadata(conversation->Clone()));
+  EXPECT_TRUE(db_->ApplyRemoteConversationMetadata(std::move(conversation)));
+
+  auto conversations = db_->GetAllConversations();
+  ASSERT_EQ(conversations.size(), 1u);
+  EXPECT_EQ(conversations[0]->title, "Title");
+  EXPECT_EQ(conversations[0]->total_tokens, 42u);
+}
+
+TEST_F(AIChatDatabaseSyncTest,
+       ApplyRemoteConversationMetadataEncryptionFailureKeepsTitle) {
+  auto conversation = mojom::Conversation::New();
+  conversation->uuid = "conv";
+  conversation->title = "Original";
+  ASSERT_TRUE(db_->ApplyRemoteConversationMetadata(conversation->Clone()));
+
+  db_.reset();
+  db_ = std::make_unique<AIChatDatabase>(
+      db_file_path(), os_crypt_async::GetTestEncryptorWithoutKeysForTesting());
+  conversation->title = "Updated";
+  EXPECT_FALSE(db_->ApplyRemoteConversationMetadata(std::move(conversation)));
+
+  db_.reset();
+  base::test::TestFuture<scoped_refptr<os_crypt_async::Encryptor>> future;
+  os_crypt_->GetInstance(future.GetCallback());
+  db_ = std::make_unique<AIChatDatabase>(db_file_path(), future.Take());
+  auto conversations = db_->GetAllConversations();
+  ASSERT_EQ(conversations.size(), 1u);
+  EXPECT_EQ(conversations[0]->title, "Original");
+}
+
+TEST_F(AIChatDatabaseSyncTest, ApplyRemoteEntryCreatesStubConversation) {
+  auto make_entry = [](std::string_view uuid, std::string_view text) {
+    auto entry = mojom::ConversationTurn::New();
+    entry->uuid = std::string(uuid);
+    entry->character_type = mojom::CharacterType::HUMAN;
+    entry->action_type = mojom::ActionType::QUERY;
+    entry->text = std::string(text);
+    entry->created_time = base::Time::Now();
+    return entry;
+  };
+
+  // No parent conversation exists yet, so a stub is created to hold the
+  // entry, and it still counts as the parent for the next one.
+  EXPECT_TRUE(db_->ApplyRemoteEntry(
+      "orphan-conv", make_entry("entry-1", "Orphan entry"), {}, {}));
+  EXPECT_TRUE(db_->ApplyRemoteEntry(
+      "orphan-conv", make_entry("entry-2", "Second entry"), {}, {}));
+
+  // The stub isn't listed until its metadata record arrives.
+  EXPECT_TRUE(db_->GetAllConversations().empty());
+
+  auto data = db_->GetConversationData("orphan-conv");
+  ASSERT_TRUE(data);
+  ASSERT_EQ(data->entries.size(), 2u);
+  EXPECT_EQ(data->entries[0]->uuid, "entry-1");
+  EXPECT_EQ(data->entries[0]->text, "Orphan entry");
+  EXPECT_EQ(data->entries[1]->uuid, "entry-2");
+}
+
+TEST_F(AIChatDatabaseSyncTest, ApplyRemoteEntryReplacesExistingEntry) {
+  auto make_entry = [](const std::string& text) {
+    auto entry = mojom::ConversationTurn::New();
+    entry->uuid = "entry-1";
+    entry->character_type = mojom::CharacterType::HUMAN;
+    entry->action_type = mojom::ActionType::QUERY;
+    entry->text = text;
+    entry->created_time = base::Time::Now();
+    return entry;
+  };
+
+  EXPECT_TRUE(db_->ApplyRemoteEntry("conv", make_entry("Original"), {}, {}));
+  EXPECT_TRUE(db_->ApplyRemoteEntry("conv", make_entry("Replaced"), {}, {}));
+
+  // Same uuid is fully replaced, not duplicated.
+  auto data = db_->GetConversationData("conv");
+  ASSERT_TRUE(data);
+  ASSERT_EQ(data->entries.size(), 1u);
+  EXPECT_EQ(data->entries[0]->text, "Replaced");
+}
+
+TEST_F(AIChatDatabaseSyncTest, ApplyRemoteEntryReplacesChildRows) {
+  // The query entry carries uploaded files and the response entry carries one
+  // event of every kind that lands in its own table. Re-applying a trimmed
+  // revision of each must replace those child rows rather than accumulate
+  // them.
+  auto history =
+      CreateSampleChatHistory(1u, 0, /*num_uploaded_files_per_query=*/2u);
+  ASSERT_EQ(history.size(), 2u);
+  ASSERT_EQ(history[0]->uploaded_files->size(), 2u);
+  history[1]->events->push_back(CreateWebSourcesEvent());
+  history[1]->events->push_back(CreateInlineSearchEvent());
+  history[1]->events->push_back(CreateToolUseEvent());
+  ASSERT_EQ(history[1]->events->size(), 6u);
+
+  EXPECT_TRUE(db_->ApplyRemoteEntry("conv", history[0]->Clone(), {}, {}));
+  EXPECT_TRUE(db_->ApplyRemoteEntry("conv", history[1]->Clone(), {}, {}));
+  auto data = db_->GetConversationData("conv");
+  ASSERT_TRUE(data);
+  ExpectConversationHistoryEquals(FROM_HERE, data->entries, history);
+
+  history[0]->uploaded_files->pop_back();
+  history[1]->events->erase(history[1]->events->begin() + 1,
+                            history[1]->events->end());
+  EXPECT_TRUE(db_->ApplyRemoteEntry("conv", history[0]->Clone(), {}, {}));
+  EXPECT_TRUE(db_->ApplyRemoteEntry("conv", history[1]->Clone(), {}, {}));
+  auto trimmed_data = db_->GetConversationData("conv");
+  ASSERT_TRUE(trimmed_data);
+  ExpectConversationHistoryEquals(FROM_HERE, trimmed_data->entries, history);
+}
+
+TEST_F(AIChatDatabaseSyncTest, ApplyRemoteEntryPersistsEdits) {
+  // Sync does not carry edit revisions, but a caller that wants to keep the
+  // local ones can hand them back in |entry->edits| and ApplyRemoteEntry must
+  // write them out as edit rows in order.
+  const base::Time now = base::Time::Now();
+  auto make_revision = [](std::string_view uuid, std::string_view text,
+                          base::Time created_time) {
+    auto revision = mojom::ConversationTurn::New();
+    revision->uuid = std::string(uuid);
+    revision->character_type = mojom::CharacterType::HUMAN;
+    revision->action_type = mojom::ActionType::QUERY;
+    revision->text = std::string(text);
+    revision->created_time = created_time;
+    return revision;
+  };
+
+  auto entry = make_revision("entry-1", "Original", now);
+  entry->edits.emplace();
+  entry->edits->push_back(
+      make_revision("edit-1", "First revision", now + base::Minutes(1)));
+  entry->edits->push_back(
+      make_revision("edit-2", "Second revision", now + base::Minutes(2)));
+  auto expected = entry->Clone();
+
+  ASSERT_TRUE(db_->ApplyRemoteEntry("conv", std::move(entry), {}, {}));
+
+  auto data = db_->GetConversationData("conv");
+  ASSERT_TRUE(data);
+  ASSERT_EQ(data->entries.size(), 1u);
+  ExpectConversationEntryEquals(FROM_HERE, data->entries[0], expected);
+}
+
+TEST_F(AIChatDatabaseSyncTest, ApplyRemoteEntryReplacesEditChildRows) {
+  // An edit row owns its own event rows, keyed by the edit's uuid rather than
+  // the head's, so deleting the edit rows flat leaves them behind. The
+  // re-insert then collides on PRIMARY KEY(conversation_entry_uuid,
+  // event_order) and the stale event is read back instead.
+  const base::Time now = base::Time::Now();
+  auto make_entry = [&now](std::string_view edit_completion) {
+    auto make_response = [](std::string_view uuid, std::string_view completion,
+                            base::Time created_time) {
+      auto response = mojom::ConversationTurn::New();
+      response->uuid = std::string(uuid);
+      response->character_type = mojom::CharacterType::ASSISTANT;
+      response->action_type = mojom::ActionType::RESPONSE;
+      response->created_time = created_time;
+      response->events = std::vector<mojom::ConversationEntryEventPtr>();
+      response->events->push_back(
+          mojom::ConversationEntryEvent::NewCompletionEvent(
+              mojom::CompletionEvent::New(std::string(completion))));
+      return response;
+    };
+    auto entry = make_response("entry-1", "Head completion", now);
+    entry->edits.emplace();
+    entry->edits->push_back(
+        make_response("edit-1", edit_completion, now + base::Minutes(1)));
+    return entry;
+  };
+
+  ASSERT_TRUE(db_->ApplyRemoteEntry("conv", make_entry("Before"), {}, {}));
+  ASSERT_TRUE(db_->ApplyRemoteEntry("conv", make_entry("After"), {}, {}));
+
+  auto data = db_->GetConversationData("conv");
+  ASSERT_TRUE(data);
+  ASSERT_EQ(data->entries.size(), 1u);
+  ExpectConversationEntryEquals(FROM_HERE, data->entries[0],
+                                make_entry("After"));
+}
+
+TEST_F(AIChatDatabaseSyncTest, ApplyRemoteEntryKeepsExistingConversation) {
+  auto conversation = mojom::Conversation::New();
+  conversation->uuid = "conv";
+  conversation->title = "Remote title";
+  conversation->model_key = "model-x";
+  conversation->total_tokens = 100;
+  conversation->trimmed_tokens = 5;
+  ASSERT_TRUE(db_->ApplyRemoteConversationMetadata(std::move(conversation)));
+
+  auto entry = mojom::ConversationTurn::New();
+  entry->uuid = "entry-1";
+  entry->character_type = mojom::CharacterType::HUMAN;
+  entry->action_type = mojom::ActionType::QUERY;
+  entry->text = "Hello";
+  entry->created_time = base::Time::Now();
+  EXPECT_TRUE(db_->ApplyRemoteEntry("conv", std::move(entry), {}, {}));
+
+  // The stub insert must not overwrite metadata that already arrived.
+  auto conversations = db_->GetAllConversations();
+  ASSERT_EQ(conversations.size(), 1u);
+  EXPECT_EQ(conversations[0]->title, "Remote title");
+  ASSERT_TRUE(conversations[0]->model_key.has_value());
+  EXPECT_EQ(*conversations[0]->model_key, "model-x");
+  EXPECT_EQ(conversations[0]->total_tokens, 100u);
+  EXPECT_EQ(conversations[0]->trimmed_tokens, 5u);
+}
+
+TEST_F(AIChatDatabaseSyncTest, ApplyRemoteConversationMetadataFillsInStub) {
+  // Records can arrive in either order: an entry first leaves a hidden stub
+  // row that the metadata record then fills in and lists, without disturbing
+  // the entry.
+  auto entry = mojom::ConversationTurn::New();
+  entry->uuid = "entry-1";
+  entry->character_type = mojom::CharacterType::HUMAN;
+  entry->action_type = mojom::ActionType::QUERY;
+  entry->text = "Hello";
+  entry->created_time = base::Time::Now();
+  ASSERT_TRUE(db_->ApplyRemoteEntry("conv", std::move(entry), {}, {}));
+  ASSERT_TRUE(db_->GetAllConversations().empty());
+
+  auto conversation = mojom::Conversation::New();
+  conversation->uuid = "conv";
+  conversation->title = "Late title";
+  conversation->total_tokens = 42;
+  EXPECT_TRUE(db_->ApplyRemoteConversationMetadata(std::move(conversation)));
+
+  auto conversations = db_->GetAllConversations();
+  ASSERT_EQ(conversations.size(), 1u);
+  EXPECT_EQ(conversations[0]->title, "Late title");
+  EXPECT_EQ(conversations[0]->total_tokens, 42u);
+
+  auto data = db_->GetConversationData("conv");
+  ASSERT_TRUE(data);
+  ASSERT_EQ(data->entries.size(), 1u);
+  EXPECT_EQ(data->entries[0]->uuid, "entry-1");
+}
+
+TEST_F(AIChatDatabaseSyncTest, ApplyRemoteEntryPersistsAssociatedContent) {
+  auto entry = mojom::ConversationTurn::New();
+  entry->uuid = "entry-1";
+  entry->character_type = mojom::CharacterType::HUMAN;
+  entry->action_type = mojom::ActionType::QUERY;
+  entry->text = "With content";
+  entry->created_time = base::Time::Now();
+
+  std::vector<mojom::AssociatedContentPtr> associated_content;
+  auto content = mojom::AssociatedContent::New();
+  content->uuid = "ac-1";
+  content->content_type = mojom::ContentType::PageContent;
+  content->url = GURL("https://example.com");
+  content->content_used_percentage = 50;
+  content->conversation_turn_uuid = "entry-1";
+  associated_content.push_back(std::move(content));
+  std::vector<std::string> contents = {"page text"};
+
+  EXPECT_TRUE(db_->ApplyRemoteEntry("conv", std::move(entry),
+                                    std::move(associated_content),
+                                    std::move(contents)));
+
+  auto data = db_->GetConversationData("conv");
+  ASSERT_TRUE(data);
+  ASSERT_EQ(data->associated_content.size(), 1u);
+  EXPECT_EQ(data->associated_content[0]->content_uuid, "ac-1");
+  EXPECT_EQ(data->associated_content[0]->content, "page text");
+  EXPECT_EQ(data->associated_content[0]->conversation_turn_uuid, "entry-1");
+}
+
+TEST_F(AIChatDatabaseSyncTest, ApplyRemoteEntryKeepsWorkspaceContent) {
+  // Sync never carries Workspace content, so a remote entry can't include it.
+  // Replacing the entry must keep this device's Workspace rows while still
+  // replacing the synced content.
+  auto entry = mojom::ConversationTurn::New();
+  entry->uuid = "entry-1";
+  entry->character_type = mojom::CharacterType::HUMAN;
+  entry->action_type = mojom::ActionType::QUERY;
+  entry->text = "With content";
+  entry->created_time = base::Time::Now();
+
+  auto make_content = [](std::string_view uuid, mojom::ContentType type,
+                         std::string_view url) {
+    auto content = mojom::AssociatedContent::New();
+    content->uuid = std::string(uuid);
+    content->content_type = type;
+    content->title = "Title";
+    content->url = GURL(url);
+    content->content_used_percentage = 50;
+    content->conversation_turn_uuid = "entry-1";
+    return content;
+  };
+
+  auto conversation = mojom::Conversation::New();
+  conversation->uuid = "conv";
+  conversation->associated_content.push_back(make_content(
+      "workspace-ac", mojom::ContentType::Workspace, "https://workspace.test"));
+  conversation->associated_content.push_back(make_content(
+      "page-ac", mojom::ContentType::PageContent, "https://example.com"));
+  ASSERT_TRUE(db_->AddConversation(std::move(conversation),
+                                   {"workspace text", "page text"},
+                                   entry->Clone()));
+
+  std::vector<mojom::AssociatedContentPtr> remote_content;
+  remote_content.push_back(make_content(
+      "page-ac", mojom::ContentType::PageContent, "https://example.com"));
+  ASSERT_TRUE(db_->ApplyRemoteEntry("conv", entry->Clone(),
+                                    std::move(remote_content),
+                                    {"updated page text"}));
+
+  auto conversations = db_->GetAllConversations();
+  ASSERT_EQ(conversations.size(), 1u);
+  const auto& listed_content = conversations[0]->associated_content;
+  EXPECT_EQ(listed_content.size(), 2u);
+  auto workspace = std::ranges::find(listed_content, "workspace-ac",
+                                     &mojom::AssociatedContent::uuid);
+  ASSERT_NE(workspace, listed_content.end());
+  EXPECT_EQ((*workspace)->content_type, mojom::ContentType::Workspace);
+  EXPECT_EQ((*workspace)->title, "Title");
+  EXPECT_EQ((*workspace)->url, GURL("https://workspace.test"));
+  EXPECT_EQ((*workspace)->content_used_percentage, 50);
+  EXPECT_EQ((*workspace)->conversation_turn_uuid, "entry-1");
+
+  auto data = db_->GetConversationData("conv");
+  ASSERT_TRUE(data);
+  ASSERT_EQ(data->associated_content.size(), 2u);
+  EXPECT_EQ(data->associated_content[0]->content_uuid, "page-ac");
+  EXPECT_EQ(data->associated_content[0]->content, "updated page text");
+  EXPECT_EQ(data->associated_content[1]->content_uuid, "workspace-ac");
+  EXPECT_EQ(data->associated_content[1]->content, "workspace text");
+
+  // Deleting the entry locally still deletes its Workspace content.
+  ASSERT_TRUE(db_->DeleteConversationEntry("entry-1"));
+  data = db_->GetConversationData("conv");
+  ASSERT_TRUE(data);
+  EXPECT_TRUE(data->associated_content.empty());
+}
+
+TEST_F(AIChatDatabaseSyncTest, GetConversationUuidForEntry) {
+  auto make_entry = [](std::string_view uuid) {
+    auto entry = mojom::ConversationTurn::New();
+    entry->uuid = std::string(uuid);
+    entry->character_type = mojom::CharacterType::HUMAN;
+    entry->action_type = mojom::ActionType::QUERY;
+    entry->text = "Hello";
+    entry->created_time = base::Time::Now();
+    return entry;
+  };
+
+  auto conv_a = mojom::Conversation::New();
+  conv_a->uuid = "conv-a";
+  ASSERT_TRUE(
+      db_->AddConversation(std::move(conv_a), {}, make_entry("entry-a1")));
+  ASSERT_TRUE(db_->AddConversationEntry("conv-a", make_entry("entry-a2")));
+  auto conv_b = mojom::Conversation::New();
+  conv_b->uuid = "conv-b";
+  ASSERT_TRUE(
+      db_->AddConversation(std::move(conv_b), {}, make_entry("entry-b1")));
+
+  EXPECT_EQ(db_->GetConversationUuidForEntry("entry-a1"), "conv-a");
+  EXPECT_EQ(db_->GetConversationUuidForEntry("entry-a2"), "conv-a");
+  EXPECT_EQ(db_->GetConversationUuidForEntry("entry-b1"), "conv-b");
+  EXPECT_EQ(db_->GetConversationUuidForEntry("no-such-entry"), std::nullopt);
+}
+
 // Test the migration for each version upgrade
 class AIChatDatabaseMigrationTest : public testing::Test,
                                     public testing::WithParamInterface<int> {
@@ -1474,7 +2180,6 @@ class AIChatDatabaseMigrationTest : public testing::Test,
               meta_table.GetCompatibleVersionNumber());
     EXPECT_EQ(kCurrentDatabaseVersion, meta_table.GetVersionNumber());
     db.Close();
-    task_environment_.RunUntilIdle();
     ASSERT_TRUE(temp_directory_.Delete());
   }
 
@@ -1500,6 +2205,15 @@ class AIChatDatabaseMigrationTest : public testing::Test,
 
   // Returns the database version for the test.
   int version() const { return GetParam(); }
+
+  int CountRowsForEntry(std::string_view table, std::string_view entry_uuid) {
+    sql::Statement statement(db_->GetDB().GetUniqueStatement(absl::StrFormat(
+        "SELECT COUNT(*) FROM %s WHERE conversation_entry_uuid=?", table)));
+    CHECK(statement.is_valid());
+    statement.BindString(0, entry_uuid);
+    CHECK(statement.Step());
+    return statement.ColumnInt(0);
+  }
 
  protected:
   base::test::TaskEnvironment task_environment_{
@@ -1530,9 +2244,11 @@ TEST_P(AIChatDatabaseMigrationTest, MigrationToVCurrent) {
   {
     // Verify we have existing entries
     auto conversations = db_->GetAllConversations();
-    EXPECT_GT(conversations.size(), 0u);
-    EXPECT_GT(db_->GetConversationData(conversations[0]->uuid)->entries.size(),
-              0u);
+    ASSERT_GT(conversations.size(), 0u);
+    auto first_conversation_data =
+        db_->GetConversationData(conversations[0]->uuid);
+    ASSERT_TRUE(first_conversation_data);
+    EXPECT_GT(first_conversation_data->entries.size(), 0u);
     // ConversationEntry table changed, check it persists correctly
     auto now = base::Time::Now();
     const std::string uuid = "migrationtest";
@@ -1552,6 +2268,7 @@ TEST_P(AIChatDatabaseMigrationTest, MigrationToVCurrent) {
 
     // Test getting the conversation entries
     mojom::ConversationArchivePtr result = db_->GetConversationData(uuid);
+    ASSERT_TRUE(result);
     ExpectConversationHistoryEquals(FROM_HERE, result->entries, history);
 
     // Add another pair of entries
@@ -1561,6 +2278,7 @@ TEST_P(AIChatDatabaseMigrationTest, MigrationToVCurrent) {
 
     // Verify all entries are returned
     mojom::ConversationArchivePtr result_2 = db_->GetConversationData(uuid);
+    ASSERT_TRUE(result_2);
     for (auto& entry : next_history) {
       history.push_back(std::move(entry));
     }
@@ -1606,6 +2324,7 @@ TEST_P(AIChatDatabaseMigrationTest, MigrationToVCurrent) {
     // Verify the token values were properly stored after migration
     auto conversations = db_->GetAllConversations();
     auto* test_conversation = GetConversation(FROM_HERE, conversations, uuid);
+    ASSERT_TRUE(test_conversation);
     EXPECT_EQ(test_conversation->total_tokens, expected_total_tokens);
     EXPECT_EQ(test_conversation->trimmed_tokens, expected_trimmed_tokens);
   }
@@ -1640,6 +2359,7 @@ TEST_P(AIChatDatabaseMigrationTest, MigrationToVCurrent) {
     EXPECT_TRUE(
         db_->AddConversationEntry("migrationtest2", history[0]->Clone()));
     auto test_conversation = db_->GetConversationData("migrationtest2");
+    ASSERT_TRUE(test_conversation);
     ASSERT_EQ(test_conversation->entries.size(), 2u);
     ASSERT_TRUE(test_conversation->entries[1]->uploaded_files);
     ASSERT_TRUE(history[0]->uploaded_files);
@@ -1687,11 +2407,13 @@ TEST_P(AIChatDatabaseMigrationTest, MigrationToVCurrent) {
     // 1. Conversation-level model_key persistence
     auto conversations = db_->GetAllConversations();
     auto* conversation = GetConversation(FROM_HERE, conversations, uuid);
+    ASSERT_TRUE(conversation);
     EXPECT_EQ(conversation->model_key, conversation_model_key);
 
     // 2. Entry-level model_key persistence
     const std::string entry_model_key = kChatAutomaticModelKey;
     auto conversation_data = db_->GetConversationData(uuid);
+    ASSERT_TRUE(conversation_data);
     ASSERT_EQ(conversation_data->entries.size(), 2u);
     EXPECT_FALSE(conversation_data->entries[0]->model_key);
     EXPECT_EQ(conversation_data->entries[1]->model_key, entry_model_key);
@@ -1725,7 +2447,7 @@ TEST_P(AIChatDatabaseMigrationTest, MigrationToVCurrent) {
 
     auto data = db_->GetConversationData(uuid);
     ASSERT_TRUE(data);
-    EXPECT_EQ(data->associated_content.size(), 1u);
+    ASSERT_EQ(data->associated_content.size(), 1u);
     EXPECT_EQ(data->associated_content[0]->content, "Hello world!");
   }
 
@@ -1741,6 +2463,8 @@ TEST_P(AIChatDatabaseMigrationTest, MigrationToVCurrent) {
     auto conversation_data_1 =
         db_->GetConversationData("1ae484fe-ab33-4f42-8813-14080e4addc1");
     ASSERT_TRUE(conversation_data_1);
+    ASSERT_FALSE(conversation_data_1->associated_content.empty());
+    ASSERT_FALSE(conversation_data_1->entries.empty());
     EXPECT_EQ(
         conversation_data_1->associated_content[0]->conversation_turn_uuid,
         conversation_data_1->entries[0]->uuid.value());
@@ -1748,6 +2472,8 @@ TEST_P(AIChatDatabaseMigrationTest, MigrationToVCurrent) {
     auto conversation_data_2 =
         db_->GetConversationData("1ae484fe-ab33-4f42-8813-14080e4addc2");
     ASSERT_TRUE(conversation_data_2);
+    ASSERT_FALSE(conversation_data_2->associated_content.empty());
+    ASSERT_FALSE(conversation_data_2->entries.empty());
     EXPECT_EQ(
         conversation_data_2->associated_content[0]->conversation_turn_uuid,
         conversation_data_2->entries[0]->uuid.value());
@@ -1838,7 +2564,7 @@ TEST_P(AIChatDatabaseMigrationTest, Migration_Version7To8_SkillColumn) {
 
   auto conversation_data = db_->GetConversationData(uuid);
   ASSERT_TRUE(conversation_data);
-  EXPECT_EQ(conversation_data->entries.size(), 1u);
+  ASSERT_EQ(conversation_data->entries.size(), 1u);
 
   // After migration (which happens automatically when the test database
   // is initialized), verify that entries can still be retrieved correctly
@@ -1856,13 +2582,62 @@ TEST_P(AIChatDatabaseMigrationTest, Migration_Version7To8_SkillColumn) {
   // Verify the new entry was stored with skill data
   conversation_data = db_->GetConversationData(uuid);
   ASSERT_TRUE(conversation_data);
-  EXPECT_EQ(conversation_data->entries.size(), 2u);
+  ASSERT_EQ(conversation_data->entries.size(), 2u);
 
   // Check that the new entry has the skill data
   auto& latest_entry = conversation_data->entries[1];
   ASSERT_TRUE(latest_entry->skill);
   EXPECT_EQ(latest_entry->skill->shortcut, "summarize");
   EXPECT_EQ(latest_entry->skill->prompt, "Please summarize this content");
+}
+
+TEST_P(AIChatDatabaseMigrationTest, Migration_Version11To12_OrphanedChildRows) {
+  // Triggers the migration, which happens on first use.
+  ASSERT_GT(db_->GetAllConversations().size(), 0u);
+
+  // Only the v11 dump carries rows left behind by the old delete paths.
+  if (version() != 11) {
+    return;
+  }
+
+  for (const char* table : kEntryChildTables) {
+    EXPECT_EQ(CountRowsForEntry(table, "orphan-edit-uuid"), 0) << table;
+  }
+
+  // Rows that still have their conversation entry are left alone.
+  auto conversation_data =
+      db_->GetConversationData("1ae484fe-ab33-4f42-8813-14080e4addc1");
+  ASSERT_TRUE(conversation_data);
+  ASSERT_EQ(conversation_data->entries.size(), 2u);
+  ASSERT_TRUE(conversation_data->entries[0]->uploaded_files);
+  EXPECT_EQ(conversation_data->entries[0]->uploaded_files->size(), 2u);
+  ASSERT_TRUE(conversation_data->entries[1]->events);
+  EXPECT_EQ(conversation_data->entries[1]->events->size(), 1u);
+}
+
+TEST_P(AIChatDatabaseMigrationTest, Migration_Version12To13_SyncStubColumn) {
+  // Existing conversations aren't stubs, so they stay listed.
+  auto conversations = db_->GetAllConversations();
+  EXPECT_NE(
+      std::ranges::find(conversations, "1ae484fe-ab33-4f42-8813-14080e4addc1",
+                        &mojom::Conversation::uuid),
+      conversations.end());
+
+  // The migrated column holds the stub flag: hidden until metadata arrives.
+  auto entry = mojom::ConversationTurn::New();
+  entry->uuid = "stub-entry";
+  entry->character_type = mojom::CharacterType::HUMAN;
+  entry->action_type = mojom::ActionType::QUERY;
+  entry->text = "Hello";
+  entry->created_time = base::Time::Now();
+  ASSERT_TRUE(db_->ApplyRemoteEntry("stub-conv", std::move(entry), {}, {}));
+  EXPECT_EQ(db_->GetAllConversations().size(), conversations.size());
+
+  auto metadata = mojom::Conversation::New();
+  metadata->uuid = "stub-conv";
+  metadata->title = "Title";
+  ASSERT_TRUE(db_->ApplyRemoteConversationMetadata(std::move(metadata)));
+  EXPECT_EQ(db_->GetAllConversations().size(), conversations.size() + 1);
 }
 
 }  // namespace ai_chat

@@ -4,8 +4,8 @@
  * You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 import * as React from 'react'
-import Button from '@brave/leo/react/button'
-import Icon from '@brave/leo/react/icon'
+import Button from '@brave/nala/react/button'
+import Icon from '@brave/nala/react/icon'
 import { getLocale } from '$web-common/locale'
 import * as Mojom from '../../../common/mojom'
 import classnames from '$web-common/classnames'
@@ -42,6 +42,7 @@ export default function ContextActionsAssistant(
     conversationContext.parentUiFrame?.rateMessage(
       props.turnUuid,
       status === 'liked',
+      null,
     )
   }
 
@@ -70,6 +71,7 @@ export default function ContextActionsAssistant(
       conversationContext.conversationHandler?.regenerateAnswer(
         props.turnUuid,
         selectedModelKey,
+        null,
       )
     },
     [conversationContext, props.turnUuid],

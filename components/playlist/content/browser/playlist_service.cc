@@ -30,8 +30,10 @@
 #include "brave/components/playlist/content/browser/type_converter.h"
 #include "brave/components/playlist/core/common/features.h"
 #include "brave/components/playlist/core/common/pref_names.h"
+#include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
 #include "components/prefs/scoped_user_pref_update.h"
+#include "components/tabs/public/tab_interface.h"
 #include "components/user_prefs/user_prefs.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/web_contents.h"
@@ -100,6 +102,26 @@ PlaylistService::PlaylistService(content::BrowserContext* context,
 
 PlaylistService::~PlaylistService() = default;
 
+// static
+void PlaylistService::RegisterProfilePrefs(PrefRegistrySimple* registry) {
+  auto default_list = mojom::Playlist::New();
+  default_list->id = kDefaultPlaylistID;
+
+  base::DictValue playlists_value;
+  playlists_value.Set(kDefaultPlaylistID, ConvertPlaylistToValue(default_list));
+  registry->RegisterDictionaryPref(kPlaylistsPref, std::move(playlists_value));
+
+  auto order_list = base::ListValue();
+  order_list.Append(kDefaultPlaylistID);
+  registry->RegisterListPref(kPlaylistOrderPref, std::move(order_list));
+
+  registry->RegisterDictionaryPref(kPlaylistItemsPref);
+  registry->RegisterBooleanPref(kPlaylistEnabledPref, true);
+  registry->RegisterBooleanPref(kPlaylistCacheByDefault, true);
+  registry->RegisterStringPref(kPlaylistDefaultSaveTargetListID,
+                               kDefaultPlaylistID);
+}
+
 void PlaylistService::Shutdown() {
   observers_.Clear();
   background_web_contentses_.reset();
@@ -127,7 +149,8 @@ void PlaylistService::AddMediaFilesFromContentsToPlaylist(
   VLOG(2) << __func__
           << " download media from WebContents to playlist: " << playlist_id;
 
-  auto* tab_helper = PlaylistTabHelper::FromWebContents(contents);
+  auto* tab_helper = PlaylistTabHelper::From(
+      tabs::TabInterface::MaybeGetFromContents(contents));
   CHECK(tab_helper);
   const auto& found_items = tab_helper->found_items();
   if (found_items.empty()) {
@@ -500,6 +523,19 @@ void PlaylistService::SetUpForTesting() const {
   media_detector_component_manager_->SetUseLocalScript();
 }
 
+void PlaylistService::SetDownloadsPausedForTesting(bool paused) {
+  thumbnail_downloader_->SetPauseDownloadForTesting(paused);         // IN-TEST
+  media_file_download_manager_->SetPauseDownloadForTesting(paused);  // IN-TEST
+}
+
+bool PlaylistService::HasPendingThumbnailDownloadsForTesting() const {
+  return thumbnail_downloader_->has_download_requests();
+}
+
+bool PlaylistService::HasPendingMediaFileDownloadsForTesting() const {
+  return media_file_download_manager_->has_download_requests();
+}
+
 void PlaylistService::AddMediaFilesFromActiveTabToPlaylist(
     const std::string& playlist_id,
     bool can_cache,
@@ -523,7 +559,8 @@ void PlaylistService::FindMediaFilesFromActiveTab() {
     return;
   }
 
-  auto* tab_helper = PlaylistTabHelper::FromWebContents(web_contents);
+  auto* tab_helper = PlaylistTabHelper::From(
+      tabs::TabInterface::MaybeGetFromContents(web_contents));
   CHECK(tab_helper);
 
   const auto url = web_contents->GetLastCommittedURL();

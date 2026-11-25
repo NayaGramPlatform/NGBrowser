@@ -77,7 +77,7 @@ class BraveShortcutsProviderTest : public testing::Test {
             u"hello", GURL("https://example.com"),
             AutocompleteMatch::DocumentType::NONE, u"hello World", "0,0",
             u"hello world", "0,4", ui::PageTransition::PAGE_TRANSITION_TYPED,
-            AutocompleteMatch::Type::HISTORY_TITLE, u""),
+            AutocompleteMatch::Type::kHistoryTitle, u""),
         base::Time::Now(), 5);
     backend_->AddShortcut(shortcut);
 
@@ -90,7 +90,6 @@ class BraveShortcutsProviderTest : public testing::Test {
     provider_ = nullptr;
     history::BlockUntilHistoryProcessesPendingRequests(
         client_.GetHistoryService());
-    task_environment_.RunUntilIdle();
   }
 
   PrefService* prefs() { return client_.GetPrefs(); }

@@ -6,12 +6,13 @@
 #include "brave/browser/webcompat_reporter/webcompat_reporter_service_delegate.h"
 
 #include <optional>
+#include <utility>
 
 #include "base/check.h"
 #include "base/memory/scoped_refptr.h"
 #include "brave/common/brave_channel_info.h"
-#include "brave/components/brave_shields/content/browser/ad_block_service.h"
 #include "brave/components/brave_shields/core/browser/ad_block_component_service_manager.h"
+#include "brave/components/brave_shields/core/browser/ad_block_service.h"
 #include "brave/components/brave_shields/core/browser/brave_shields_locale_utils.h"
 #include "brave/components/brave_shields/core/browser/brave_shields_utils.h"
 #include "brave/components/brave_shields/core/browser/filter_list_catalog_entry.h"
@@ -28,13 +29,13 @@ WebcompatReporterServiceDelegateImpl::WebcompatReporterServiceDelegateImpl(
     const std::string& application_locale,
     component_updater::ComponentUpdateService* component_update_service,
     brave_shields::AdBlockService* adblock_service,
-    HostContentSettingsMap* host_content_settings_map,
+    scoped_refptr<HostContentSettingsMap> host_content_settings_map,
     scoped_refptr<content_settings::CookieSettings> content_settings)
     : WebcompatReporterServiceDelegateBase(component_update_service),
       local_state_(local_state),
       application_locale_(application_locale),
       adblock_service_(adblock_service),
-      host_content_settings_map_(host_content_settings_map),
+      host_content_settings_map_(std::move(host_content_settings_map)),
       cookie_settings_(content_settings) {}
 
 WebcompatReporterServiceDelegateImpl::~WebcompatReporterServiceDelegateImpl() =
@@ -79,7 +80,7 @@ WebcompatReporterServiceDelegateImpl::GetCookiePolicy(
   }
 
   return brave_shields::ControlTypeToString(brave_shields::GetCookieControlType(
-      host_content_settings_map_, cookie_settings_.get(),
+      host_content_settings_map_.get(), cookie_settings_.get(),
       GURL(current_url.value())));
 }
 
@@ -93,7 +94,7 @@ WebcompatReporterServiceDelegateImpl::GetScriptBlockingFlag(
   }
 
   return BoolToString(
-      brave_shields::GetNoScriptControlType(host_content_settings_map_,
+      brave_shields::GetNoScriptControlType(host_content_settings_map_.get(),
                                             GURL(current_url.value())) ==
       brave_shields::ControlType::BLOCK);
 }

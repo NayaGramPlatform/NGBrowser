@@ -1,0 +1,13 @@
+diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/IncognitoTabSwitcherPane.java b/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/IncognitoTabSwitcherPane.java
+index 6cc952d1c1da09cde065546a2896820df92ff3cc..3ff4068a1f952a7e15f91efd321271f0af48d318 100644
+--- a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/IncognitoTabSwitcherPane.java
++++ b/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/IncognitoTabSwitcherPane.java
+@@ -124,7 +124,7 @@ public class IncognitoTabSwitcherPane extends TabSwitcherPaneBase {
+     /** Not safe to use until initWithNative. */
+     private final Supplier<TabModel> mIncognitoTabModelSupplier;
+ 
+-    private final ResourceButtonData mReferenceButtonData;
++    protected ResourceButtonData mReferenceButtonData;
+     private final FullButtonData mEnabledNewTabButtonData;
+     private final FullButtonData mDisabledNewTabButtonData;
+ 

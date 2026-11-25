@@ -1,8 +1,61 @@
 diff --git a/ios/web/web_state/web_state_impl_realized_web_state.mm b/ios/web/web_state/web_state_impl_realized_web_state.mm
-index 6f691b27efe94d6f7215e8eac64ffbcd24fead06..fb5c84651dfe90982ae1084a55d2a47b15585aa6 100644
+index 02cb29f6b20753dbe13fd84ff8df2c0142fbe7c4..043631bd9d8b229eb0bb97f2fe411c9fe25a0c9b 100644
 --- a/ios/web/web_state/web_state_impl_realized_web_state.mm
 +++ b/ios/web/web_state/web_state_impl_realized_web_state.mm
-@@ -1116,7 +1116,7 @@ std::unique_ptr<WebUIIOS> WebStateImpl::RealizedWebState::CreateWebUIIOS(
+@@ -336,7 +336,7 @@ void WebStateImpl::RealizedWebState::OnNavigationFinished(
+ 
+   // Clear provisional WebUI if the navigation was cancelled/failed, or if it
+   // committed to a non-WebUI page.
+-  if (web_ui_ && (!context->HasCommitted() ||
++  if (HasWebUI() && (!context->HasCommitted() ||
+                   !web::GetWebClient()->IsAppSpecificURL(context->GetUrl()))) {
+     ClearWebUI();
+   }
+@@ -422,22 +422,22 @@ void WebStateImpl::RealizedWebState::OnFaviconUrlUpdated(
+ }
+ 
+ void WebStateImpl::RealizedWebState::CreateWebUI(const GURL& url) {
+-  if (HasWebUI()) {
+-    if (web_ui_->GetController()->GetHost() == url.GetHost()) {
+-      // Don't recreate webUI for the same host.
+-      return;
+-    }
+-    ClearWebUI();
++  const std::string_view host = url.host();
++  if (web_uis_.contains(host)) {
++    return;
++  }
++  std::unique_ptr<WebUIIOS> web_ui = CreateWebUIIOS(url);
++  if (web_ui) {
++    web_uis_.insert({std::string(host), std::move(web_ui)});
+   }
+-  web_ui_ = CreateWebUIIOS(url);
+ }
+ 
+ void WebStateImpl::RealizedWebState::ClearWebUI() {
+-  web_ui_.reset();
++  web_uis_.clear();
+ }
+ 
+ bool WebStateImpl::RealizedWebState::HasWebUI() const {
+-  return !!web_ui_;
++  return !web_uis_.empty();
+ }
+ 
+ void WebStateImpl::RealizedWebState::HandleWebUIMessage(
+@@ -447,7 +447,10 @@ void WebStateImpl::RealizedWebState::HandleWebUIMessage(
+   if (!HasWebUI()) {
+     return;
+   }
+-  web_ui_->ProcessWebUIIOSMessage(source_url, message, args);
++  auto web_ui = web_uis_.find(source_url.host());
++  if (web_ui != web_uis_.end()) {
++    web_ui->second->ProcessWebUIIOSMessage(source_url, message, args);
++  }
+ }
+ 
+ void WebStateImpl::RealizedWebState::SetContentsMimeType(
+@@ -1138,7 +1141,7 @@ std::unique_ptr<WebUIIOS> WebStateImpl::RealizedWebState::CreateWebUIIOS(
    if (!factory) {
      return nullptr;
    }

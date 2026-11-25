@@ -1,0 +1,12 @@
+diff --git a/chrome/browser/policy/BUILD.gn b/chrome/browser/policy/BUILD.gn
+index 2034c09078df14d90c9e9ce705da1d0205a07bdf..35329233b926f711d6387f1b69781de00eb13bd5 100644
+--- a/chrome/browser/policy/BUILD.gn
++++ b/chrome/browser/policy/BUILD.gn
+@@ -1349,6 +1349,7 @@ source_set("impl") {
+     "//components/variations/service",
+     "//services/device/public/cpp:device_features",
+   ]
++  deps += [ "//brave/browser/policy:brave_simple_policy_map" ]
+ 
+   if (enable_extensions_core) {
+     sources += [

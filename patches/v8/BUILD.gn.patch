@@ -1,16 +1,17 @@
 diff --git a/BUILD.gn b/BUILD.gn
-index c6132807ff6c488543b4df1f3ba8793d9dea98d5..df45c0f459b6c9582280f6b0b8e35c7da0e8e28d 100644
+index 091e894a4742a1a69c4eb3ceaff72524d6041545..07c15f3063a6705140eaaeff29eb12bca85fcf45 100644
 --- a/BUILD.gn
 +++ b/BUILD.gn
-@@ -4,6 +4,7 @@
+@@ -4,6 +4,8 @@
  
  # LINT.IfChange
  
++import("//tools/v8_context_snapshot/v8_context_snapshot.gni")
 +import("//brave/v8/sources.gni")
  import("//build/config/android/config.gni")
  import("//build/config/arm.gni")
  import("//build/config/c++/c++.gni")
-@@ -963,6 +964,9 @@ config("internal_config_base") {
+@@ -1009,6 +1011,9 @@ config("internal_config_base") {
      "$target_gen_dir",
      "$target_gen_dir/include",
    ]
@@ -20,15 +21,15 @@ index c6132807ff6c488543b4df1f3ba8793d9dea98d5..df45c0f459b6c9582280f6b0b8e35c7d
  }
  
  config("internal_config") {
-@@ -2503,6 +2507,7 @@ if (v8_use_metagen_instance_types) {
-     # configuration an explicit input. In particular, changing a feature define
-     # must re-run the driver even though the action command is unchanged.
+@@ -2582,6 +2587,7 @@ if (v8_use_metagen) {
+     # define must re-run the driver even though the action command is
+     # unchanged.
      deps = [ ":v8_dump_build_config" ]
 +    deps += brave_v8_headers_public_deps
  
      if (v8_generate_external_defines_header) {
        # v8config.h includes the generated v8-gn.h in this configuration.
-@@ -3847,6 +3852,7 @@ v8_header_set("v8_headers") {
+@@ -4090,6 +4096,7 @@ v8_header_set("v8_headers") {
      "include/v8-weak-callback-info.h",
      "include/v8.h",
    ]
@@ -36,7 +37,7 @@ index c6132807ff6c488543b4df1f3ba8793d9dea98d5..df45c0f459b6c9582280f6b0b8e35c7d
  
    sources += [
      # The following headers cannot be platform-specific. The include validation
-@@ -3857,6 +3863,7 @@ v8_header_set("v8_headers") {
+@@ -4100,6 +4107,7 @@ v8_header_set("v8_headers") {
    ]
  
    public_deps = [ ":v8_config_headers" ]
@@ -44,3 +45,23 @@ index c6132807ff6c488543b4df1f3ba8793d9dea98d5..df45c0f459b6c9582280f6b0b8e35c7d
  
    deps = [
      ":cppgc_headers",
+@@ -8985,6 +8993,9 @@ if (is_component_build) {
+       ":v8_libplatform",
+       "src/inspector:inspector_headers",
+     ]
++    if (!use_v8_context_snapshot || include_both_v8_snapshots) {
++      public_deps += [ ":v8_snapshot" ]
++    }
+ 
+     configs = [ ":internal_config" ]
+     v8_add_configs += [ "//build/config/compiler:thinlto_optimize_max" ]
+@@ -9066,6 +9077,9 @@ if (is_component_build) {
+       ":v8_libplatform",
+       "src/inspector:inspector_headers",
+     ]
++    if (!use_v8_context_snapshot || include_both_v8_snapshots) {
++      public_deps += [ ":v8_snapshot" ]
++    }
+ 
+     public_configs = [ ":external_config" ]
+   }

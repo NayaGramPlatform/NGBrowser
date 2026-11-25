@@ -18,17 +18,63 @@ source_set("sync") {
 }
 
 if (!is_ios) {
+  source_set("alerts") {
+    sources = [
+      "brave_sync_alerts_service.cc",
+      "brave_sync_alerts_service.h",
+      "brave_sync_alerts_service_factory.cc",
+      "brave_sync_alerts_service_factory.h",
+    ]
+
+    public_deps = [
+      "//components/keyed_service/content",
+      "//components/keyed_service/core",
+      "//components/sync/service",
+    ]
+
+    deps = [
+      "//base",
+      "//brave/components/brave_sync:prefs",
+      "//chrome/browser/profiles",
+      "//chrome/browser/profiles:profile",
+      "//chrome/browser/sync",
+      "//chrome/browser/ui/browser_window",
+      "//components/infobars/content",
+      "//components/pref_registry",
+    ]
+
+    if (is_android) {
+      deps += [ "//brave/build/android:jni_headers" ]
+    } else {
+      deps += [
+        "//brave/browser/infobars",
+        "//chrome/browser/ui/tabs:tab_strip",
+      ]
+    }
+  }
+
   source_set("browser_tests") {
     testonly = true
-    sources = [ "network_time_helper_browsertest.cc" ]
+    sources = [
+      "brave_sync_smoke_browsertest.cc",
+      "network_time_helper_browsertest.cc",
+    ]
 
     deps = [
       "//base",
       "//base/test:test_support",
       "//brave/components/brave_sync:network_time_helper",
       "//brave/components/brave_sync:prefs",
+      "//brave/components/brave_sync/test:test_support",
       "//chrome/browser",
+      "//chrome/browser/sync",
       "//chrome/test:test_support",
+      "//chrome/test/base:chrome_test_utils",
+      "//components/sync:test_support",
+      "//components/sync/base",
+      "//components/sync/protocol",
+      "//components/sync/service",
+      "//net:test_support",
     ]
 
     defines = [ "HAS_OUT_OF_PROC_TEST_RUNNER" ]

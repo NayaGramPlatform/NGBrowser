@@ -11,8 +11,10 @@
 #include "base/functional/callback.h"
 #include "base/functional/callback_helpers.h"
 #include "base/test/mock_callback.h"
+#include "brave/browser/ui/views/brave_layout_provider.h"
 #include "brave/common/pref_names.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/browser_window/test/mock_browser_window_interface.h"
 #include "chrome/browser/ui/side_panel/side_panel_entry.h"
 #include "chrome/browser/ui/side_panel/side_panel_entry_key.h"
@@ -25,6 +27,7 @@
 #include "ui/views/layout/layout_provider.h"
 #include "ui/views/view.h"
 
+using ::testing::Const;
 using ::testing::NiceMock;
 using ::testing::Return;
 
@@ -38,6 +41,10 @@ class BraveSidePanelHeaderControllerTest : public ChromeViewsTestBase {
         std::make_unique<NiceMock<MockBrowserWindowInterface>>();
     ON_CALL(*mock_browser_window_, GetProfile())
         .WillByDefault(Return(profile_.get()));
+    ON_CALL(Const(*mock_browser_window_), GetProfile())
+        .WillByDefault(Return(profile_.get()));
+    ON_CALL(Const(*mock_browser_window_), GetType())
+        .WillByDefault(Return(BrowserWindowInterface::Type::TYPE_NORMAL));
 
     entry_ = std::make_unique<SidePanelEntry>(
         SidePanelEntryKey(SidePanelEntry::Id::kReadingList),
@@ -76,7 +83,7 @@ TEST_F(BraveSidePanelHeaderControllerTest,
        GetTopRadiusMatchesLayoutMetricWhenPrefEnabled) {
   prefs()->SetBoolean(kWebViewRoundedCorners, true);
   const int expected = views::LayoutProvider::Get()->GetCornerRadiusMetric(
-      views::ShapeContextTokensOverride::kRoundedCornersBorderRadius);
+      ExtendedShapeContextTokens::kRoundedCornersBorderRadius);
   EXPECT_EQ(expected, controller_->GetTopRadius());
 }
 

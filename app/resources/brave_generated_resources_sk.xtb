@@ -3,18 +3,14 @@
 <translationbundle lang="sk">
 <translation id="1751249301761991853">Osobný</translation>
 <translation id="3333887201479867589">Odmeny Brave</translation>
-<translation id="7561196759112975576">Vždy</translation>
-<translation id="7961015016161918242">Nikdy</translation>
 <translation id="8507663778530179003">Tlačidlo Zobraziť všetky záložky</translation>
 <translation id="9018648632047670921">Tlačidlo zobraziť všetky záložky</translation>
 <translation id="7630214457764713113">Kopírovať čisté prepojenie</translation>
 <translation id="7973394300052703468">Nové &amp; Súkromné okno</translation>
 <translation id="4615489450165434530">Nahlásiť nefunkčnú stránku</translation>
 <translation id="8097438084542431276">Kopírovať čisté prepojenie</translation>
-<translation id="4678672101289648246">Len na stránke s novou kartou</translation>
 <translation id="6516243500644829484">Nové &amp;súkromné okno</translation>
 <translation id="1209739344687072997">Nahlásiť nefunkčnú stránku</translation>
-<translation id="8294286161128352783">Len na stránke s novou kartou</translation>
 <translation id="6406506848690869874">Synchronizovať</translation>
 <translation id="1544192797660353713">Peňaženka</translation>
 <translation id="2361906291514218784">Leo AI</translation>
@@ -54,6 +50,7 @@
 <translation id="4931114810905682683"><ph name="LEARN_MORE_ABOUT_WIDEVINE"/>.
 Alebo môžete zmeny vykonať neskôr na <ph name="SETTINGS_EXTENIONS_LINK"/>.</translation>
 <translation id="6229752134959014186">Ďalšie informácie o Widevine</translation>
+<translation id="3318169548229684688">stiahnuť model rozpoznávania reči (<ph name="DOWNLOAD_SIZE"/>) na spracovanie reči v tomto zariadení</translation>
 <translation id="6061083111980694767"><ph name="SITE_NAME"/> vás žiada o</translation>
 <translation id="3218385319396786393">Funkcia autoplay bola na tejto stránke zakázaná</translation>
 <translation id="4988333904713528597">Vždy povoliť automatické prehrávanie na <ph name="HOST"/></translation>
@@ -121,6 +118,8 @@ Alebo môžete zmeny vykonať neskôr na <ph name="SETTINGS_EXTENIONS_LINK"/>.</
 <translation id="2162109630536601963">Ak toto rozšírenie vyžaduje sieťové požiadavky, nepoužije Tor ani súkromný režim.</translation>
 <translation id="2725327089319971976">Ak chcete toto rozšírenie deaktivovať v súkromnom režime a v režime Tor, zrušte výber tejto možnosti.</translation>
 <translation id="438106944087726695">Hosťované spoločnosťou Brave</translation>
+<translation id="2265651566599167057">Označené ako malvér službou Socket.</translation>
+<translation id="2607395470596637070">Zistite viac o tom, ako vás Socket v prehliadači Brave chráni</translation>
 <translation id="3371343170427636147">Aplikácie Brave Nightly prehliadača</translation>
 <translation id="4097979995947147464">Beta aplikácie Brave prehliadača</translation>
 <translation id="8303432794159193481">Dev aplikácie Brave prehliadača</translation>
@@ -195,7 +194,9 @@ Alebo môžete zmeny vykonať neskôr na <ph name="SETTINGS_EXTENIONS_LINK"/>.</
 <translation id="5977931179408079967">Pozícia</translation>
 <translation id="3790384768741064842">Presunúť doprava</translation>
 <translation id="7444424316576061724">Presunúť doľava</translation>
+<translation id="7561196759112975576">Vždy</translation>
 <translation id="7060352228894039151">Pri prejdení myšou</translation>
+<translation id="7961015016161918242">Nikdy</translation>
 <translation id="8981254605840444865">Zobraziť nastavenia</translation>
 <translation id="59174027418879706">Povolené</translation>
 <translation id="4176463684765177261">Deaktivované</translation>
@@ -221,6 +222,7 @@ Alebo môžete zmeny vykonať neskôr na <ph name="SETTINGS_EXTENIONS_LINK"/>.</
 <translation id="4515057635283480525">Internetový archív ukladá minulé verzie mnohých webových stránok. Chcete túto stránku vyhľadať v archíve?</translation>
 <translation id="8252977752585110703">Ľutujeme, skontrolovali sme Internetový archív a nemá archivovanú verziu tejto stránky.</translation>
 <translation id="8748778103033196270">Vyhľadať v archíve</translation>
+<translation id="7369915833843501413">Vyhľadávanie v archíve</translation>
 <translation id="191143826155037518">Brave je vám k dispozícii na <ph name="BEGIN_LINK_MPL"/>Mozilla Public License 2.0<ph name="END_LINK_MPL"/> (MPL) a zahŕňa <ph name="BEGIN_LINK_OSS"/>open source software<ph name="END_LINK_OSS"/> na základe rôznych iných licencií.
         Môžete si prečítať <ph name="BEGIN_LINK_BUILD_INSTRUCTIONS"/>pokyny na stiahnutie a buildovanie pre sebaf<ph name="END_LINK_BUILD_INSTRUCTIONS"/> špecifický <ph name="BEGIN_LINK_SOURCE_CODE"/>zdrojový kód použitý na vytvorenie tejto kópie<ph name="END_LINK_SOURCE_CODE"/>.</translation>
 <translation id="4474155171896946103">Všetky karty uložiť ako záložky...</translation>
@@ -371,7 +373,7 @@ Alebo môžete zmeny vykonať neskôr na <ph name="SETTINGS_EXTENIONS_LINK"/>.</
 <translation id="7985042437720138349">Táto funkcia odosiela údaje o vašich otvorených kartách Leovi, AI asistentovi v prehliadači Brave.</translation>
 <translation id="6165508094623778733">Dozvedieť sa viac</translation>
 <translation id="7557539689487606886">Prejsť na Premium</translation>
-<translation id="1035309871698658326">Po otvorení automaticky odošle názvy a pôvod všetkých nesúkromných kariet Leovi, aby ich mohol klasifikovať.</translation>
+<translation id="7103144720752576727">Po otvorení sa automaticky odošlú názvy a origin všetkých neprivátnych kariet do Leo na ich klasifikáciu. Ak zapnete aj odosielanie obsahu stránky, odošlú sa aj krátke úryvky textu z každej karty.</translation>
 <translation id="3435896845095436175">Aktivovať</translation>
 <translation id="9031526219709160683">Brave vám môže pomôcť optimalizovať nastavenia ochrany osobných údajov tejto stránky. Chcete si prejsť návrhy Brave?</translation>
 <translation id="5739953050957336013">Návrhy vyhľadávania</translation>
@@ -386,8 +388,6 @@ Alebo môžete zmeny vykonať neskôr na <ph name="SETTINGS_EXTENIONS_LINK"/>.</
 <translation id="8570228839666486945">AI na zariadení</translation>
 <translation id="7447041379556102185">Rozpoznávanie reči v zariadení</translation>
 <translation id="3456536577668402695">Vaše vyhľadávania a obsah stránok sú spracovávané v tomto zariadení. Nič sa neodosiela do Brave ani nie je viditeľné pre ľudských kontrolórov.</translation>
-<translation id="4751537843966994505">Sémantické vyhľadávanie v histórii</translation>
-<translation id="6175973371938222040">Indexuje stránky, ktoré navštívite, lokálne, takže môžete prehľadávať svoju históriu podľa významu. Všetko spracovanie zostáva v tomto zariadení.</translation>
 <translation id="9156965752763025780">Zmeny sa prejavia pri nasledujúcom reštartovaní prehliadača Brave.</translation>
 <translation id="7179921470347911571">Spustiť ešte raz</translation>
 <translation id="1426410128494586442">Áno</translation>
@@ -425,6 +425,7 @@ Alebo môžete zmeny vykonať neskôr na <ph name="SETTINGS_EXTENIONS_LINK"/>.</
 <translation id="4328541188421002379">Dajte kontajneru názov, napríklad Práca alebo Osobné</translation>
 <translation id="4976989127264491396">Chyba: <ph name="ERROR_MESSAGE"/></translation>
 <translation id="5436069931267876389">Kontajner sa nenašiel</translation>
+<translation id="5831840958001766835">Zmeniť poradie položky. Na presun použite klávesy so šípkami.</translation>
 <translation id="6055154402239241620">Kontrola prevádzky</translation>
 <translation id="8134521925475508805">Nakonfigurujte konkrétne lokality tak, aby sa automaticky otvárali v konkrétnom kontexte, čím oddelíte svoje relácie prehliadania. <ph name="BEGIN_LINK"/>Ďalšie informácie<ph name="END_LINK"/></translation>
 <translation id="6944848312867106540">Povoliť kontrolu prevádzky</translation>
@@ -477,10 +478,6 @@ Alebo môžete zmeny vykonať neskôr na <ph name="SETTINGS_EXTENIONS_LINK"/>.</
 <translation id="7310387888625228830">Asistent AI Leo</translation>
 <translation id="5222974844674487962">Zobraziť tlačidlo Brave News</translation>
 <translation id="2085436423511121572">Zobraziť tlačidlo Leo AI</translation>
-<translation id="6156323911414505561">Zobrazovať panel so záložkami</translation>
-<translation id="4054323497808446566">Panel so záložkami je viditeľný na všetkých stránkach</translation>
-<translation id="8693858092251192712">Panel so záložkami je skrytý na všetkých stránkach okrem stránky s novou kartou</translation>
-<translation id="7158817046543187970">Panel so záložkami je skrytý na všetkých stránkach</translation>
 <translation id="3416468988018290825">Vždy zobrazovať kompletné adresy URL</translation>
 <translation id="5529693968082667490">Tlačidlo zobrazenia karty vyhľadávania</translation>
 <translation id="1013121820689882118">Speedreader</translation>
@@ -612,6 +609,10 @@ Alebo môžete zmeny vykonať neskôr na <ph name="SETTINGS_EXTENIONS_LINK"/>.</
 <translation id="5825943197137337319">Iba štandardné verejné rozhranie</translation>
 <translation id="1689062823386843231">Deaktivovať nezastupované UDP</translation>
 <translation id="3540231253392253941">Pre správy s upozorneniami používajte služby Google</translation>
+<translation id="2224032129673914306">Sémantické vyhľadávanie v histórii</translation>
+<translation id="6045998903985162478">Indexujte stránky, ktoré navštívite, aby ste ich ľahko našli v histórii, otvorených kartách a nástroji Leo.</translation>
+<translation id="3962946446120925966">Rozpoznávanie reči v zariadení</translation>
+<translation id="6408242130028978631">Stiahnite si model rozpoznávania reči (<ph name="DOWNLOAD_SIZE"/>), aby weby mohli spracovávať reč v tomto zariadení. Ak túto možnosť vypnete, model sa odstráni.</translation>
 <translation id="5813105074916486721">Uchovávanie lokálnej histórie</translation>
 <translation id="5671611745062206644">Ako dlho Brave uchováva vašu históriu prehliadania lokálne</translation>
 <translation id="7184510058087008090">1 deň</translation>
@@ -727,7 +728,7 @@ Alebo môžete zmeny vykonať neskôr na <ph name="SETTINGS_EXTENIONS_LINK"/>.</
 <translation id="4432071071853308688">Tento kód je prázdny</translation>
 <translation id="955848693465029904">Chyba nastavenia internej synchronizácie</translation>
 <translation id="7456398316301207582">Interná chyba vymazania účtu</translation>
-<translation id="859506441384380749">Tento kód bol vygenerovaný zastaranou verziou Brave, aktualizujte najskôr svoje zariadenie</translation>
+<translation id="4002014583969312635">Zdá sa, že kód bol vytvorený na zariadení so starou verziou prehliadača Brave. Aktualizujte prehliadač Brave na najnovšiu verziu na svojom zariadení a následne vytvorte nový synchronizačný kód.</translation>
 <translation id="3132642509209154999">Platnosť kódu vypršala. Vygenerujte na svojom zariadení nový kód a skúste to znova.</translation>
 <translation id="2859229680945501779">Tento kód je neplatný. Skontrolujte, či je vo vašom zariadení správne nastavený čas a časové pásmo.</translation>
 <translation id="2339730291919608488">Ukončiť synchronizačný reťazec</translation>
@@ -875,6 +876,7 @@ Alebo môžete zmeny vykonať neskôr na <ph name="SETTINGS_EXTENIONS_LINK"/>.</
 <translation id="2618193846561624884">Chcete aktualizovať existujúcu sieť?</translation>
 <translation id="1643029991199044105">Prechádzať cez naposledy použité karty s Ctrl-Tab</translation>
 <translation id="2775956301559569472">Zobraziť výzvu Wayback Machine na stránkach  404</translation>
+<translation id="8485716275262929774">Automaticky načítavať uložené verzie z nástroja Wayback Machine na stránkach 404</translation>
 <translation id="3095201688102519917">Upozorniť ma pred zatvorením okna s viacerými kartami</translation>
 <translation id="7120553802660696133">Pri zatváraní poslednej karty zatvoriť okno</translation>
 <translation id="3394171693948989253">Zobraziť pripomienku na celú obrazovku. Na ukončenie stlačte Esc</translation>
@@ -884,6 +886,8 @@ Alebo môžete zmeny vykonať neskôr na <ph name="SETTINGS_EXTENIONS_LINK"/>.</
 <translation id="1529674267267221673">Leo sa zobrazí v kontextovej ponuke po kliknutí pravým tlačidlom myši na webovú stránku. Tým sa kontext z aktuálnej webovej stránky odošle do Lea.</translation>
 <translation id="5226020406479918122">Režim Tab Focus</translation>
 <translation id="3705539672403311123">Umožní organizáciu kariet na stránke s vyhľadávaním kariet. Po otvorení automaticky odošle názvy a pôvod všetkých nesúkromných kariet Leovi, aby ich mohol klasifikovať. <ph name="BEGIN_LINK"/>Zistiť viac<ph name="END_LINK"/></translation>
+<translation id="2002238795517052616">Odoslať obsah stránky pre zameranie karty</translation>
+<translation id="2276823422122514441">Odošle aj krátke úryvky textu z každej karty, takže karty budú zoskupené podľa toho, o čom stránka je, namiesto podľa jej názvu. Úryvky sa odošlú nástroju Leo alebo vášmu vlastnému modelu, ak ste si ho vybrali pre zameranie karty. Vyžaduje to <ph name="BEGIN_LINK"/><ph name="SEMANTIC_HISTORY_SEARCH"/><ph name="END_LINK"/>, ktoré vytvára úryvky vo vašom zariadení.</translation>
 <translation id="9049433973274198706">Predvolený model pre tab focus</translation>
 <translation id="2161546758719933059">Model použitý na organizovanie vašich kariet v režime sústredenia na kartu. <ph name="BEGIN_LINK"/>Ďalšie informácie<ph name="END_LINK"/></translation>
 <translation id="8172263161008556851">Zobraziť navrhované podnety v konverzácii</translation>
@@ -968,9 +972,6 @@ Leo AI. Túto akciu nie je možné vrátiť späť.</translation>
 <translation id="1838374766361614909">Vymazať vyhľadávanie</translation>
 <translation id="5126255551970171328">Vyhľadať pamäť</translation>
 <translation id="7402116145895962069">Synchronizovať svoje miestne modely Ollama</translation>
-<translation id="5985516785067818307">Účasť v prieskumoch</translation>
-<translation id="8347743943525229984">Povoliť prieskumy od Brave</translation>
-<translation id="3204080538332044581">Umožňuje spoločnosti Brave zobrazovať odkazy na súkromné prieskumy na stránke novej karty. Prieskumy nám pomáhajú vytvárať lepšie funkcie a merať účinnosť reklamných kampaní v prehliadači. <ph name="BEGIN_LINK"/>Viac informácií<ph name="END_LINK"/></translation>
 <translation id="349846214503465941">Zapnúť zoznam skladieb</translation>
 <translation id="7903608716704052878">Automaticky pridávať súbory na prezeranie v režime offline</translation>
 <translation id="384666453982355633">Táto možnosť automaticky ukladá mediálne súbory do vyrovnávacej pamäte, aby ste ich mohli prehrávať bez pripojenia na internet</translation>

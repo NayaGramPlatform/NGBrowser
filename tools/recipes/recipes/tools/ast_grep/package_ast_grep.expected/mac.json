@@ -88,17 +88,67 @@
   {
     "cmd": [
       "git",
-      "cache",
-      "exists",
-      "--quiet",
-      "--cache-dir",
-      "/b/cache",
-      "https://chromium.googlesource.com/chromium/src.git"
+      "config",
+      "gc.auto",
+      "0"
     ],
+    "cwd": "/b/cache/chromium.googlesource.com-chromium-src",
     "env": {
       "CHROME_HEADLESS": "1"
     },
-    "name": "git cache exists"
+    "name": "git cache populate disable (after): gc.auto=0"
+  },
+  {
+    "cmd": [
+      "git",
+      "config",
+      "gc.autodetach",
+      "0"
+    ],
+    "cwd": "/b/cache/chromium.googlesource.com-chromium-src",
+    "env": {
+      "CHROME_HEADLESS": "1"
+    },
+    "name": "git cache populate disable (after): gc.autodetach=0"
+  },
+  {
+    "cmd": [
+      "git",
+      "config",
+      "gc.autopacklimit",
+      "0"
+    ],
+    "cwd": "/b/cache/chromium.googlesource.com-chromium-src",
+    "env": {
+      "CHROME_HEADLESS": "1"
+    },
+    "name": "git cache populate disable (after): gc.autopacklimit=0"
+  },
+  {
+    "cmd": [
+      "git",
+      "config",
+      "maintenance.gc.enabled",
+      "false"
+    ],
+    "cwd": "/b/cache/chromium.googlesource.com-chromium-src",
+    "env": {
+      "CHROME_HEADLESS": "1"
+    },
+    "name": "git cache populate disable (after): maintenance.gc.enabled=false"
+  },
+  {
+    "cmd": [
+      "git",
+      "config",
+      "maintenance.auto",
+      "false"
+    ],
+    "cwd": "/b/cache/chromium.googlesource.com-chromium-src",
+    "env": {
+      "CHROME_HEADLESS": "1"
+    },
+    "name": "git cache populate disable (after): maintenance.auto=false"
   },
   {
     "cmd": [
@@ -170,6 +220,19 @@
   {
     "cmd": [
       "git",
+      "config",
+      "maintenance.auto",
+      "false"
+    ],
+    "cwd": "[WORKSPACE]/b/src",
+    "env": {
+      "CHROME_HEADLESS": "1"
+    },
+    "name": "disable auto-gc: maintenance.auto=false"
+  },
+  {
+    "cmd": [
+      "git",
       "checkout",
       "--force",
       "refs/tags/151.0.7917.1",
@@ -227,23 +290,21 @@
   {
     "cmd": [
       "git",
-      "-C",
-      "[WORKSPACE]/b/src/brave",
       "sparse-checkout",
       "list"
     ],
+    "cwd": "[WORKSPACE]/b/src/brave",
     "name": "sparse-checkout list"
   },
   {
     "cmd": [
       "git",
-      "-C",
-      "[WORKSPACE]/b/src/brave",
       "sparse-checkout",
       "add",
       "third_party/ast-grep",
-      "tools/cr/toolchains"
+      "tools/cr"
     ],
+    "cwd": "[WORKSPACE]/b/src/brave",
     "name": "sparse-checkout add"
   },
   {
@@ -275,22 +336,20 @@
   {
     "cmd": [
       "git",
-      "-C",
-      "[WORKSPACE]/b/src/brave",
       "sparse-checkout",
       "list"
     ],
+    "cwd": "[WORKSPACE]/b/src/brave",
     "name": "sparse-checkout list (2)"
   },
   {
     "cmd": [
       "git",
-      "-C",
-      "[WORKSPACE]/b/src/brave",
       "sparse-checkout",
       "add",
-      "tools/cr/toolchains"
+      "tools/cr"
     ],
+    "cwd": "[WORKSPACE]/b/src/brave",
     "name": "sparse-checkout add (2)"
   },
   {

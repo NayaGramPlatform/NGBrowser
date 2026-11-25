@@ -7,9 +7,9 @@ import * as React from 'react'
 import styled from 'styled-components'
 
 import * as Styles from './style'
-import Icon from '@brave/leo/react/icon'
-import Tooltip from '@brave/leo/react/tooltip'
-import { color, font } from '@brave/leo/tokens/css/variables'
+import Icon from '@brave/nala/react/icon'
+import Tooltip from '@brave/nala/react/tooltip'
+import { color, font } from '@brave/nala/tokens/css/variables'
 import { getLocale, formatLocale } from '$web-common/locale'
 import SelectRegionList from '../select-region-list'
 import PanelBox from '../panel-box'
@@ -153,8 +153,29 @@ function MainPanel() {
     return currentRegion.namePretty
   }
 
+  const isAgentUnavailable =
+    connectionStatus === ConnectionState.CONNECT_NO_AGENT
+
+  // Losing the agent makes settings and the region selector meaningless, and
+  // they shouldn't come back by themselves once the agent recovers.
+  React.useEffect(() => {
+    if (isAgentUnavailable) {
+      setSettingsPanelVisible(false)
+      dispatch(Actions.toggleRegionSelector(false))
+    }
+  }, [isAgentUnavailable, dispatch])
+
   if (isContactSupportVisible) {
     return <ContactSupport onCloseContactSupport={closeContactSupport} />
+  }
+
+  if (isAgentUnavailable) {
+    return (
+      <ErrorPanel
+        showContactSupport={showContactSupport}
+        isAgentUnavailable
+      />
+    )
   }
 
   if (isSettingsPanelVisible) {

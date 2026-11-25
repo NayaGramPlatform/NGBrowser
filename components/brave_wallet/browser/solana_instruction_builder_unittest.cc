@@ -12,7 +12,6 @@
 #include "brave/components/brave_wallet/browser/solana_account_meta.h"
 #include "brave/components/brave_wallet/browser/solana_instruction.h"
 #include "brave/components/brave_wallet/common/brave_wallet.mojom.h"
-#include "brave/components/brave_wallet/common/brave_wallet_constants.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace brave_wallet::solana {
@@ -21,7 +20,7 @@ namespace system_program {
 
 TEST(SolanaInstructionBuilderUnitTest, TransferSOL) {
   auto ins = Transfer("pubkey1", "pubkey2", 10000000);
-  EXPECT_TRUE(ins);
+  ASSERT_TRUE(ins);
   EXPECT_EQ(
       ins.value(),
       SolanaInstruction(
@@ -42,7 +41,7 @@ TEST(SolanaInstructionBuilderUnitTest, TransferSPLToken) {
   auto ins =
       TransferChecked("program", "source", "mint_address", "destination",
                       "authority", std::vector<std::string>(), 10000000, 2u);
-  EXPECT_TRUE(ins);
+  ASSERT_TRUE(ins);
   EXPECT_EQ(ins.value(),
             SolanaInstruction(
                 "program",
@@ -55,7 +54,7 @@ TEST(SolanaInstructionBuilderUnitTest, TransferSPLToken) {
   ins = TransferChecked(
       "program", "source", "mint_address", "destination", "authority",
       std::vector<std::string>({"signer1", "signer2"}), 10000000, 2u);
-  EXPECT_TRUE(ins);
+  ASSERT_TRUE(ins);
   EXPECT_EQ(ins.value(),
             SolanaInstruction(
                 "program",
@@ -69,7 +68,7 @@ TEST(SolanaInstructionBuilderUnitTest, TransferSPLToken) {
 
   ins = TransferChecked("program", "source", "mint_address", "destination",
                         "authority", std::vector<std::string>(), 1, 2);
-  EXPECT_TRUE(ins);
+  ASSERT_TRUE(ins);
   EXPECT_EQ(ins.value(),
             SolanaInstruction(
                 "program",

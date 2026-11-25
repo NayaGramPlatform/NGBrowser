@@ -1,0 +1,13 @@
+diff --git a/chrome/browser/ui/views/tabs/tab_container.cc b/chrome/browser/ui/views/tabs/tab_container.cc
+index 18323408ab55b71896a7fe81e9cdf3933cba10c5..aeebcb38f5914dd3523832204f27a1542601aeeb 100644
+--- a/chrome/browser/ui/views/tabs/tab_container.cc
++++ b/chrome/browser/ui/views/tabs/tab_container.cc
+@@ -600,7 +600,7 @@ bool TabContainer::IsRectInContentArea(const gfx::Rect& rect) {
+     if (tab_index.has_value() && IsValidModelIndex(tab_index.value())) {
+       Tab* tab = GetTabAtModelIndex(tab_index.value());
+       gfx::Rect tab_drag_handle = tab->GetMirroredBounds();
+-      tab_drag_handle.set_height(kDragHandleExtension);
++      tab_drag_handle.set_height(GetBraveDragHandleExtension(kDragHandleExtension));
+       return tab->IsActive() || !tab_drag_handle.Intersects(rect);
+     }
+   }

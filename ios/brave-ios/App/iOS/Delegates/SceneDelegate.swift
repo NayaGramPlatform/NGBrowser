@@ -3,6 +3,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import AppIntents
 import Brave
 import BraveCore
 import BraveNews
@@ -61,7 +62,7 @@ struct ProfileState {
     // Setup Rewards & Ads
     let configuration = BraveRewards.Configuration.current()
     Migration.migrateAdsConfirmations(for: configuration)
-    rewards = BraveRewards(configuration: configuration)
+    rewards = BraveRewards(configuration: configuration, profile: profileController.profile)
 
     // Setup BraveCore profile migrations
     migrations = BraveProfileMigrations(profileController: profileController)
@@ -109,6 +110,9 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
   private static var profileState: ProfileState?
 
   private var cancellables: Set<AnyCancellable> = []
+
+  /// A control widget shortcut that arrived before this window had a browser to open it in.
+  private var pendingControlWidgetShortcut: WidgetShortcut?
 
   func scene(
     _ scene: UIScene,
@@ -474,6 +478,10 @@ extension SceneDelegate {
       handleCustomUserActivityActions(sceneState.windowScene, userActivity: currentActivity)
     }
 
+    if #available(iOS 26.0, *), let intent = sceneState.connectionOptions.appIntent {
+      openControlWidgetShortcut(for: intent, in: browserViewController)
+    }
+
     if sceneState.windowScene.activationState == .foregroundActive {
       // Perform any actions that would also execute in sceneDidBecomeActive
       Preferences.AppState.backgroundedCleanly.value = false
@@ -494,6 +502,24 @@ extension SceneDelegate {
     }
   }
 
+  @available(iOS 26.0, *)
+  private func openControlWidgetShortcut(
+    for appIntent: any UISceneAppIntent,
+    in browserViewController: BrowserViewController
+  ) {
+    let shortcut: WidgetShortcut? =
+      switch appIntent {
+      // The static controls carry no parameter, so the intent type alone identifies the shortcut.
+      case is OpenBraveSearchControlIntent: .search
+      case is OpenAskBraveControlIntent: .askBrave
+      case let intent as OpenControlWidgetShortcutIntent: intent.shortcutOption.widgetShortcut
+      default: nil
+      }
+    if let shortcut {
+      browserViewController.handleNavigationPath(path: .widgetShortcutURL(shortcut))
+    }
+  }
+
   private func sendDAUPingIfNeeded() {
     guard let profileState = Self.profileState else { return }
     // We try to send DAU ping each time the app goes to foreground to work around network edge cases
@@ -506,9 +532,9 @@ extension SceneDelegate {
 
   private func refreshSKUsCredentials(in scene: UIWindowScene) {
     Task { @MainActor in
-      let isPrivateBrowsing =
-        scene.browserViewController?.privateBrowsingManager.isPrivateBrowsing == true
-      await Skus.SkusServiceFactory.get(privateMode: isPrivateBrowsing)?.refreshSkusCredentials()
+      if let profile = Self.profileState?.profile {
+        await Skus.SkusServiceFactory.get(profile: profile)?.refreshSkusCredentials()
+      }
     }
   }
 
@@ -907,6 +933,14 @@ extension SceneDelegate {
     let onlyPrivateTabs = privateTabs.count == windowTabs.count
 
     return selectedTabIsPrivate || onlyPrivateTabs
+  }
+}
+
+@available(iOS 26.0, *)
+extension SceneDelegate: AppIntentSceneDelegate {
+  func scene(_ scene: UIScene, willPerformAppIntent appIntent: any UISceneAppIntent) {
+    guard let bvc = (scene as? UIWindowScene)?.browserViewController else { return }
+    openControlWidgetShortcut(for: appIntent, in: bvc)
   }
 }
 

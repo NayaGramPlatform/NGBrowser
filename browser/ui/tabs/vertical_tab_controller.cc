@@ -5,41 +5,48 @@
 
 #include "brave/browser/ui/tabs/public/vertical_tab_controller.h"
 
+#include <utility>
+
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "brave/browser/ui/focus_mode/focus_mode_controller.h"
 #include "brave/browser/ui/tabs/brave_tab_prefs.h"
 #include "brave/browser/ui/tabs/public/switches.h"
 #include "build/build_config.h"
-#include "chrome/browser/ui/browser_window/public/browser_window_features.h"
+#include "chrome/browser/ui/exclusive_access/fullscreen_controller.h"
 #include "chrome/browser/ui/tabs/features.h"
 #include "chrome/common/pref_names.h"
 #include "components/prefs/pref_service.h"
 
+DEFINE_USER_DATA(VerticalTabController);
+
 // static
-VerticalTabController* VerticalTabController::FromBrowser(
+VerticalTabController* VerticalTabController::From(
     BrowserWindowInterface* browser) {
   if (!browser) {
     return nullptr;
   }
-  return browser->GetFeatures().vertical_tab_controller();
+  return Get(browser->GetUnownedUserDataHost());
 }
 
 // static
-const VerticalTabController* VerticalTabController::FromBrowser(
+const VerticalTabController* VerticalTabController::From(
     const BrowserWindowInterface* browser) {
   if (!browser) {
     return nullptr;
   }
-  return browser->GetFeatures().vertical_tab_controller();
+  return Get(browser->GetUnownedUserDataHost());
 }
 
 VerticalTabController::VerticalTabController(
+    ui::UnownedUserDataHost& host,
     BrowserWindowInterface::Type type,
     PrefService* prefs,
     FocusModeController* focus_mode_controller)
     : type_(type),
       prefs_(prefs),
-      focus_mode_controller_(focus_mode_controller) {}
+      focus_mode_controller_(focus_mode_controller),
+      scoped_unowned_user_data_(host, *this) {}
 
 VerticalTabController::~VerticalTabController() = default;
 
@@ -49,7 +56,7 @@ bool VerticalTabController::SupportsBraveVerticalTabs() const {
     return false;
   }
 
-  if (prefs_->GetBoolean(prefs::kVerticalTabsEnabled)) {
+  if (tabs::IsUpstreamVerticalTabsForceEnabled()) {
     // In case that Chromium's vertical tabs are enabled, we should not show
     // Brave's vertical tabs.
     return false;
@@ -128,6 +135,20 @@ bool VerticalTabController::ShouldShowVerticalTabToggleButton() const {
   return prefs_->GetBoolean(brave_tabs::kVerticalTabsShowToggleButton);
 }
 
-base::WeakPtr<VerticalTabController> VerticalTabController::GetWeakPtr() {
-  return weak_ptr_factory_.GetWeakPtr();
+void VerticalTabController::ListenFullscreenChanges(
+    FullscreenController& fullscreen_controller) {
+  fullscreen_subscription_ =
+      fullscreen_controller.RegisterOnFullscreenStateChanged(
+          base::BindRepeating(&VerticalTabController::OnFullscreenStateChanged,
+                              base::Unretained(this)));
+}
+
+base::CallbackListSubscription
+VerticalTabController::RegisterOnFullscreenStateChanged(
+    base::RepeatingClosure callback) {
+  return fullscreen_state_changed_callbacks_.Add(std::move(callback));
+}
+
+void VerticalTabController::OnFullscreenStateChanged() {
+  fullscreen_state_changed_callbacks_.Notify();
 }

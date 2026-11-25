@@ -80,6 +80,7 @@
 <translation id="8982438328166986164">ສະແດງຄຳແນະນຳທີ່ເວັບໄຊຂອງທ່ານໃນການຈັດຕັ້ງເຄືອຂ່າຍ</translation>
 <translation id="924029461438529367">ສະແດງຄຳແນະນຳການຄົ້ນຫາ</translation>
 <translation id="9148058034647219655">ອອກ</translation>
+<translation id="2139186145475833000">ເພີ່ມໃສ່ໜ້າຈໍຫຼັກ</translation>
 <translation id="7534079972563542000">Unstoppable Domains</translation>
 <translation id="6486983549008741930">ຕົວກ່ອງການຟິນເຕີປິ້ນໃນເນື່ອງຫມາຍ</translation>
 <translation id="2398817776566547893">ເຮັດໃຫ້ຕັ້ງຄົ້ນຂອງທ່ານສາມາດປິດຄຳວ່າແລະທີ່ຂອງພາສາ</translation>
@@ -193,9 +194,6 @@
 <translation id="5668852698659986622">ເປີດໃຊ້ Sponsored Ads</translation>
 <translation id="431194936581466649">ຊ່ວຍສະໜັບສະໜູນພາລະກິດຂອງ Brave ໃນການສ້າງເວັບທີ່ເປັນອິດສະຫຼະ, ໃຫ້ຄວາມສໍາຄັນກັບຜູ້ໃຊ້ເປັນອັນດັບໜຶ່ງດ້ວຍ Sponsored Ads. ພວກເຮົາວັດແທກປະສິດທິພາບຂອງ ad ຢ່າງເປັນສ່ວນຕົວ, ໂດຍບໍ່ໄດ້ລະບຸຕົວທ່ານ.</translation>
 <translation id="1939813747486101115">ຮຽນຮູ້ເພີ່ມເຕີມກ່ຽວກັບ Sponsored Ads</translation>
-<translation id="8347743943525229984">ອະນຸຍາດແບບສຳຫຼວດຂອງ Brave</translation>
-<translation id="6022939994702081659">ອະນຸຍາດໃຫ້ Brave ສະແດງລິ້ງໄປສູ່ການສຳຫຼວດສ່ວນຕົວໃນໜ້າກະດານແທັບບໃໝ່.ການສຳຫຼວດຊ່ວຍເຮົາສ້າງຄຸນສົມບັດທີ່ດີຂຶ້ນ ແລະ ວັດຜົນກະທົບຂອງໂຄສະນາໃນເວັບຟຣອມປຸ່ມອາດແດງ</translation>
-<translation id="7746496306508543965">ຮຽນຮູ້ເພິ່ມເຕີມກ່ຽວກັບການສຳຫຼວດຂອງ Brave</translation>
 <translation id="410351446219883937">ຫຼິ້ນອັດຕະໂນມັດ</translation>
 <translation id="7445411102860286510">ອະນຸຍາດເວັບໄຊໃຫ້ໃຊ້ແລວວີດິໂອໂທມາ</translation>
 <translation id="7837721118676387834">ອະນຸຍາດໃຫ້ວີດິໂອເທັບໂພຈຄໍາເຍົາໂປ</translation>
@@ -291,7 +289,7 @@
 <translation id="2569646144216067185">ຈຳນວນ​ຄໍາ: <ph name="WORD_COUNT"/></translation>
 <translation id="7507533586185621084">ລະຫັດກຸ່ມຂໍ້ມູນຜິດ</translation>
 <translation id="8284063834901328650">ລະຫັດ QR Code ผิດ</translation>
-<translation id="859506441384380749">ລະຫັດນີ້ຖືກສ້າງໂດຍສະບັບທີ່ຖືກຍົກເລີກຂອງ Brave, ກະລຸນາອັບເກຣດອຸປະກອນອື່ນຂອງທ່ານກ່ອນ</translation>
+<translation id="4002014583969312635">ເບິ່ງຄືວ່າລະຫັດນີ້ຖືກສ້າງຂຶ້ນໃນອຸປະກອນທີ່ໃຊ້ Brave ເວີຊັນເກົ່າ. ກະລຸນາອັບເດດເປັນ Brave ເວີຊັນຫຼ້າສຸດໃນອຸປະກອນອື່ນຂອງທ່ານ, ແລ້ວສ້າງລະຫັດ sync ໃໝ່.</translation>
 <translation id="3132642509209154999">ລະຫັດນີ້ໝົດອາຍຸແລ້ວ. ກະລຸນາສ້າງໃຫມ່ໃນອຸປະກອນອື່ນຂອງທ່ານແລະລອງໃໝ່.</translation>
 <translation id="2859229680945501779">ລະຫັດນີ້ບໍ່ຖືກຕ້ອງ. ກະລຸນາກວດເບິ່ງວ່າເວລາແລະເຂດເວລາຕັ້ງຖືກຕ້ອງໃນອຸປະກອນຂອງທ່ານ.</translation>
 <translation id="3149880132460839085">Brave Sync</translation>
@@ -344,8 +342,6 @@ Enter the sync chain code words shown below.</translation>
 <translation id="8185825081026121627">ຮັບເງິນຈາກ Basic Attention Token ທີ່ເບິ່ງສະໂມສີນທີ່ປອດໄພຂອງ Brave Rewards ads.</translation>
 <translation id="5321518976657560663">ວິຜິນການລືມ</translation>
 <translation id="4114170343590425996">ການລືມາດຽນຂອງ Brave Rewards ໄດ້ເກິດຂື້ນ. ກະລຸນາຮີສູຼ໌ Brave ແລະພຽງທ້ັງຫມົດນີ້.</translation>
-<translation id="6417420737057016607">Brave Ads</translation>
-<translation id="5611966874859284786">ສະແດງປ່າຢາງທີ່ Brave ບໍ່ແມ່ນໃຊ້ງານ</translation>
 <translation id="5717636703619499822"><ph name="BEGIN_LINK1"/>ປັບໃຫມ່ຂໍ້ມູນຂອງ Brave Rewards…<ph name="END_LINK1"/></translation>
 <translation id="1830919318137227284"><ph name="BEGIN_LINK1"/>ປັກປອໄຟເຄົາຂອງ Brave Ads…<ph name="END_LINK1"/></translation>
 <translation id="8293206222192510085">ເພີ່ມບຸກມາກ</translation>
@@ -400,6 +396,13 @@ Enter the sync chain code words shown below.</translation>
 <translation id="8793108040181436796">Widgets</translation>
 <translation id="8643377320501056697">ສະແດງເວັບໄຊທ໌ຫຼັກຂອງທ່ານ</translation>
 <translation id="7275773481201277457">ສະແດງສະຖິຕິຂອງ Brave</translation>
+<translation id="8516804522688861636">ສະແດງເວັບໄຊທີ່ເຂົ້າຊົມເລື້ອຍໆ</translation>
+<translation id="4546260624932151782">ສະແດງທີ່ຕິດຕາມ</translation>
+<translation id="5313967007315987356">ເພີ່ມໄຊທ໌</translation>
+<translation id="1773147648972887693">ສະແດງທີ່ເຂົ້າບ່ອຍ</translation>
+<translation id="7134741506051403308">ເຊື່ອງ widget</translation>
+<translation id="1247759249260562308">ແກ້ໄຂລາຍການທີ່ມັກ</translation>
+<translation id="6387214885349500492">ປັກໝຸດລາຍການທີ່ມັກນີ້</translation>
 <translation id="7462178177755090262">ຫນ້າເປີດ</translation>
 <translation id="5365434987337264071">ແທັບທີ່ເປີດລ່າສຸດ</translation>
 <translation id="6019856124237323989">{HOURS, plural, =1 {ແຖບໃໝ່ຫຼັງຈາກຢຸດການໃຊ້ງານ <ph name="HOURS_ONE"/> ຊົ່ວໂມງ} other {ແຖບໃໝ່ຫຼັງຈາກຢຸດການໃຊ້ງານ <ph name="HOURS_MANY"/> ຊົ່ວໂມງ}}</translation>
@@ -966,6 +969,7 @@ Enter the sync chain code words shown below.</translation>
 <translation id="6365389672683343144">ການຕັ້ງຄ່າ Brave VPN ຂອງທ່ານສົນບັນຍາດໃຫ້ປົກປ້ອງໄດ້ຮອດ 5 ອຸປະກອນຕ່າງໆ, ທີ່ເປັນ Android, iOS ແລະ Desktop. ເພື່ອໃຊ້ໄດ້ທ່ານຕ້ອງເຊື່ອມການຊື້ເວັນມາຈາກ Play Store ຂອງ Google ກັບບັນຊີ Brave ຂອງທ່ານ.</translation>
 <translation id="6610899852831463073">ບໍ່ສາມາດເປີດໃຊ້ໃນການຄົ້ນຫາປອດໄພແລ້ວ</translation>
 <translation id="7954263306665462056">ການຄົ້ນຫາປອດໄພໄດ້ຖືກປິດໃນອຸປະກອນຂອງທ່ານ. ເພື່ອເປີດໃຊ້, ກະລຸນາເຮັດໃຫ້ແນ່ໃຈວ່າ Google Play Services ໄດ້ຕິດຕັ້ງແລ້ວ ແລະເປັນຂັ້ນຕອນຫລຸດໄປຫຼ້າສຸດ.</translation>
+<translation id="6417420737057016607">Brave Ads</translation>
 <translation id="7748944510530490017">ເນັດແທັກຄັ້ງຕິດຕາມເລບຍນ</translation>
 <translation id="2781668117338732220">ເນັດແທັກຄັ້ງຮອດໄດ້ຮອດ</translation>
 <translation id="282560918037172384">ເນັດແທັກຄັ້ງເຕັສ</translation>
@@ -992,6 +996,13 @@ Enter the sync chain code words shown below.</translation>
 <translation id="7530313002494358590">ການເປີດ ຫຼື ປິດການນຳໃຊ້ຄຸນສົມບັດຂອງ Brave ຮຽກຮ້ອງໃຫ້ມີການເລີ່ມຕົ້ນຕົວທ່ອງເວັບໃໝ່ເພື່ອນຳໃຊ້ການປ່ຽນແປງ. ກະລຸນາແຕະ <ph name="BEGIN_BOLD"/>ເລີ່ມຕົ້ນໃໝ່ດຽວນີ້<ph name="END_BOLD"/> ເມື່ອ Brave Origin ອັບເດດສຳເລັດແລ້ວ.</translation>
 <translation id="1028940738207645746">ທ່ານມັ້ນໃຈບໍ່ວ່າຕ້ອງການຕັ້ງຄ່າທັງໝົດເປັນຄ່າເລີ່ມຕົ້ນ?</translation>
 <translation id="5939518447894949180">ຈົ່ງໂຫມດ</translation>
+<translation id="3222790865318305905">ຮອດຂີດຈຳກັດການເປີດໃຊ້ງານແລ້ວ</translation>
+<translation id="3787857711016546034">ເພື່ອປ້ອງກັນການສໍ້ໂກງ, ການເປີດໃຊ້ງານ Origin ຖືກຈຳກັດອັດຕາ. ແຕ່ທ່ານສາມາດຮ້ອງຂໍການເປີດໃຊ້ງານເພີ່ມເຕີມເພື່ອໃຊ້ໃບອະນຸຍາດ Origin ຂອງທ່ານໃນຫຼາຍອຸປະກອນໄດ້ຕະຫຼອດ. ພຽງແຕ່ຄລິກທີ່ options ຮ້ອງຂໍການເປີດໃຊ້ງານເພີ່ມເຕີມ, ຫຼື <ph name="CONTACT_SUPPORT"/> ເພື່ອຂໍຄວາມຊ່ວຍເຫຼືອ.</translation>
+<translation id="6760819753412779585">ຕິດຕໍ່ການສະໜອງ</translation>
+<translation id="571697836019670200">ຮ້ອງຂໍການເປີດໃຊ້ງານເພີ່ມເຕີມ</translation>
+<translation id="9019545131475425538">ກໍາລັງປະມວນຜົນ…</translation>
+<translation id="7242700630179071243">ພ້ອມເປີດໃຊ້ງານ</translation>
+<translation id="5463918917265356202">Brave Origin ຕອນນີ້ໃຊ້ງານໄດ້ແລ້ວໃນອຸປະກອນນີ້. ເພື່ອເລີ່ມໃຊ້ຄຸນສົມບັດນີ້, ທ່ານຈຳເປັນຕ້ອງເປີດ browser ຄືນໃໝ່. ທ່ານຕ້ອງການເປີດຄືນໃໝ່ຕອນນີ້ບໍ?</translation>
 <translation id="8554205386170195281">ຊື້</translation>
 <translation id="8613144770663526433">ເຂົ້າລະບົບດ້ວຍ Brave Wallet</translation>
 <translation id="3696514931437952995">ທ່ານກຳລັງທິດໃຊ້ຢູ່ທີ່ <ph name="ORIGIN"/>. Brave Wallet ສົ່ງເບີນໄອດີຂອງທ່ານຕໍ່ <ph name="ORIGIN"/>.</translation>

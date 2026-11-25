@@ -1,0 +1,26 @@
+# Copyright (c) 2026 The Brave Authors. All rights reserved.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this file,
+# You can obtain one at https://mozilla.org/MPL/2.0/.
+
+substitutions:
+  - description: |
+      Import Brave's routes so the Brave sections can be added to the router.
+    add_import:
+      entry: import addBraveRoutes from './brave_routes.js'
+
+  - description: |
+      Wire Brave's routes into the router `createRoutes()` builds.
+    regex:
+      pattern: '  return r as unknown as SettingsRoutes;'
+      replace: "  addBraveRoutes(r);\n  return r as unknown as SettingsRoutes;"
+
+  - description: |
+      Make Brave's get-started route the top level route for non-guests.
+
+      Brave has no People section; its profile and import routes live under
+      `GET_STARTED`.
+    regex:
+      re_pattern: '(function getTopLevelRoute\(\).*?)routes\.PEOPLE;'
+      re_flags: [DOTALL]
+      replace: '\1routes.GET_STARTED;'

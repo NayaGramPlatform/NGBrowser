@@ -65,6 +65,10 @@ brave_grit("static_resources") {
     ]
   }
 
+  if (enable_email_aliases) {
+    deps += [ "//brave/components/email_aliases/resources:email_aliases_ui" ]
+  }
+
   if (enable_extensions) {
     deps += [ "//brave/components/brave_extension/extension/brave_extension" ]
   }
@@ -237,8 +241,14 @@ brave_grit("strings") {
     "enable_psst=$enable_psst",
   ]
 
+  if (translate_genders) {
+    grit_flags = [ "--translate-genders" ]
+  }
+
   foreach(locale, all_chrome_locales) {
-    outputs += [ "brave_components_strings_$locale.pak" ]
+    foreach(gender_suffix, gender_suffixes) {
+      outputs += [ "brave_components_strings_${locale}${gender_suffix}.pak" ]
+    }
   }
 
   output_dir = "$root_gen_dir/components"

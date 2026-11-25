@@ -16,7 +16,9 @@
 #include "base/test/gmock_callback_support.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
-#include "brave/components/api_request_helper/api_request_helper.h"
+#include "base/test/test_future.h"
+#include "base/test/values_test_util.h"
+#include "base/values.h"
 #include "brave/components/brave_wallet/browser/account_resolver_delegate_impl.h"
 #include "brave/components/brave_wallet/browser/blockchain_registry.h"
 #include "brave/components/brave_wallet/browser/brave_wallet_utils.h"
@@ -36,9 +38,9 @@
 #include "brave/components/brave_wallet/common/features.h"
 #include "components/grit/brave_components_strings.h"
 #include "components/sync_preferences/testing_pref_service_syncable.h"
-#include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "services/network/public/cpp/weak_wrapper_shared_url_loader_factory.h"
 #include "services/network/test/test_url_loader_factory.h"
+#include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "url/origin.h"
@@ -58,6 +60,10 @@ inline constexpr const char kBob[] =
 inline constexpr const char kBobSS58[] =
     "14E5nqKAp3oAJcmzgZhUD2RcptBeUBScxKHgJKU4HPNcKVf3";
 
+// BOB's raw public key, as stored in the transaction's `recipient`.
+inline constexpr char kBobPublicKeyHex[] =
+    "8eaf04151687736326c9fea17e25fc5287613693c912909cb226aa4794f26a48";
+
 inline constexpr char kExpectedExtrinsic[] =
     "3502840014bccfbad15c6327408e833d162271f93a51fa3a6bc67d3eacc384bb9704d71e01"
     "1a847b30e2d9a658d52234e673056933258552bb107e533788a072663624d002ba2e25b63b"
@@ -71,18 +77,18 @@ inline constexpr char kExpectedTransferAllExtrinsic[] =
     "04151687736326c9fea17e25fc5287613693c912909cb226aa4794f26a4800";
 
 inline constexpr char kExpectedAssetIdExtrinsic[] =
-    "5d02840014bccfbad15c6327408e833d162271f93a51fa3a6bc67d3eacc384bb9704d71e01"
-    "90bb5bdb9fd592c54b26852a6ccd5071529942fa5656642a84975b765f629658ae187fa7d7"
-    "1bcd27432fc97ee5e03df37aa83c981c2d04a338c8ca45deb3f48900000000005501440000"
-    "003209cad1eb0b008eaf04151687736326c9fea17e25fc5287613693c912909cb226aa4794"
-    "f26a484913";
+    "5502840014bccfbad15c6327408e833d162271f93a51fa3a6bc67d3eacc384bb9704d71e01"
+    "6417a9bd286eb1edaf7c605e9f98f972d3b3db02cd50a90da571e386c0bc1619474c8039dd"
+    "46738402217d8f7e696f92d9f7f96b174becde368c7be8fe0e888500000055014400000032"
+    "09cad1eb0b008eaf04151687736326c9fea17e25fc5287613693c912909cb226aa4794f26a"
+    "484913";
 
 inline constexpr char kExpectedTransferAllAssetIdExtrinsic[] =
-    "5902840014bccfbad15c6327408e833d162271f93a51fa3a6bc67d3eacc384bb9704d71e01"
-    "5e4cd46bf09b8e6641510dd682561316fc03984243558399530487f8ad44554ff9798b8797"
-    "2769a7f5be6683305650e17ae057020eb483c4247d323ad619238000000000005501440000"
-    "003220cad1eb0b008eaf04151687736326c9fea17e25fc5287613693c912909cb226aa4794"
-    "f26a4800";
+    "5102840014bccfbad15c6327408e833d162271f93a51fa3a6bc67d3eacc384bb9704d71e01"
+    "42fa51f4e95bece97d24a5fa408fa9646285b1fbd3a67b7cb42218bd063b912a759cc6fe7c"
+    "1664c833a7b276f482b1905541ee01fe87b083a56e4d23f3068c8e00000055014400000032"
+    "20cad1eb0b008eaf04151687736326c9fea17e25fc5287613693c912909cb226aa4794f26a"
+    "4800";
 
 class MockTxStateManagerObserver : public TxStateManager::Observer {
  public:
@@ -206,7 +212,8 @@ class PolkadotTxManagerUnitTest : public testing::Test {
 
     polkadot_wallet_service_ = std::make_unique<PolkadotWalletService>(
         *keyring_service_, *network_manager_, profile_prefs_,
-        url_loader_factory_.GetSafeWeakWrapper());
+        url_loader_factory_.GetSafeWeakWrapper(), NoParachainUrlMap(),
+        NoOriginPermissionChecking());
 
     auto tx_storage = CreateTxStorageForTest(temp_dir_.GetPath());
     tx_storage_ptr_ = tx_storage.get();
@@ -248,16 +255,9 @@ class PolkadotTxManagerUnitTest : public testing::Test {
   }
 
   void UnlockWallet() {
-    keyring_service_->Unlock(
-        kTestWalletPassword,
-        base::BindOnce(
-            [](base::RepeatingClosure quit_closure, bool unlocked) {
-              EXPECT_TRUE(unlocked);
-              quit_closure.Run();
-            },
-            task_environment_.QuitClosure()));
-
-    task_environment_.RunUntilQuit();
+    base::test::TestFuture<bool> unlock_future;
+    keyring_service_->Unlock(kTestWalletPassword, unlock_future.GetCallback());
+    ASSERT_TRUE(unlock_future.Take());
 
     keyring_service_->polkadot_mainnet_keyring_->SetMockRndSeedForTesting();
     keyring_service_->polkadot_testnet_keyring_->SetMockRndSeedForTesting();
@@ -309,15 +309,6 @@ class PolkadotTxManagerUnitTest : public testing::Test {
                   polkadot_tx->tx()->extrinsic_metadata()->extrinsic()),
               kExpectedExtrinsic);
     EXPECT_FALSE(polkadot_tx->tx()->signature_payload().empty());
-  }
-
-  size_t GetStatusTaskCount() {
-    return GetPolkadotTxManager()->polkadot_transaction_status_tasks_.size();
-  }
-
-  bool HasStatusTaskFor(const std::string& tx_meta_id) {
-    return GetPolkadotTxManager()->polkadot_transaction_status_tasks_.contains(
-        tx_meta_id);
   }
 
  protected:
@@ -378,23 +369,24 @@ TEST_F(PolkadotTxManagerUnitTest, AddUnapprovedPolkadotTransaction) {
 
     const auto& txs = tx_storage_ptr_->GetTxs();
     const auto* tx = txs.FindDict(tx_meta_id);
-    EXPECT_TRUE(tx);
+    ASSERT_TRUE(tx);
 
     const auto* polkadot_tx = tx->FindDict("tx");
+    ASSERT_TRUE(polkadot_tx);
 
-    EXPECT_EQ(
-        *polkadot_tx->FindString("recipient"),
-        R"(8eaf04151687736326c9fea17e25fc5287613693c912909cb226aa4794f26a48)");
-    EXPECT_EQ(*polkadot_tx->FindString("amount"),
-              "d2040000000000000000000000000000");
-    EXPECT_EQ(*polkadot_tx->FindString("fee"),
-              "dc8df1b5030000000000000000000000");
-    EXPECT_EQ(*polkadot_tx->FindBool("transfer_all"), false);
-    EXPECT_EQ(*polkadot_tx->FindInt("ss58_prefix"), 0);
+    EXPECT_THAT(*polkadot_tx,
+                base::test::DictionaryHasValues(
+                    base::DictValue()
+                        .Set("recipient", kBobPublicKeyHex)
+                        .Set("amount", "d2040000000000000000000000000000")
+                        .Set("fee", "dc8df1b5030000000000000000000000")
+                        .Set("transfer_all", false)
+                        .Set("ss58_prefix", 0)));
 
+    const auto* fee_hex = polkadot_tx->FindString("fee");
+    ASSERT_TRUE(fee_hex);
     uint128_t fee = 0;
-    EXPECT_TRUE(base::HexStringToSpan(*polkadot_tx->FindString("fee"),
-                                      base::byte_span_from_ref(fee)));
+    EXPECT_TRUE(base::HexStringToSpan(*fee_hex, base::byte_span_from_ref(fee)));
 
     EXPECT_EQ(fee, 15937408476ull);
   }
@@ -421,23 +413,24 @@ TEST_F(PolkadotTxManagerUnitTest, AddUnapprovedPolkadotTransaction) {
 
     const auto& txs = tx_storage_ptr_->GetTxs();
     const auto* tx = txs.FindDict(tx_meta_id);
-    EXPECT_TRUE(tx);
+    ASSERT_TRUE(tx);
 
     const auto* polkadot_tx = tx->FindDict("tx");
+    ASSERT_TRUE(polkadot_tx);
 
-    EXPECT_EQ(
-        *polkadot_tx->FindString("recipient"),
-        R"(8eaf04151687736326c9fea17e25fc5287613693c912909cb226aa4794f26a48)");
-    EXPECT_EQ(*polkadot_tx->FindString("amount"),
-              "ffffffffffffffffffffffffffffffff");
-    EXPECT_EQ(*polkadot_tx->FindString("fee"),
-              "dc8df1b5030000000000000000000000");
-    EXPECT_EQ(*polkadot_tx->FindBool("transfer_all"), false);
-    EXPECT_EQ(*polkadot_tx->FindInt("ss58_prefix"), 0);
+    EXPECT_THAT(*polkadot_tx,
+                base::test::DictionaryHasValues(
+                    base::DictValue()
+                        .Set("recipient", kBobPublicKeyHex)
+                        .Set("amount", "ffffffffffffffffffffffffffffffff")
+                        .Set("fee", "dc8df1b5030000000000000000000000")
+                        .Set("transfer_all", false)
+                        .Set("ss58_prefix", 0)));
 
+    const auto* fee_hex = polkadot_tx->FindString("fee");
+    ASSERT_TRUE(fee_hex);
     uint128_t fee = 0;
-    EXPECT_TRUE(base::HexStringToSpan(*polkadot_tx->FindString("fee"),
-                                      base::byte_span_from_ref(fee)));
+    EXPECT_TRUE(base::HexStringToSpan(*fee_hex, base::byte_span_from_ref(fee)));
 
     EXPECT_EQ(fee, 15937408476ull);
   }
@@ -701,7 +694,7 @@ TEST_F(PolkadotTxManagerUnitTest, ApproveTransaction_AssetId_Confirmed) {
   const uint32_t asset_id = 50001010;
 
   auto transaction_params = mojom::NewPolkadotTransactionParams::New(
-      chain_id, polkadot_testnet_account_->account_id->Clone(), kBobSS58,
+      chain_id, polkadot_testnet_account_->account_id->Clone(), kBob,
       mojom::uint128::New(0, 1234), false, nullptr,
       mojom::PolkadotAssetId::New(asset_id));
 
@@ -735,7 +728,7 @@ TEST_F(PolkadotTxManagerUnitTest, ApproveTransaction_AssetId_Confirmed) {
     EXPECT_EQ(polkadot_tx->status(), mojom::TransactionStatus::Submitted);
 
     auto recipient = polkadot_tx->tx()->recipient().ToString().value();
-    EXPECT_EQ(recipient, kBobSS58);
+    EXPECT_EQ(recipient, kBob);
     EXPECT_EQ(polkadot_tx->tx()->amount(), uint128_t{1234});
     EXPECT_EQ(polkadot_tx->tx()->fee(), uint128_t{15937408476ull});
     EXPECT_EQ(polkadot_tx->tx()->transfer_all(), false);
@@ -759,7 +752,7 @@ TEST_F(PolkadotTxManagerUnitTest, ApproveTransaction_AssetId_Confirmed) {
     ASSERT_TRUE(polkadot_tx);
 
     EXPECT_EQ(polkadot_tx->status(), mojom::TransactionStatus::Confirmed);
-    EXPECT_EQ(polkadot_tx->tx()->recipient().ToString().value(), kBobSS58);
+    EXPECT_EQ(polkadot_tx->tx()->recipient().ToString().value(), kBob);
     EXPECT_EQ(polkadot_tx->tx()->amount(), uint128_t{1234});
     // Note, our events blob manually changes the fee for the sake of testing.
     EXPECT_EQ(polkadot_tx->tx()->fee(), uint128_t{84656885212ull});
@@ -801,7 +794,7 @@ TEST_F(PolkadotTxManagerUnitTest,
   const uint32_t asset_id = 50001010;
 
   auto transaction_params = mojom::NewPolkadotTransactionParams::New(
-      chain_id, polkadot_testnet_account_->account_id->Clone(), kBobSS58,
+      chain_id, polkadot_testnet_account_->account_id->Clone(), kBob,
       mojom::uint128::New(0, 1234), true, nullptr,
       mojom::PolkadotAssetId::New(asset_id));
 
@@ -835,7 +828,7 @@ TEST_F(PolkadotTxManagerUnitTest,
     EXPECT_EQ(polkadot_tx->status(), mojom::TransactionStatus::Submitted);
 
     auto recipient = polkadot_tx->tx()->recipient().ToString().value();
-    EXPECT_EQ(recipient, kBobSS58);
+    EXPECT_EQ(recipient, kBob);
     // Note that the send amount is unadajusted here, because we pay fees using
     // the native coin.
     EXPECT_EQ(polkadot_tx->tx()->amount(), uint128_t{1234});
@@ -861,7 +854,7 @@ TEST_F(PolkadotTxManagerUnitTest,
     ASSERT_TRUE(polkadot_tx);
 
     EXPECT_EQ(polkadot_tx->status(), mojom::TransactionStatus::Confirmed);
-    EXPECT_EQ(polkadot_tx->tx()->recipient().ToString().value(), kBobSS58);
+    EXPECT_EQ(polkadot_tx->tx()->recipient().ToString().value(), kBob);
     // Note that the send amount is unadajusted here, because we pay fees using
     // the native coin.
     EXPECT_EQ(polkadot_tx->tx()->amount(), uint128_t{1234});
@@ -1422,7 +1415,9 @@ TEST_F(PolkadotTxManagerUnitTest, UpdatePendingTransactions_BlockTracker) {
 TEST_F(PolkadotTxManagerUnitTest,
        UpdatePendingTransactions_DedupesStatusTasks) {
   // Calling UpdatePendingTransactions() shouldn't spawn more than one task for
-  // a given transaction.
+  // a given transaction. Each status task issues exactly one chain_getBlock
+  // for the block containing the extrinsic, so extra tasks would show up as
+  // extra chain_getBlock requests.
 
   SetUpMockRpcForFoundExtrinsic(polkadot_mock_rpc_.get(), true, false);
   polkadot_mock_rpc_->AddReqResPairs();
@@ -1440,14 +1435,22 @@ TEST_F(PolkadotTxManagerUnitTest,
   ASSERT_TRUE(success);
 
   ExpectSubmittedTxState(tx_meta_id);
-  ASSERT_EQ(GetStatusTaskCount(), 1u);
-  ASSERT_TRUE(HasStatusTaskFor(tx_meta_id));
 
   for (int i = 0; i < 5; ++i) {
     GetPolkadotTxManager()->UpdatePendingTransactions(chain_id);
-    EXPECT_EQ(GetStatusTaskCount(), 1u);
-    EXPECT_TRUE(HasStatusTaskFor(tx_meta_id));
   }
+
+  MockTxStateManagerObserver observer(*GetPolkadotTxStateManager());
+  EXPECT_CALL(observer, OnTransactionStatusChanged(testing::_))
+      .Times(1)
+      .WillOnce(base::test::RunOnceClosure(task_environment_.QuitClosure()));
+
+  task_environment_.RunUntilQuit();
+
+  auto polkadot_tx = GetPolkadotTxManager()->GetPolkadotTx(tx_meta_id);
+  ASSERT_TRUE(polkadot_tx);
+  EXPECT_EQ(polkadot_tx->status(), mojom::TransactionStatus::Confirmed);
+  EXPECT_EQ(polkadot_mock_rpc_->GetRequestCount("chain_getBlock"), 1u);
 }
 
 }  // namespace brave_wallet

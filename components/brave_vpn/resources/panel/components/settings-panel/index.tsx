@@ -9,8 +9,9 @@ import * as Styles from './style'
 import { PanelHeader } from '../select-region-list'
 import getPanelBrowserAPI, { ManageURLType } from '../../api/panel_browser_api'
 import { getLocale } from '$web-common/locale'
-import Toggle from '@brave/leo/react/toggle'
-import { useSelector } from '../../state/hooks'
+import Toggle from '@brave/nala/react/toggle'
+import { useDispatch, useSelector } from '../../state/hooks'
+import * as Actions from '../../state/actions'
 
 interface Props {
   closeSettingsPanel: () => void
@@ -18,19 +19,34 @@ interface Props {
 }
 
 function SettingsPanel(props: Props) {
-  const [onDemand, setOnDemand] = React.useState({
-    available: false,
-    enabled: false
-  })
+  const [autoReconnectAvailable, setAutoReconnectAvailable] = React.useState(false)
+  const dispatch = useDispatch()
 
+  const autoReconnectEnabled = useSelector((state) => state.autoReconnectEnabled)
   const smartProxyRoutingEnabled = useSelector((state) => state.smartProxyRoutingEnabled)
 
+  const [allowLanTraffic, setAllowLanTraffic] = React.useState({
+    available: false,
+    allowed: true
+  })
+
   React.useEffect(() => {
-    getPanelBrowserAPI().serviceHandler.getOnDemandState().then(setOnDemand)
-  }, [])
+    getPanelBrowserAPI()
+      .serviceHandler.getAutoReconnectState()
+      .then(({ available, enabled }) => {
+        setAutoReconnectAvailable(available)
+        dispatch(Actions.autoReconnectStateChanged(enabled))
+      })
+    getPanelBrowserAPI().serviceHandler.getAllowLanTraffic().then(setAllowLanTraffic)
+  }, [dispatch])
 
   const handleClick = (entry: ManageURLType) => {
     getPanelBrowserAPI().panelHandler.openVpnUI(entry)
+  }
+
+  const handleAllowLanTrafficChange = ({ checked }: { checked: boolean }) => {
+    setAllowLanTraffic({ ...allowLanTraffic, allowed: checked })
+    getPanelBrowserAPI().serviceHandler.allowLanTraffic(checked)
   }
 
   function handleKeyDown(
@@ -47,9 +63,9 @@ function SettingsPanel(props: Props) {
     handleClick(entry)
   }
 
-  const handleToggleChange = ({ checked }: { checked: boolean }) => {
-    setOnDemand({ ...onDemand, enabled: checked })
-    getPanelBrowserAPI().serviceHandler.enableOnDemand(checked)
+  const handleAutoReconnectChange = ({ checked }: { checked: boolean }) => {
+    dispatch(Actions.autoReconnectStateChanged(checked))
+    getPanelBrowserAPI().serviceHandler.enableAutoReconnect(checked)
   }
 
   const handleSmartProxyRoutingChange = ({ checked }: { checked: boolean }) => {
@@ -68,11 +84,11 @@ function SettingsPanel(props: Props) {
         />
         <Styles.Divider />
         <Styles.SettingsList>
-          {onDemand.available && (
+          {autoReconnectAvailable && (
             <>
               <Styles.Setting
                 onClick={
-                  e => handleToggleChange({ checked: !onDemand.enabled })
+                  e => handleAutoReconnectChange({ checked: !autoReconnectEnabled })
                 }
               >
                 <Styles.StyledIcon name='refresh'></Styles.StyledIcon>
@@ -82,10 +98,37 @@ function SettingsPanel(props: Props) {
                   </Styles.SettingLabel>
                 </Styles.SettingLabelBox>
                 <Toggle
-                  checked={onDemand.enabled}
-                  onChange={handleToggleChange}
+                  checked={autoReconnectEnabled}
+                  onChange={handleAutoReconnectChange}
                   size='small'
-                  aria-label='Reconnect automatically'
+                  aria-label={getLocale(S.BRAVE_VPN_RECONNECT_AUTOMATICALLY)}
+                />
+              </Styles.Setting>
+            </>
+          )}
+          {allowLanTraffic.available && (
+            <>
+              <Styles.Setting
+                onClick={
+                  e => handleAllowLanTrafficChange({
+                    checked: !allowLanTraffic.allowed
+                  })
+                }
+              >
+                <Styles.StyledIcon name='hierarchy-structure'></Styles.StyledIcon>
+                <Styles.SettingLabelBox>
+                  <Styles.SettingLabel>
+                    {getLocale(S.BRAVE_VPN_ALLOW_LAN_TRAFFIC)}
+                  </Styles.SettingLabel>
+                <Styles.SettingDesc>
+                  {getLocale(S.BRAVE_VPN_ALLOW_LAN_TRAFFIC_DESC)}
+                </Styles.SettingDesc>
+                </Styles.SettingLabelBox>
+                <Toggle
+                  checked={allowLanTraffic.allowed}
+                  onChange={handleAllowLanTrafficChange}
+                  size='small'
+                  aria-label={getLocale(S.BRAVE_VPN_ALLOW_LAN_TRAFFIC)}
                 />
               </Styles.Setting>
             </>
@@ -120,7 +163,7 @@ function SettingsPanel(props: Props) {
               checked={smartProxyRoutingEnabled}
               onChange={handleSmartProxyRoutingChange}
               size='small'
-              area-label={getLocale(S.BRAVE_VPN_SMART_PROXY_ROUTING)}
+              aria-label={getLocale(S.BRAVE_VPN_SMART_PROXY_ROUTING)}
             />
           </Styles.Setting>
           <Styles.Setting

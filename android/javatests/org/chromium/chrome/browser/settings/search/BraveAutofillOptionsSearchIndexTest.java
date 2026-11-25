@@ -24,7 +24,6 @@ import org.chromium.base.ThreadUtils;
 import org.chromium.base.test.util.Batch;
 import org.chromium.base.test.util.CommandLineFlags;
 import org.chromium.base.test.util.DisableLeakChecks;
-import org.chromium.base.test.util.Features.DisableFeatures;
 import org.chromium.base.test.util.Features.EnableFeatures;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.autofill.settings.AutofillAndPasswordsFragment;
@@ -83,35 +82,12 @@ public class BraveAutofillOptionsSearchIndexTest {
 
     @Test
     @SmallTest
-    @DisableFeatures(ChromeFeatureList.YOUR_SAVED_INFO_SETTINGS_PAGE_ANDROID)
-    public void testPrivateWindowEntrySurvivesLegacyRoute() {
-        buildIndex();
-
-        SettingsIndexData.Entry entry = getPrivateWindowEntry();
-        assertSettingsSearchReferrerExtras(entry);
-        assertSearchFindsPrivateWindowEntry(entry);
-
-        SettingsIndexData.Entry legacyAutofillOptionsEntry =
-                mIndexData.getEntryForKey(
-                        MainSettings.class.getName(), MainSettings.PREF_AUTOFILL_OPTIONS);
-        assertNotNull(legacyAutofillOptionsEntry);
-        assertEquals(AutofillOptionsFragment.class.getName(), legacyAutofillOptionsEntry.fragment);
-        assertSettingsSearchReferrerExtras(legacyAutofillOptionsEntry);
-    }
-
-    @Test
-    @SmallTest
-    @EnableFeatures(ChromeFeatureList.YOUR_SAVED_INFO_SETTINGS_PAGE_ANDROID)
     public void testPrivateWindowEntrySurvivesHomeOfTransactionsRoute() {
         buildIndex();
 
         SettingsIndexData.Entry entry = getPrivateWindowEntry();
         assertSettingsSearchReferrerExtras(entry);
         assertSearchFindsPrivateWindowEntry(entry);
-
-        assertNull(
-                mIndexData.getEntryForKey(
-                        MainSettings.class.getName(), MainSettings.PREF_AUTOFILL_OPTIONS));
 
         SettingsIndexData.Entry mainAutofillAndPasswordsEntry =
                 mIndexData.getEntryForKey(
@@ -140,6 +116,18 @@ public class BraveAutofillOptionsSearchIndexTest {
         assertEquals(2, breadcrumbEntries.size());
         assertEquals(mainAutofillAndPasswordsEntry.id, breadcrumbEntries.get(0).id);
         assertEquals(homeAutofillOptionsEntry.id, breadcrumbEntries.get(1).id);
+    }
+
+    @Test
+    @SmallTest
+    public void testMainAutofillAndPasswordsEntryUsesDisplayHeader() {
+        buildIndex();
+
+        SettingsIndexData.Entry entry =
+                mIndexData.getEntryForKey(
+                        MainSettings.class.getName(), MainSettings.PREF_AUTOFILL_AND_PASSWORDS);
+        assertNotNull(entry);
+        assertEquals(mContext.getString(R.string.prefs_section_display), entry.header);
     }
 
     private void buildIndex() {

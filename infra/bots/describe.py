@@ -4,13 +4,14 @@
 # You can obtain one at https://mozilla.org/MPL/2.0/.
 """Print a builder's generated configuration.
 
-Brave builder carries gn args, sync config, and compile/test targets. Use
-`--json` to produce JSON for tooling.
+A builder carries GN args, its spec, the `.gclient` lists it syncs, and the
+targets it compiles and tests. Use `--json` to produce JSON for tooling.
 """
 
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 
 import gen_paths
@@ -18,46 +19,50 @@ import generated_output
 
 
 def describe_builder(builder_name: str) -> dict:
-    """Reads and merges one builder's generated files.
+    """One builder's generated output.
 
     Raises:
-        BotsError: this builder has no generated `gn-args.json`, same as
-            `lookup`/`gen` (including the "available builders" hint).
+        BotsError: the builder's generated output cannot be read.
     """
-    gn_args_json = generated_output.OutputGenerator(
-        builder_name).read_generated_gn_args()
-
-    result = {'gn_args': gn_args_json}
-    builder_dir = gen_paths.BUILDERS_OUTPUT_DIR / builder_name
-    for key, filename in (('sync', 'sync.json'), ('targets', 'targets.json')):
-        path = builder_dir / filename
-        if path.is_file():
-            result[key] = json.loads(path.read_bytes().decode('utf-8'))
-    return result
+    return dataclasses.asdict(
+        generated_output.GeneratedBuilder(builder_name).read()
+    )
 
 
 def _print_text(name: str, description: dict) -> None:
-    """Prints one builder's description for a person to read.
-    """
-    gn_args = description['gn_args'].get('gn_args', {})
-    sync = description.get('sync', {})
-    targets = description.get('targets', {})
+    """Prints one builder's description for a person to read."""
+    gn_args = description['gn_args']['gn_args']
+    chromium_config = description['builder_spec']['chromium_config']
+    sync = description['sync']
+    targets = description['targets']
 
     print('%s:' % name)
-    print('  target_os:  %s' %
-          sync.get('target_os', gn_args.get('target_os', '?')))
-    print('  target_cpu: %s' %
-          sync.get('target_cpu', gn_args.get('target_cpu', '?')))
+    print('  target_os:  %s' % gn_args['target_os'])
+    print('  target_cpu: %s' % gn_args['target_cpu'])
+    if 'build_config' in chromium_config:
+        print('  build_config: %s' % chromium_config['build_config'])
+    # What the checkout syncs, besides the host (always synced).
+    print('  sync target_os:  %s' % (', '.join(sync['target_os']) or '(host)'))
+    print('  sync target_cpu: %s' % (', '.join(sync['target_cpu']) or '(host)'))
+    gclient_config = description['builder_spec']['gclient_config']
+    for field in ('custom_deps', 'custom_vars'):
+        entries = gclient_config[field]
+        print(
+            '  %s: %s'
+            % (
+                field,
+                ', '.join(
+                    '%s=%s' % (key, json.dumps(value))
+                    for key, value in entries.items()
+                )
+                or '(none)',
+            )
+        )
 
-    overrides = sync.get('gclient_overrides')
-    if overrides:
-        print('  gclient overrides: %s' %
-              ', '.join('%s=%r' % kv for kv in sorted(overrides.items())))
-
-    compile_targets = targets.get('compile', ())
+    compile_targets = targets['compile']
     print('  compile: %s' % (', '.join(compile_targets) or '(none)'))
 
-    tests = targets.get('tests', ())
+    tests = targets['tests']
     print('  tests (%d): %s' % (len(tests), ', '.join(tests) or '(none)'))
 
     secrets = description['gn_args'].get('secrets')
@@ -65,8 +70,10 @@ def _print_text(name: str, description: dict) -> None:
         # Names only - these are environment variable names, never values.
         print('  secrets: %s' % ', '.join(sorted(secrets)))
 
-    print('  gn_args (%d): %s' %
-          (len(gn_args), ', '.join(sorted(gn_args)) or '(none)'))
+    print(
+        '  gn_args (%d): %s'
+        % (len(gn_args), ', '.join(sorted(gn_args)) or '(none)')
+    )
 
 
 def cmd_describe(args: argparse.Namespace) -> int:
@@ -77,7 +84,8 @@ def cmd_describe(args: argparse.Namespace) -> int:
         if not names:
             raise generated_output.BotsError(
                 'no generated builders found under %s; run `bots.py '
-                'snapshot` first.' % gen_paths.BUILDERS_OUTPUT_DIR)
+                'snapshot` first.' % gen_paths.BUILDERS_OUTPUT_DIR
+            )
 
     descriptions = {name: describe_builder(name) for name in names}
 
@@ -95,7 +103,8 @@ def add_subparser(subparsers) -> argparse.ArgumentParser:
     describe_parser = subparsers.add_parser(
         'describe',
         description="Describe one builder's generated configuration, or "
-        "every builder's when none is given.")
+        "every builder's when none is given.",
+    )
     # Unlike `lookup`/`gen`'s builder argument (generated_output.
     # add_builder_argument), this one is optional: omitting it means
     # "describe everything", not a usage error, so it does not go through
@@ -104,10 +113,12 @@ def add_subparser(subparsers) -> argparse.ArgumentParser:
         'builder',
         nargs='?',
         help='A builder name, e.g. "linux-x64-asan-brave". Omit to '
-        'describe every generated builder.')
+        'describe every generated builder.',
+    )
     describe_parser.add_argument(
         '--json',
         action='store_true',
-        help='Print JSON instead of a human-readable report.')
+        help='Print JSON instead of a human-readable report.',
+    )
     describe_parser.set_defaults(func=cmd_describe)
     return describe_parser

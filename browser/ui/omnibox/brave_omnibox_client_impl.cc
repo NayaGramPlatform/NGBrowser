@@ -6,6 +6,7 @@
 #include "brave/browser/ui/omnibox/brave_omnibox_client_impl.h"
 
 #include <string>
+#include <utility>
 
 #include "base/check.h"
 #include "base/check_is_test.h"
@@ -21,6 +22,7 @@
 #include "brave/components/omnibox/browser/brave_omnibox_prefs.h"
 #include "brave/components/omnibox/browser/promotion_utils.h"
 #include "brave/components/p3a_utils/bucket.h"
+#include "brave/components/search_engines/brave_prepopulated_engines.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/omnibox/chrome_omnibox_client.h"
@@ -29,6 +31,10 @@
 #include "components/omnibox/browser/omnibox_log.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
+#include "components/search_engines/template_url.h"
+#include "components/search_engines/template_url_service.h"
+#include "ui/base/mojom/window_open_disposition.mojom.h"
+#include "ui/gfx/image/image.h"
 
 #if BUILDFLAG(ENABLE_AI_CHAT)
 #include "brave/components/ai_chat/core/browser/ai_chat_metrics.h"
@@ -61,16 +67,26 @@ constexpr const char* kAllSearchCountHistogramNames[] = {
 };
 constexpr int kSearchCountBuckets[] = {0, 5, 10, 20, 50, 100, 500};
 
+bool IsBraveSearchProvider(const TemplateURL* template_url) {
+  if (!template_url) {
+    return false;
+  }
+
+  const auto id = template_url->prepopulate_id();
+  return id == TemplateURLPrepopulateData::PREPOPULATED_ENGINE_ID_BRAVE ||
+         id == TemplateURLPrepopulateData::PREPOPULATED_ENGINE_ID_BRAVE_TOR;
+}
+
 bool IsSearchEvent(const AutocompleteMatch& match) {
   switch (match.type) {
-    case AutocompleteMatchType::SEARCH_WHAT_YOU_TYPED:
-    case AutocompleteMatchType::SEARCH_HISTORY:
-    case AutocompleteMatchType::SEARCH_SUGGEST:
-    case AutocompleteMatchType::SEARCH_SUGGEST_ENTITY:
-    case AutocompleteMatchType::SEARCH_SUGGEST_TAIL:
-    case AutocompleteMatchType::SEARCH_SUGGEST_PERSONALIZED:
-    case AutocompleteMatchType::SEARCH_SUGGEST_PROFILE:
-    case AutocompleteMatchType::SEARCH_OTHER_ENGINE:
+    case omnibox::AutocompleteMatchType::kSearchWhatYouTyped:
+    case omnibox::AutocompleteMatchType::kSearchHistory:
+    case omnibox::AutocompleteMatchType::kSearchSuggest:
+    case omnibox::AutocompleteMatchType::kSearchSuggestEntity:
+    case omnibox::AutocompleteMatchType::kSearchSuggestTail:
+    case omnibox::AutocompleteMatchType::kSearchSuggestPersonalized:
+    case omnibox::AutocompleteMatchType::kSearchSuggestProfile:
+    case omnibox::AutocompleteMatchType::kSearchOtherEngine:
       return true;
     default:
       return false;
@@ -142,6 +158,31 @@ BraveOmniboxClientImpl::GetSchemeClassifier() const {
   return scheme_classifier_;
 }
 
+gfx::Image BraveOmniboxClientImpl::GetFaviconForDefaultSearchProvider(
+    FaviconFetchedCallback on_favicon_fetched) {
+  // The Brave logo already stands for Shields in the location bar, so showing
+  // it again for Brave Search is confusing. Returning an empty image makes the
+  // omnibox fall back to the generic search vector icon.
+  if (IsBraveSearchProvider(
+          GetTemplateURLService()->GetDefaultSearchProvider())) {
+    return gfx::Image();
+  }
+
+  return ChromeOmniboxClient::GetFaviconForDefaultSearchProvider(
+      std::move(on_favicon_fetched));
+}
+
+gfx::Image BraveOmniboxClientImpl::GetFaviconForKeywordSearchProvider(
+    const TemplateURL* template_url,
+    FaviconFetchedCallback on_favicon_fetched) {
+  if (IsBraveSearchProvider(template_url)) {
+    return gfx::Image();
+  }
+
+  return ChromeOmniboxClient::GetFaviconForKeywordSearchProvider(
+      template_url, std::move(on_favicon_fetched));
+}
+
 void BraveOmniboxClientImpl::OnURLOpenedFromOmnibox(OmniboxLog* log) {
   if (log->selection.line <= 0) {
     return;
@@ -156,9 +197,9 @@ void BraveOmniboxClientImpl::OnURLOpenedFromOmnibox(OmniboxLog* log) {
 void BraveOmniboxClientImpl::OnAutocompleteAccept(
     const GURL& destination_url,
     TemplateURLRef::PostContent* post_content,
-    WindowOpenDisposition disposition,
+    ui::mojom::WindowOpenDisposition disposition,
     ui::PageTransition transition,
-    AutocompleteMatchType::Type match_type,
+    omnibox::AutocompleteMatchType match_type,
     base::TimeTicks match_selection_timestamp,
     bool destination_url_entered_without_scheme,
     bool destination_url_entered_with_http_scheme,
@@ -181,7 +222,7 @@ void BraveOmniboxClientImpl::OnAutocompleteAccept(
     // Record omnibox entry type for Brave Search queries
     if (page_metrics_) {
       bool is_suggestion =
-          match.type != AutocompleteMatchType::SEARCH_WHAT_YOU_TYPED;
+          match.type != omnibox::AutocompleteMatchType::kSearchWhatYouTyped;
       page_metrics_->brave_search_metrics().MaybeRecordOmniboxQuery(
           destination_url, is_suggestion);
       page_metrics_->RecordOmniboxQuery();
@@ -189,16 +230,16 @@ void BraveOmniboxClientImpl::OnAutocompleteAccept(
   }
   if (page_metrics_ && destination_url.SchemeIsHTTPOrHTTPS()) {
     switch (match.type) {
-      case AutocompleteMatchType::URL_WHAT_YOU_TYPED:
+      case omnibox::AutocompleteMatchType::kUrlWhatYouTyped:
         page_metrics_->navigation_source_metrics().RecordDirectNavigation();
         break;
-      case AutocompleteMatchType::HISTORY_URL:
-      case AutocompleteMatchType::HISTORY_TITLE:
-      case AutocompleteMatchType::HISTORY_BODY:
-      case AutocompleteMatchType::HISTORY_KEYWORD:
+      case omnibox::AutocompleteMatchType::kHistoryUrl:
+      case omnibox::AutocompleteMatchType::kHistoryTitle:
+      case omnibox::AutocompleteMatchType::kHistoryBody:
+      case omnibox::AutocompleteMatchType::kHistoryKeyword:
         page_metrics_->navigation_source_metrics().RecordHistoryNavigation();
         break;
-      case AutocompleteMatchType::BOOKMARK_TITLE:
+      case omnibox::AutocompleteMatchType::kBookmarkTitle:
         page_metrics_->navigation_source_metrics().RecordBookmarkNavigation();
         break;
       default:
@@ -207,7 +248,7 @@ void BraveOmniboxClientImpl::OnAutocompleteAccept(
   }
 #if BUILDFLAG(ENABLE_EMAIL_ALIASES)
   if (email_aliases_metrics_ &&
-      match.type == AutocompleteMatchType::URL_WHAT_YOU_TYPED &&
+      match.type == omnibox::AutocompleteMatchType::kUrlWhatYouTyped &&
       destination_url.spec() == email_aliases::kEmailAliasesSettingsURL) {
     email_aliases_metrics_->RecordSettingsPageNavigation(
         email_aliases::SettingsPageMethod::kManualNavigation);

@@ -14,8 +14,20 @@
 -All/SharedStorageManagerErrorParamTest.OtherOperationResults_NoErrorsAdded/FileBacked
 -All/SharedStorageManagerErrorParamTest.OtherOperationResults_NoErrorsAdded/InMemoryOnly
 
-# These tests fail because we override Prefetch methods to do nothing.
+# Upstream flake: 0.3% flake rate over 30 days per LUCI Analysis. The test
+# gives its two tabs, and the "tab outside a tab group" it selects last, local
+# IDs from tab_groups::test::GenerateRandomTabID(), which returns
+# RandIntInclusive(0, 1000). When two of those IDs collide, the selection
+# resolves to a tab in the group and fires an extra
+# HidePersistentMessage(DIRTY_TAB), over-saturating a Times(1) expectation.
+# Platform-independent, so it is filtered on all platforms.
+-MessagingBackendServiceImplTest.TestTabSelectionClearsAfterUnselectBasedOnConfiguration
+
+# These tests fail because we override Prefetch methods to do nothing, and
+# stub off `AffiliationServiceImpl::FetchChangePasswordURL` so it never fetches
+# (see rewrite/components/affiliations/core/browser/affiliation_service_impl.cc.yaml).
 -AffiliationServiceImplTest.*
+-All/WellKnownChangePasswordStateTest.FetchCallbackStoresPatternedChangePasswordUrlOverride/*
 
 # These tests fail because RankerURLFetcher::Request no longer performs a
 # real network fetch; it synchronously returns false and never invokes its
@@ -74,7 +86,8 @@
 -FeaturedSearchProviderTest.*
 
 # These tests fail because we stub out
-# optimization_guide::IsUserPermittedToFetchRemoteOptimizationGuide and
+# optimization_guide::IsUserPermittedToFetchRemoteOptimizationGuide,
+# optimization_guide::ShouldSkipGoogleApiKeyConfigurationCheck and
 # optimization_guide::features::IsModelDownloadingEnabled
 -All/OnDeviceModelServiceControllerBackgroundDownloadTest.Run/ConfigNotAvailableIfBackgroundDownloadEnabledAndAssetPending
 -HintsManagerFetchingTest.*
@@ -82,12 +95,23 @@
 -ModelBrokerClientTest.*
 -OnDeviceAssetManagerTest.*
 -OptimizationGuidePermissionsUtilTest.IsUserPermittedToFetchHintsDefaultUserAnonymousDataCollectionEnabled
+-OptimizationGuidePermissionsUtilTest.IsUserPermittedToFetchHintsRequiresGoogleChromeApiKey
 -PDPMetricsTest.TestFalseOptGuideResponseIsRecorded
 -PDPMetricsTest.TestPDPIsRecorded
 -PredictionManagerTest.*
+-PredictionModelDownloadManagerTest.ShouldFetchModelsRequiresGoogleChromeApiKey
+
+# These tests enable kPredictionModelComponentDelivery and expect a component
+# config, but we make optimization_guide::GetPredictionModelComponentConfig
+# always return std::nullopt (see
+# brave/rewrite/components/optimization_guide/core/delivery/prediction_mod
+# el_component_configs.cc.yaml).
+-PredictionModelComponentConfigsTest.*
+-PredictionModelComponentInstallerTest.*
+-PredictionModelComponentUpdateListenerTest.*
 
 # These tests fail because we disable commerce::kShoppingList
--All/ShoppingServiceTest.TestShoppingList*/*
+-ShoppingServiceTest.TestShoppingListEligible_CountryAndLocale_RegionLaunched
 
 # These tests fail because we override SyncAuthManager::DetermineAccountToUse.
 -SyncServiceImplStartupWithDetermineAccountTypeTest.StartupWithConsumerAccount
@@ -104,13 +128,14 @@
 # This test fails because we use different search engine keywords.
 -SearchEngineChoiceEligibilityTest.ChoiceScreenConditions_SkipFor3p_Waffle
 
-# This test assumes Google is the default search engine for the JP test fixture,
-# but Brave overrides the per-country default DSE (see
+# These tests assume Google is the default search engine for the JP test
+# fixture, but Brave overrides the per-country default DSE (see
 # regional_capabilities_utils.cc's JP entry in the default-engine map and
 # template_url_prepopulate_data_resolver.cc's GetPrepopulatedFallbackSearch
 # override), so JP resolves to a Yahoo JP engine instead. That engine also
 # carries our own prepopulate_id, not upstream's yahoo_jp/yahoo_jp_next id, so
 # it can't classify as kLegacy/kNew and always records kUnknown.
+-SearchEngineSettingsDataProviderSplitRegionTest.RecordsEngineStateForEachSplitEngine
 -SearchEngineSplitTemplateURLServiceSplitRegionTest.SearchEngineSplitProfileLoadMetrics_SplitRegion
 
 # These tests fail because upstream doesn't expect passwords to be syncable
@@ -143,10 +168,13 @@
 # consent level
 -AccountPreviewDataServiceTest.*
 -AccountUtilsTest.*
+-ContextualSearchSessionHandleTest.StartTabContextUploadFlow_RecordsAccountMatchesHistogram_Match
+-ContextualSearchSessionHandleTest.StartTabContextUploadFlow_RecordsAccountMatchesHistogram_NoUrlUsesAuthUserIndex
 -ContextualTasksServiceImplTest.CreateTaskFromUrl_MatchesPrimaryAccount
 -IdentityUtilsTest.GetOrderedAccountsForDisplayCookieOrderOnDesktop
 -LensIdentityDelegationHelperTest.FetchIdentityDelegationHeaders_*
 -WebSigninTrackerTest.FreshCookiesWithSigninAccountShouldTriggerSuccessResult
+-WebSigninTrackerTest.KnownResultShouldNotBeTriggeredBeforeStart
 
 # These tests fail because we do not record permissions UKM, see
 # brave/chromium_src/components/permissions/permission_uma_util.cc
@@ -175,17 +203,28 @@
 # These tests fail because we override WalletHttpClientImpl.
 -WalletHttpClientImplTest.*
 
-# This tests fails because we disable safe browsing enhanced protection and
+# These tests fail because we disable safe browsing enhanced protection and
 # patch safe_browsing::IsEnhancedProtectionEnabled to return false
 -All/ClientSideDetectionServiceBaseLimitTest.AtPhishingReportLimitESB/*
 -All/ClientSideDetectionServiceBaseLimitTest.GetNumReportTestESB/*
 -All/ClientSideDetectionServiceBaseOnlyESBTest.TestReceivingImageClassifierUpdatesAfterResubscription/*
 -All/ClientSideDetectionServiceOnlyESBTest.TestReceivingImageClassifierUpdatesAfterResubscription/*
 -ClientSideDetectionHostBaseTest.*
+-ClientSideDetectionHostBaseVisualClassificationTest.BrowserSideImageEmbeddingEmptyResultRecordsFailed
+-ClientSideDetectionHostBaseVisualClassificationTest.BrowserSideImageEmbeddingRecaptureFailureStillSendsPing
+-ClientSideDetectionHostBaseVisualClassificationTest.BrowserSideImageEmbeddingRecapturesWithoutRetainedImage
+-ClientSideDetectionHostBaseVisualClassificationTest.BrowserSideImageEmbeddingUsesRetainedImage
+-ClientSideDetectionHostBaseVisualClassificationTest.BrowserSideImageEmbeddingWithoutScorerSkipsRecapture
+-ClientSideDetectionHostBaseVisualClassificationTest.CancelPendingRequestsDuringRecaptureDropsEmbedding
+-ClientSideDetectionHostBaseVisualClassificationTest.EnhancedProtectionUpgradesTriggerModelsToImageEmbeddingMatch
+-ClientSideDetectionHostBaseVisualClassificationTest.ScorerChangeDuringRecaptureDropsEmbedding
+-ClientSideDetectionServiceBaseScorerTest.ImageEmbeddingModelGatedOnEnhancedProtection
 -ClientSideDetectionServiceBaseTest.TestReceivingImageEmbedderUpdatesAfterResubscription
 -GetUserPopulationTest.PopulatesPopulation_WithoutSBERDeprecation
 -RealTimeUrlLookupServiceTest.TestCanSendRTSampleRequest_FeatureEnabled
 -RealTimeUrlLookupServiceTest.TestFillLlamaForcedTriggerCapability
+-SafeBrowsingPrefsTest.ExplicitPermanentNoProtectionOptOut
+-SafeBrowsingPrefsTest.TemporaryNoProtectionStateTracking
 -SuspiciousSiteTriggerTest.MonitorMode_SuspiciousHitDuringLoad
 -TriggerManagerTest.AdSamplerTrigger
 -TriggerManagerTest.CollectionWhenSBERDisabledByPolicy_WithSBERDeprecation
@@ -204,22 +243,28 @@
 # These tests fail because we disable kAimEnabled.
 -AimEligibilityServiceTest.*
 
-# This test fails because we have a different set of regional search engines.
+# These tests fail because we have a different set of regional search engines.
 -RegionalCapabilitiesUtilsTest.GetPrepopulatedEngines
+-RegionalCapabilitiesUtilsTest.GetPrepopulatedEnginesInRegionalLists
+-TemplateURLPrepopulateDataTest.GetAllPrepopulatedEngines_ExcludesEnginesNotInRegionalLists
 
 # These tests fail because they use raw
 # TemplateURLPrepopulateData::kCurrentDataVersion to compare with the version
 # that is overridden to add Brave's version bump.
+-TemplateURLPrepopulateDataUpdateRequirementsTest.ComputeDatabaseUpdateRequirements/DbMoreRecentWithEngineMigrationDowngrade
+-TemplateURLPrepopulateDataUpdateRequirementsTest.ComputeDatabaseUpdateRequirements/EngineMigrationRollbackWithShadowVariantsUpgrade
 -TemplateURLPrepopulateDataUpdateRequirementsTest.ComputeDatabaseUpdateRequirements/UpgradeToBoth
 -TemplateURLPrepopulateDataUpdateRequirementsTest.ComputeDatabaseUpdateRequirements/UpToDateMetadataWithBothMigrations
 -TemplateURLPrepopulateDataUpdateRequirementsTest.ComputeDatabaseUpdateRequirements/UpToDateMetadataWithEngineMigration
 -TemplateURLPrepopulateDataUpdateRequirementsTest.ComputeDatabaseUpdateRequirements/UpToDateMetadataWithShadowVariants
+-TemplateURLServiceUtilLoadTest.GetSearchProvidersUsingLoadedEngines_MigrationRollback
 
 # These tests fail because we disable kAimEnabled.
 -AimEligibilityServiceTest.*
 
 # These tests fail because the default search engine is Brave instead of Google.
 -DefaultSearchManagerTest.DefaultSearchOverridesIgnoredWhenFlagEnabled
+-SearchEngineSettingsDataProviderNonSplitRegionTest.GetAllPrepopulatedSearchEngines_CuratesTheCatalog
 
 # This test fails because we disable Actor Safety Lists component.
 -ActorSafetyListsComponentInstallerPolicyTest.ComponentRegistered
@@ -307,11 +352,20 @@
 -SyncToSigninMigrationUndoTest.*
 -UnifiedConsentServiceTest.ReplaceSync_*
 
-
-# This test fails because we override VariationsIdsProvider's method
-# GetClientDataHeaders to return nullptr, so the X-Client-Data header the test
-# expects to find is never added.
+# These tests fail because we override VariationsIdsProvider's method
+# GetClientDataHeaders to return nullptr, so the X-Client-Data header the tests
+# expect to find is never added.
+-ContextualSearchDelegateImplTest.DiscourseContextHeaderRemovedOnCrossOriginRedirect_GoogleDSE
 -LogoServiceImplTest.IncludesVariationsHeaderWhenDSEIsGoogle
+
+# brave/build/config/locales.gni re-enables desktop UI support for az, bs, ka,
+# kk, km, lo, mk, mn, my, si, sq, uz (upstream's `extended_locales` excludes
+# them from desktop). Upstream never exercises these locales in this test on
+# desktop as a result. But third_party/icu/filters/common.json (unmodified by
+# us) still strips full calendar/date data for exactly these locales to
+# save binary size, since upstream assumes desktop never needs it. So ICU falls
+# back to the root pattern ("M12 7") for these 12 locales only.
+-DateInfo.GetIcuDate_LocalizedPattern_AllPlatformLocales
 
 # Tests below this point have not been diagnosed or had issues created yet.
 -AccountInvestigatorTest.*
@@ -342,7 +396,6 @@
 -ContentAutofillDriverTest.ExtractLabeledTextNodeValue_DoesNotTriggerOnInactiveFrame
 -ContentAutofillDriverTest_PrerenderBadMessage.BadMessageIfPrerendering
 -ContentSettingsRegistryTest.Inheritance
--CookieSettingsBaseTest.CookieAccessNotAllowedWithNoncePartitionKey
 -CookieSettingsTest.CookiesBlockSingle
 -CookieSettingsTest.CookiesExplicitSessionOnly
 -CookieSettingsTestP.CookiesBlockThirdParty/GrantSource_0
@@ -365,7 +418,7 @@
 -FeedbackUploaderDispatchTest.VariationHeaders
 -FeedbackUploaderDispatchTest.VariationHeadersForProductID
 -GetUserPopulationTest.PopulatesPopulation
--HashRealTimeUtilsTest.TestDetermineHashRealTimeSelection
+-HashRealTimeUtilsTest.TestDetermineHashRealTimeSelectionAndAreOhttpKeyFetchesEnabled
 -HistoryClustersServiceKeywordTest.*
 -HistoryURLProviderTest.DoesNotInlinePunycodeMatches
 -IdentityManagerBuilderTest.BuildIdentityManagerInitParameters
@@ -374,7 +427,7 @@
 -LocationBarModelUtilTest.GetSecurityVectorIconWithSecureLevel
 -MirrorTableMultilogin/AccountReconcilorTestMirrorMultilogin.TableRowTest/*
 -OhttpKeyServiceTest.AsyncFetch_PrefChanges_BackgroundHprtDisabled
--OhttpKeyServiceTest.GetOhttpKey_BackgroundLookupsForbidden
+-All/OhttpKeyServiceEsbTest.GetOhttpKey_EnhancedProtectionWithoutBackgroundLookups/0
 -OnDeviceModelAdaptationLoaderTest.*
 -OnDeviceModelComponentTest.*
 -OnDeviceModelServiceControllerTest.*
@@ -443,6 +496,8 @@
 -TemplateURLPrepopulateDataTest.ClearProvidersFromPrefs
 -TemplateURLPrepopulateDataTest.EntriesPerCountryConsistency
 -TemplateURLPrepopulateDataTest.FindGoogleAsFallback
+-TemplateURLPrepopulateDataTest.GetAllPrepopulatedEngines_RegionalPriority
+-TemplateURLPrepopulateDataTest.GetAllPrepopulatedEngines_SkipsMigratingTargets
 -TemplateURLPrepopulateDataTest.GetPrepopulatedEngineFromFullList
 -TemplateURLPrepopulateDataTest.NumberOfEntriesPerCountryConsistency
 -TemplateURLPrepopulateDataTest.ProvidersFromPrepopulated

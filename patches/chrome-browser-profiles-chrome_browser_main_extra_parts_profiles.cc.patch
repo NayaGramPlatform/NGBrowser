@@ -1,0 +1,13 @@
+diff --git a/chrome/browser/profiles/chrome_browser_main_extra_parts_profiles.cc b/chrome/browser/profiles/chrome_browser_main_extra_parts_profiles.cc
+index 1887208972a6f0b89b28b40e666434aefbd1b94f..69733333b281cb546106ce981b094f15c5c9a4d2 100644
+--- a/chrome/browser/profiles/chrome_browser_main_extra_parts_profiles.cc
++++ b/chrome/browser/profiles/chrome_browser_main_extra_parts_profiles.cc
+@@ -705,7 +705,7 @@ void ChromeBrowserMainExtraPartsProfiles::
+   chromeos_extensions::EnsureBrowserContextKeyedServiceFactoriesBuilt();
+ #endif
+   extensions::EnsureBrowserContextKeyedServiceFactoriesBuilt();
+-#elif BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
++#elif BUILDFLAG(IS_ANDROID) && BUILDFLAG(ENABLE_EXTENSIONS_CORE)
+   chrome_extensions::EnsureBrowserContextKeyedServiceFactoriesBuilt();
+   // EnsureBrowserContextKeyedServiceFactoriesBuilt() is invoked before the
+   // ExtensionsBrowserClient is ready on Android. This is due to Android

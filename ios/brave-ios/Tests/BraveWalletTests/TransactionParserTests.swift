@@ -220,7 +220,7 @@ class TransactionParserTests: XCTestCase {
       createdTime: Date(),
       submittedTime: Date(),
       confirmedTime: Date(),
-      originInfo: nil,
+      dappOriginInfo: nil,
       chainId: chainId,
       effectiveRecipient: effectiveRecipient,
       isRetriable: false,
@@ -255,7 +255,6 @@ class TransactionParserTests: XCTestCase {
 
     let expectedParsedTransaction = ParsedTransaction(
       transaction: transaction,
-      namedFromAddress: accountInfos[0].name,
       fromAccountInfo: accountInfos[0],
       namedToAddress: "Ethereum Account 2",
       toAddress: "0x0987654321098765432109876543210987654321",
@@ -295,7 +294,6 @@ class TransactionParserTests: XCTestCase {
       expectedParsedTransaction.fromAccountInfo.id,
       parsedTransaction.fromAccountInfo.id
     )
-    XCTAssertEqual(expectedParsedTransaction.namedFromAddress, parsedTransaction.namedFromAddress)
     XCTAssertEqual(expectedParsedTransaction.toAddress, parsedTransaction.toAddress)
     XCTAssertEqual(expectedParsedTransaction.networkSymbol, parsedTransaction.networkSymbol)
     guard case .ethSend(let expectedDetails) = expectedParsedTransaction.details,
@@ -337,7 +335,6 @@ class TransactionParserTests: XCTestCase {
 
     let expectedParsedTransaction = ParsedTransaction(
       transaction: transaction,
-      namedFromAddress: accountInfos[0].name,
       fromAccountInfo: accountInfos[0],
       namedToAddress: "Ethereum Account 2",
       toAddress: "0x0987654321098765432109876543210987654321",
@@ -415,7 +412,6 @@ class TransactionParserTests: XCTestCase {
 
     let expectedParsedTransaction = ParsedTransaction(
       transaction: transaction,
-      namedFromAddress: accountInfos[0].name,
       fromAccountInfo: accountInfos[0],
       namedToAddress: "0x Exchange Proxy",
       toAddress: "0xDef1C0ded9bec7F1a1670819833240f027b25EfF",
@@ -498,7 +494,6 @@ class TransactionParserTests: XCTestCase {
 
     let expectedParsedTransaction = ParsedTransaction(
       transaction: transaction,
-      namedFromAddress: accountInfos[0].name,
       fromAccountInfo: accountInfos[0],
       namedToAddress: "0x Exchange Proxy",
       toAddress: "0xDef1C0ded9bec7F1a1670819833240f027b25EfF",
@@ -568,7 +563,6 @@ class TransactionParserTests: XCTestCase {
 
     let expectedParsedTransaction = ParsedTransaction(
       transaction: transaction,
-      namedFromAddress: accountInfos[0].name,
       fromAccountInfo: accountInfos[0],
       namedToAddress: BraveWallet.BlockchainToken.previewDaiToken.contractAddress.truncatedAddress,
       toAddress: BraveWallet.BlockchainToken.previewDaiToken.contractAddress,
@@ -636,7 +630,6 @@ class TransactionParserTests: XCTestCase {
 
     let expectedParsedTransaction = ParsedTransaction(
       transaction: transaction,
-      namedFromAddress: accountInfos[0].name,
       fromAccountInfo: accountInfos[0],
       namedToAddress: BraveWallet.BlockchainToken.previewDaiToken.contractAddress.truncatedAddress,
       toAddress: BraveWallet.BlockchainToken.previewDaiToken.contractAddress,
@@ -707,7 +700,6 @@ class TransactionParserTests: XCTestCase {
 
     let expectedParsedTransaction = ParsedTransaction(
       transaction: transaction,
-      namedFromAddress: accountInfos[0].name,
       fromAccountInfo: accountInfos[0],
       namedToAddress: "Ethereum Account 2",
       toAddress: "0x0987654321098765432109876543210987654321",
@@ -745,6 +737,100 @@ class TransactionParserTests: XCTestCase {
       return
     }
     XCTAssertNoDifference(expectedParsedTransaction, parsedTransaction)
+  }
+
+  func testErc721SetApprovalForAllTransaction() {
+    let network: BraveWallet.NetworkInfo = .mockMainnet
+    let spenderAddress = "0x0987654321098765432109876543210987654321"
+
+    let transactionData: BraveWallet.TxData1559 = .init(
+      baseData: .init(
+        chainId: network.chainId,
+        nonce: "1",
+        gasPrice: "0x0",
+        gasLimit: "0x5208",
+        to: BraveWallet.BlockchainToken.previewDaiToken.contractAddress,
+        value: "0x0",
+        data: []
+      ),
+      maxPriorityFeePerGas: "0x59672ead",
+      maxFeePerGas: "0x59672eb6"
+    )
+
+    let expectedDetails: ParsedTransaction.Details = .erc721SetApprovalForAll(
+      .init(
+        spenderAddress: spenderAddress,
+        gasFee: .init(
+          fee: "0.0000314986",
+          fiat: "$0.0000315"
+        )
+      )
+    )
+
+    // Granting and revoking parse identically; only `txArgs[1]` differs, which
+    // the UI reads via `isGrantingERC721SetApprovalForAll`.
+    for approved in ["0x1", "0x0"] {
+      let transaction = mockTransaction(
+        fromAccount: accountInfos[0],
+        txDataUnion: .init(ethTxData1559: transactionData),
+        txType: .erc721SetApprovalForAll,
+        txArgs: [
+          spenderAddress,  // operator
+          approved,
+        ],
+        effectiveRecipient: transactionData.baseData.to
+      )
+
+      guard
+        let parsedTransaction = TransactionParser.parseTransaction(
+          transaction: transaction,
+          allNetworks: [network, .mockPolygon],
+          accountInfos: accountInfos,
+          userAssets: tokens,
+          allTokens: tokens,
+          assetRatios: assetRatios,
+          nftMetadata: [:],
+          solEstimatedTxFee: nil,
+          currencyFormatter: currencyFormatter
+        )
+      else {
+        XCTFail("Failed to parse erc721SetApprovalForAll transaction")
+        return
+      }
+      XCTAssertNoDifference(
+        ParsedTransaction(
+          transaction: transaction,
+          fromAccountInfo: accountInfos[0],
+          namedToAddress: "",
+          toAddress: spenderAddress,
+          network: network,
+          details: expectedDetails
+        ),
+        parsedTransaction
+      )
+    }
+
+    // Missing the `approved` arg is unparseable.
+    let malformedTransaction = mockTransaction(
+      fromAccount: accountInfos[0],
+      txDataUnion: .init(ethTxData1559: transactionData),
+      txType: .erc721SetApprovalForAll,
+      txArgs: [spenderAddress],
+      effectiveRecipient: transactionData.baseData.to
+    )
+    XCTAssertNil(
+      TransactionParser.parseTransaction(
+        transaction: malformedTransaction,
+        allNetworks: [network, .mockPolygon],
+        accountInfos: accountInfos,
+        userAssets: tokens,
+        allTokens: tokens,
+        assetRatios: assetRatios,
+        nftMetadata: [:],
+        solEstimatedTxFee: nil,
+        currencyFormatter: currencyFormatter
+      )
+    )
   }
 
   func testSolanaSystemTransfer() {
@@ -787,7 +873,6 @@ class TransactionParserTests: XCTestCase {
     )
     let expectedParsedTransaction = ParsedTransaction(
       transaction: transaction,
-      namedFromAddress: accountInfos[2].name,
       fromAccountInfo: accountInfos[2],
       namedToAddress: accountInfos[3].name,
       toAddress: accountInfos[3].address,
@@ -828,7 +913,6 @@ class TransactionParserTests: XCTestCase {
       expectedParsedTransaction.fromAccountInfo.id,
       parsedTransaction.fromAccountInfo.id
     )
-    XCTAssertEqual(expectedParsedTransaction.namedFromAddress, parsedTransaction.namedFromAddress)
     XCTAssertEqual(expectedParsedTransaction.toAddress, parsedTransaction.toAddress)
     XCTAssertEqual(expectedParsedTransaction.networkSymbol, parsedTransaction.networkSymbol)
     guard case .solSystemTransfer(let expectedDetails) = expectedParsedTransaction.details,
@@ -884,7 +968,6 @@ class TransactionParserTests: XCTestCase {
     )
     let expectedParsedTransaction = ParsedTransaction(
       transaction: transaction,
-      namedFromAddress: accountInfos[2].name,
       fromAccountInfo: accountInfos[2],
       namedToAddress: accountInfos[3].name,
       toAddress: accountInfos[3].address,
@@ -964,7 +1047,6 @@ class TransactionParserTests: XCTestCase {
     )
     let expectedParsedTransaction = ParsedTransaction(
       transaction: transaction,
-      namedFromAddress: accountInfos[2].name,
       fromAccountInfo: accountInfos[2],
       namedToAddress: accountInfos[3].name,
       toAddress: accountInfos[3].address,
@@ -1216,7 +1298,6 @@ class TransactionParserTests: XCTestCase {
 
     let expectedParsedTransaction = ParsedTransaction(
       transaction: transaction,
-      namedFromAddress: accountInfos[4].name,
       fromAccountInfo: accountInfos[4],
       namedToAddress: accountInfos[5].name,
       toAddress: accountInfos[5].address,
@@ -1259,7 +1340,6 @@ class TransactionParserTests: XCTestCase {
       expectedParsedTransaction.fromAccountInfo.id,
       parsedTransaction.fromAccountInfo.id
     )
-    XCTAssertEqual(expectedParsedTransaction.namedFromAddress, parsedTransaction.namedFromAddress)
     XCTAssertEqual(expectedParsedTransaction.toAddress, parsedTransaction.toAddress)
     XCTAssertEqual(expectedParsedTransaction.networkSymbol, parsedTransaction.networkSymbol)
     guard case .filSend(let expectedDetails) = expectedParsedTransaction.details,
@@ -1301,7 +1381,6 @@ class TransactionParserTests: XCTestCase {
 
     let expectedParsedTransaction = ParsedTransaction(
       transaction: transaction,
-      namedFromAddress: mockFromAccount.name,
       fromAccountInfo: mockFromAccount,
       namedToAddress: "",
       toAddress: mockToAccountAddress,
@@ -1342,7 +1421,6 @@ class TransactionParserTests: XCTestCase {
       expectedParsedTransaction.fromAccountInfo.id,
       parsedTransaction.fromAccountInfo.id
     )
-    XCTAssertEqual(expectedParsedTransaction.namedFromAddress, parsedTransaction.namedFromAddress)
     XCTAssertEqual(expectedParsedTransaction.toAddress, parsedTransaction.toAddress)
     XCTAssertEqual(expectedParsedTransaction.networkSymbol, parsedTransaction.networkSymbol)
 
@@ -1384,7 +1462,6 @@ class TransactionParserTests: XCTestCase {
 
     let expectedParsedTransaction = ParsedTransaction(
       transaction: transaction,
-      namedFromAddress: mockFromAccount.name,
       fromAccountInfo: mockFromAccount,
       namedToAddress: "",
       toAddress: mockToAccountAddress,
@@ -1425,7 +1502,6 @@ class TransactionParserTests: XCTestCase {
       expectedParsedTransaction.fromAccountInfo.id,
       parsedTransaction.fromAccountInfo.id
     )
-    XCTAssertEqual(expectedParsedTransaction.namedFromAddress, parsedTransaction.namedFromAddress)
     XCTAssertEqual(expectedParsedTransaction.toAddress, parsedTransaction.toAddress)
     XCTAssertEqual(expectedParsedTransaction.networkSymbol, parsedTransaction.networkSymbol)
 
@@ -1466,7 +1542,6 @@ class TransactionParserTests: XCTestCase {
 
     let expectedParsedTransaction = ParsedTransaction(
       transaction: transaction,
-      namedFromAddress: mockFromAccount.name,
       fromAccountInfo: mockFromAccount,
       namedToAddress: "",
       toAddress: mockToAccountAddress,
@@ -1507,7 +1582,6 @@ class TransactionParserTests: XCTestCase {
       expectedParsedTransaction.fromAccountInfo.id,
       parsedTransaction.fromAccountInfo.id
     )
-    XCTAssertEqual(expectedParsedTransaction.namedFromAddress, parsedTransaction.namedFromAddress)
     XCTAssertEqual(expectedParsedTransaction.toAddress, parsedTransaction.toAddress)
     XCTAssertEqual(expectedParsedTransaction.networkSymbol, parsedTransaction.networkSymbol)
 
@@ -1551,7 +1625,6 @@ class TransactionParserTests: XCTestCase {
 
     let expectedParsedTransaction = ParsedTransaction(
       transaction: transaction,
-      namedFromAddress: mockFromAccount.name,
       fromAccountInfo: mockFromAccount,
       namedToAddress: "",
       toAddress: mockToAccountAddress,
@@ -1592,7 +1665,6 @@ class TransactionParserTests: XCTestCase {
       expectedParsedTransaction.fromAccountInfo.id,
       parsedTransaction.fromAccountInfo.id
     )
-    XCTAssertEqual(expectedParsedTransaction.namedFromAddress, parsedTransaction.namedFromAddress)
     XCTAssertEqual(expectedParsedTransaction.toAddress, parsedTransaction.toAddress)
     XCTAssertEqual(expectedParsedTransaction.networkSymbol, parsedTransaction.networkSymbol)
 

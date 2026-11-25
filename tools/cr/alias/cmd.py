@@ -11,6 +11,10 @@ Subcommands:
                     renames.
   - mv              Move a file/directory in brave-core and repair every
                     downstream artefact.
+  - rebase-feature-branch
+                    Rebase a feature branch onto a Chromium update, refreshing
+                    plaster patches and using brockit's logic to resolve patch
+                    conflicts
   - install-hook    Install the commit-msg hook from
                     tools/cr/alias/commit-msg.py.
   - setup-alias     Register the `git cr` alias in the local .git/config.
@@ -45,8 +49,13 @@ from pathlib import Path
 
 import _boot  # noqa: F401
 import repository
-from alias.base import (HOOK_DEST, HOOK_SOURCE, WINDOWS_SHIM,
-                        UserValidationError, check_hooks_path)
+from alias.base import (
+    HOOK_DEST,
+    HOOK_SOURCE,
+    WINDOWS_SHIM,
+    UserValidationError,
+    check_hooks_path,
+)
 from alias.commit import cmd_commit
 from vpython_utils import VPYTHON3_PATH
 
@@ -93,13 +102,20 @@ def cmd_install_hook() -> int:
 
     if platform.system() == 'Windows':
         HOOK_DEST.write_bytes(WINDOWS_SHIM)
-        HOOK_DEST.chmod(HOOK_DEST.stat().st_mode | stat.S_IXUSR
-                        | stat.S_IXGRP
-                        | stat.S_IXOTH)
+        HOOK_DEST.chmod(
+            HOOK_DEST.stat().st_mode
+            | stat.S_IXUSR
+            | stat.S_IXGRP
+            | stat.S_IXOTH
+        )
     else:
         HOOK_DEST.symlink_to(HOOK_SOURCE)
-        HOOK_SOURCE.chmod(HOOK_SOURCE.stat().st_mode | stat.S_IXUSR
-                          | stat.S_IXGRP | stat.S_IXOTH)
+        HOOK_SOURCE.chmod(
+            HOOK_SOURCE.stat().st_mode
+            | stat.S_IXUSR
+            | stat.S_IXGRP
+            | stat.S_IXOTH
+        )
 
     print(f'Installed: {HOOK_DEST} → {HOOK_SOURCE}')
     return 0
@@ -115,8 +131,9 @@ def cmd_setup_alias() -> int:
     # `!`-prefixed aliases run from the work-tree top by default, masking the
     # user's actual cwd. Restore it via $GIT_PREFIX (git's path-from-top hint)
     # so relative paths and `git rev-parse --show-cdup` behave as expected.
-    alias_value = (f'!cd "${{GIT_PREFIX:-.}}" && '
-                   f'"{_VPYTHON3_PATH}" "{_SCRIPT_PATH}"')
+    alias_value = (
+        f'!cd "${{GIT_PREFIX:-.}}" && "{_VPYTHON3_PATH}" "{_SCRIPT_PATH}"'
+    )
     try:
         repository.brave.run_git('config', '--local', 'alias.cr', alias_value)
     except subprocess.CalledProcessError as e:
@@ -143,10 +160,16 @@ def main() -> int:
             return cmd_setup_alias()
         if subcmd == 'mv':
             import alias.mv
+
             return alias.mv.cmd_mv(rest)
         if subcmd == 'follow-renames':
             import alias.follow_renames
+
             return alias.follow_renames.cmd_follow_renames(rest)
+        if subcmd == 'rebase-feature-branch':
+            import alias.rebase_feature_branch
+
+            return alias.rebase_feature_branch.cmd_rebase_feature_branch(rest)
     except UserValidationError as e:
         print(e, file=sys.stderr)
         return 1

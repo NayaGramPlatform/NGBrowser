@@ -5,6 +5,7 @@
 
 import("//brave/components/ai_chat/core/common/buildflags/buildflags.gni")
 import("//brave/components/commander/common/buildflags/buildflags.gni")
+import("//brave/components/local_ai/buildflags/buildflags.gni")
 import("//brave/components/omnibox/buildflags/buildflags.gni")
 
 # Only reachable from the strict query check, which stands in for the suggest
@@ -75,6 +76,19 @@ source_set("unit_tests") {
     deps += [ "//brave/components/ai_chat/core/common" ]
   }
 
+  if (enable_local_ai) {
+    sources += [ "//brave/components/omnibox/browser/brave_history_embeddings_provider_unittest.cc" ]
+    deps += [
+      "//brave/components/history_embeddings/core",
+      "//components/history/core/browser",
+      "//components/history/core/test",
+      "//components/passage_embeddings/core",
+      "//third_party/metrics_proto",
+      "//ui/base",
+      "//url",
+    ]
+  }
+
   # This target isn't built on iOS, but GN still defines it there and resolves
   # these labels, and //chrome/... asserts it isn't reachable from an iOS
   # build. Keep every //chrome dep in here.
@@ -106,7 +120,10 @@ source_set("unit_tests") {
 
     deps += [
       "//brave/components/commander/browser",
+      "//brave/components/resources:strings",
       "//brave/components/vector_icons",
+      "//third_party/omnibox_proto",
+      "//ui/base",
     ]
   }
 

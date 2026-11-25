@@ -35,11 +35,11 @@ constexpr char kCountryIDAtInstall[] = "countryid_at_install";
 std::unique_ptr<TemplateURLData> CreatePrepopulateTemplateURLData(
     int prepopulate_id,
     const std::string& keyword,
-    TemplateURLID id) {
+    int64_t id) {
   std::unique_ptr<TemplateURLData> data(new TemplateURLData);
   data->prepopulate_id = prepopulate_id;
   data->SetKeyword(base::ASCIIToUTF16(keyword));
-  data->id = id;
+  data->id = TemplateURLID(id);
   return data;
 }
 
@@ -56,7 +56,7 @@ class BraveTemplateURLServiceUtilTest : public testing::Test {
 
 void TestDefaultOrder(const TemplateURL::OwnedTemplateURLVector& template_urls,
                       const std::vector<std::string>& keywords) {
-  EXPECT_EQ(template_urls.size(), keywords.size());
+  ASSERT_EQ(template_urls.size(), keywords.size());
 
   for (size_t i = 0; i < template_urls.size(); i++) {
     EXPECT_EQ(template_urls[i]->keyword(), base::ASCIIToUTF16(keywords[i]));

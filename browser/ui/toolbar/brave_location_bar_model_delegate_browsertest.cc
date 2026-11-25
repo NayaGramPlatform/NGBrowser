@@ -9,10 +9,10 @@
 #include "brave/browser/brave_shields/brave_shields_tab_helper.h"
 #include "brave/browser/ui/page_info/features.h"
 #include "brave/components/vector_icons/vector_icons.h"
-#include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_location_bar_model_delegate.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
+#include "components/tabs/public/tab_interface.h"
 #include "content/public/test/browser_test.h"
 #include "net/dns/mock_host_resolver.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
@@ -40,7 +40,9 @@ class MockBraveLocationBarModelDelegate
 
 class BraveLocationBarModelDelegateBrowserTest : public InProcessBrowserTest {
  public:
-  BraveLocationBarModelDelegateBrowserTest() = default;
+  BraveLocationBarModelDelegateBrowserTest()
+      : BraveLocationBarModelDelegateBrowserTest(
+            /*shields_in_page_info=*/false) {}
 
   void SetUpOnMainThread() override {
     InProcessBrowserTest::SetUpOnMainThread();
@@ -75,11 +77,17 @@ class BraveLocationBarModelDelegateBrowserTest : public InProcessBrowserTest {
   }
 
   brave_shields::BraveShieldsTabHelper* GetShieldsHelper() {
-    return brave_shields::BraveShieldsTabHelper::FromWebContents(
-        GetActiveWebContents());
+    return brave_shields::BraveShieldsTabHelper::From(
+        tabs::TabInterface::MaybeGetFromContents(GetActiveWebContents()));
   }
 
  protected:
+  explicit BraveLocationBarModelDelegateBrowserTest(bool shields_in_page_info) {
+    feature_list_.InitWithFeatureState(
+        page_info::features::kShowBraveShieldsInPageInfo, shields_in_page_info);
+  }
+
+  base::test::ScopedFeatureList feature_list_;
   std::unique_ptr<MockBraveLocationBarModelDelegate> delegate_;
 };
 
@@ -115,15 +123,11 @@ IN_PROC_BROWSER_TEST_F(BraveLocationBarModelDelegateBrowserTest,
 class BraveLocationBarModelDelegateShieldsBrowserTest
     : public BraveLocationBarModelDelegateBrowserTest {
  public:
-  BraveLocationBarModelDelegateShieldsBrowserTest() {
-    feature_list.InitAndEnableFeature(
-        page_info::features::kShowBraveShieldsInPageInfo);
-  }
+  BraveLocationBarModelDelegateShieldsBrowserTest()
+      : BraveLocationBarModelDelegateBrowserTest(
+            /*shields_in_page_info=*/true) {}
 
   ~BraveLocationBarModelDelegateShieldsBrowserTest() override = default;
-
- protected:
-  base::test::ScopedFeatureList feature_list;
 };
 
 IN_PROC_BROWSER_TEST_F(BraveLocationBarModelDelegateShieldsBrowserTest,

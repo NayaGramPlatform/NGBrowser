@@ -1,20 +1,40 @@
 diff --git a/chrome/browser/ui/views/tabs/common/tab_collection_node.cc b/chrome/browser/ui/views/tabs/common/tab_collection_node.cc
-index 37b753fbc73505e362121892730490c825efccdb..0e832e4498c79515724f0b201f50ce5029ea3a23 100644
+index 0d651c18cf0a348fe63eb4ce322a2ceb8125e065..53e507e505502eb4d35ac9144b3d4615d87671c8 100644
 --- a/chrome/browser/ui/views/tabs/common/tab_collection_node.cc
 +++ b/chrome/browser/ui/views/tabs/common/tab_collection_node.cc
-@@ -37,6 +37,7 @@ TabCollectionNode::Type GetTypeFromNode(tabs::ConstChildPtr node_data_) {
-         return TabCollectionNode::Type::GROUP;
-       case tabs::TabCollection::Type::SPLIT:
-         return TabCollectionNode::Type::SPLIT;
-+      BRAVE_GET_TYPE_FROM_NODE
-     }
-   }
-   CHECK(std::holds_alternative<tabs::ConstDanglingUntriagedTabInterface>(
-@@ -110,6 +111,7 @@ std::unique_ptr<views::View> TabCollectionNode::CreateViewForNode(
-       return std::make_unique<TabGroupView>(node_for_view);
-     case Type::TAB:
-       return std::make_unique<TabView>(node_for_view);
-+    BRAVE_TAB_COLLECTION_NODE_CREATE_VIEW_FOR_NODE
-   }
-   return std::make_unique<CollectionTestViewImpl>(node_for_view);
- }
+@@ -28,6 +28,8 @@ TabCollectionNode::Type GetTypeFromNode(tabs::ConstChildPtr node_data_) {
+           node_data_)) {
+     switch (std::get<tabs::ConstDanglingUntriagedTabCollection>(node_data_)
+                 ->type()) {
++      case tabs::TabCollection::Type::TREE_NODE:
++        return TabCollectionNode::Type::TREE_NODE;
+       case tabs::TabCollection::Type::TABSTRIP:
+         return TabCollectionNode::Type::TABSTRIP;
+       case tabs::TabCollection::Type::PINNED:
+@@ -76,6 +78,8 @@ tabs::TabCollectionNodeHandle GetHandleFromNode(tabs::ConstChildPtr node_data) {
+ std::unique_ptr<views::View> TabCollectionNode::CreateViewForNode(
+     TabCollectionNode* node_for_view) {
+   switch (node_for_view->type()) {
++    case Type::TREE_NODE:
++      NOTREACHED();
+     case Type::TABSTRIP:
+       return std::make_unique<TabStripView>(node_for_view);
+     case Type::PINNED:
+@@ -115,7 +119,7 @@ std::unique_ptr<views::View> TabCollectionNode::Initialize() {
+           node_data_)) {
+     const tabs::TabCollection* collection =
+         std::get<tabs::ConstDanglingUntriagedTabCollection>(node_data_);
+-    for (const auto& child_data : collection->GetChildren()) {
++    for (const tabs::Child& child_data : tree_tab_view_utils::GetUnwrappedChildren(*collection)) {
+       tabs::ConstChildPtr child_ptr;
+       if (std::holds_alternative<std::unique_ptr<tabs::TabCollection>>(
+               child_data)) {
+@@ -141,7 +145,7 @@ void TabCollectionNode::Deinitialize() {
+           node_data_)) {
+     const tabs::TabCollection* collection =
+         std::get<tabs::ConstDanglingUntriagedTabCollection>(node_data_);
+-    for (const auto& child_data : collection->GetChildren()) {
++    for (const tabs::Child& child_data : tree_tab_view_utils::GetUnwrappedChildren(*collection)) {
+       tabs::TabCollectionNodeHandle child_handle;
+       if (std::holds_alternative<std::unique_ptr<tabs::TabCollection>>(
+               child_data)) {

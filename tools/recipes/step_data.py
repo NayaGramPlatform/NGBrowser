@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from engine_types import StepPresentation
 from recipe_api import Placeholder
 
 # Distinguishes "no result staged" from a placeholder whose result is None.
@@ -43,13 +44,15 @@ class _PlaceholderNamespace:
     def __getattr__(self, name: str):
         raise AttributeError(
             f'StepData({self._step_name!r}).{self._namespace} has no attribute '
-            f'{name!r}.')
+            f'{name!r}.'
+        )
 
     def __setattr__(self, name: str, value: Any) -> None:
         if self.__dict__.get('_frozen'):
             raise AttributeError(
                 f'Cannot assign to StepData({self._step_name!r})'
-                f'.{self._namespace}.{name}.')
+                f'.{self._namespace}.{name}.'
+            )
         self.__dict__[name] = value
 
     def _freeze(self) -> None:
@@ -65,6 +68,8 @@ class StepData:
       * `retcode`: the command's exit code.
       * `stdout` / `stderr`: the result of the step's `stdout`/`stderr`
         placeholder, or `None` when the step didn't redirect that handle.
+      * `presentation`: the step's `StepPresentation`, through which it
+        exports output properties.
 
     On top of those, each output placeholder in the step's command contributes
     one attribute, addressed by the placeholder's namespaces (its module and
@@ -91,23 +96,25 @@ class StepData:
         # the `step` module once the step is done.
         self.stdout: Any = None
         self.stderr: Any = None
+        self.presentation = StepPresentation(name)
         # namespaces -> {placeholder name or None: result}, filled in by
         # `assign_placeholder` and turned into real attributes by `finalize`.
         self._staged: dict[tuple[str, str], dict[str | None, Any]] = {}
         self._frozen = False
 
-    def assign_placeholder(self, placeholder: Placeholder,
-                           result: Any) -> None:
+    def assign_placeholder(self, placeholder: Placeholder, result: Any) -> None:
         """Stage one output placeholder's *result*, to be filed by `finalize`."""
         if self._frozen:
             raise ValueError(
                 f'Cannot assign placeholder {placeholder.label!r} on the '
-                f'finalized result of step {self.name!r}')
+                f'finalized result of step {self.name!r}'
+            )
         by_name = self._staged.setdefault(placeholder.namespaces, {})
         if placeholder.name in by_name:
             raise ValueError(
                 f'Step {self.name!r} has two {placeholder.label!r} '
-                'placeholders. Give them distinct names.')
+                'placeholders. Give them distinct names.'
+            )
         by_name[placeholder.name] = result
 
     def finalize(self) -> None:
@@ -145,10 +152,12 @@ class StepData:
         if self.__dict__.get('_frozen'):
             raise ValueError(
                 f'Cannot assign to {name!r} on the finalized result of step '
-                f'{self.name!r}')
+                f'{self.name!r}'
+            )
         object.__setattr__(self, name, value)
 
     def __getattr__(self, name: str):
         step_name = self.__dict__.get('name')
         raise AttributeError(
-            f'The result of step {step_name!r} has no attribute {name!r}.')
+            f'The result of step {step_name!r} has no attribute {name!r}.'
+        )

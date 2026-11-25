@@ -156,7 +156,7 @@ var package = Package(
         .copy("Frontend/Reader/Reader.html"),
         .copy("Frontend/Reader/ReaderViewLoading.html"),
         .copy("Frontend/Browser/NewTabPage/Backgrounds/Assets/NTP_Images/corwin-prescott-3.jpg"),
-        .copy("Frontend/Browser/Favorites/Data/top_sites_by_region.json"),
+        .copy("Frontend/Browser/TopSites/Data/top_sites_by_region.json"),
         .copy(
           "Frontend/UserContent/UserScripts/Scripts_Dynamic/Scripts/DomainSpecific/Paged/BraveSearchResultAdScript.js"
         ),
@@ -215,9 +215,6 @@ var package = Package(
           "Frontend/UserContent/UserScripts/Scripts_Dynamic/Scripts/Sandboxed/FaviconScript.js"
         ),
         .copy(
-          "Frontend/UserContent/UserScripts/Scripts_Dynamic/Scripts/Sandboxed/ResourceDownloaderScript.js"
-        ),
-        .copy(
           "Frontend/UserContent/UserScripts/Scripts_Dynamic/Scripts/Sandboxed/SiteStateListenerScript.js"
         ),
         .copy("WebFilters/ContentBlocker/Lists/block-ads.json"),
@@ -255,7 +252,6 @@ var package = Package(
         "CertificateUtilities", "BraveShared", "BraveCore",
         "PartitionAllocSupport",
       ],
-      exclude: ["Certificates/self-signed.conf"],
       resources: [
         .copy("Certificates/certviewer/brave.com.cer"),
         .copy("Certificates/certviewer/github.com.cer"),
@@ -378,10 +374,12 @@ var package = Package(
     ),
     .target(
       name: "BraveWidgetsModels",
-      dependencies: ["FaviconModels"],
+      dependencies: ["BraveStrings", "FaviconModels"],
       sources: [
         "BraveWidgets.intentdefinition", "LockScreenFavoriteIntentHandler.swift",
         "FavoritesWidgetData.swift", "DisabledShortcutsWidgetData.swift",
+        "OpenControlWidgetShortcutIntent.swift",
+        "ShortcutOption.swift", "WidgetShortcut+Appearance.swift",
       ],
       plugins: ["IntentBuilderPlugin", "LoggerPlugin"]
     ),
@@ -629,18 +627,21 @@ var package = Package(
 let iosRootDirectory = URL(string: PackageDescription.Context.packageDirectory)!.absoluteString
 let isStripAbsolutePathsFromDebugSymbolsEnabled = {
   do {
-    let env = try String(contentsOfFile: "\(iosRootDirectory)/../../.env", encoding: .utf8)
-      .split(separator: "\n")
-      .map { $0.split(separator: "=").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) } }
-    return env.contains(where: { $0.first == "use_remoteexec" && $0.last == "true" })
+    let env = try String(
+      contentsOfFile: "\(iosRootDirectory)/../../../out/ios_current_link/args.xcconfig",
+      encoding: .utf8
+    )
+    .split(separator: "\n")
+    .map { $0.split(separator: "=").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) } }
+    return env.contains(where: { $0.first == "brave_ios_debug_prefix_map_flag" })
   } catch {
     return false
   }
 }()
 
-if isStripAbsolutePathsFromDebugSymbolsEnabled {
-  for target in package.targets where target.type == .regular || target.type == .test {
-    var settings = target.swiftSettings ?? []
+for target in package.targets where target.type == .regular || target.type == .test {
+  var settings = target.swiftSettings ?? []
+  if isStripAbsolutePathsFromDebugSymbolsEnabled {
     settings.append(
       .unsafeFlags(
         [
@@ -649,6 +650,98 @@ if isStripAbsolutePathsFromDebugSymbolsEnabled {
         .when(configuration: .debug)
       )
     )
-    target.swiftSettings = settings
   }
+  // Approchable Concurrency feature flags
+  settings.append(contentsOf: [
+    .enableUpcomingFeature("DisableOutwardActorInference"),
+    .enableUpcomingFeature("GlobalActorIsolatedTypesUsability"),
+    .enableUpcomingFeature("InferIsolatedConformances"),
+    .enableUpcomingFeature("InferSendableFromCaptures"),
+    .enableUpcomingFeature("NonisolatedNonsendingByDefault"),
+  ])
+  // We cannot use `treatAllWarnings` to enable warnings-as-errors here because it turns warnings
+  // that we cannot opt-out of (such as third-party dependency Obj-C header warnings in
+  // GuardianConnect–into errors) so the alternative is to explicitly treat Swift specific
+  // diagnostic groups as errors instead.
+  //
+  // The source of truth for these groups are in Swift, found here:
+  // https://github.com/swiftlang/swift/blob/swift-6.4.2-RELEASE/include/swift/AST/DiagnosticGroups.def
+  //
+  // - Update this link and list with major Swift releases
+  // - Diagnostic groups marked as `DefaultIgnoreWarnings` are not included in this list.
+  // - Ignore linked groups (`GROUP_LINK`), instead opting into each individual diagnostic group.
+  // - Keep this list alpha-sorted.
+  let diagnosticGroups: Set<String> = [
+    "ActorIsolatedCall",
+    "ActorIsolatedMutatingAsync",
+    "AddPreconcurrencyImport",
+    "AlwaysAvailableDomain",
+    "AvailabilityUnrecognizedName",
+    "ClangDeclarationImport",
+    "CompilationCaching",
+    "ConformanceIsolation",
+    "ConversionFromIsolatedAnyToSynchronous",
+    "DeprecatedDeclaration",
+    "DynamicCallable",
+    "ErrorInFutureSwiftVersion",
+    "ExclusivityViolation",
+    "ExistentialAny",
+    "ExistentialMemberAccess",
+    "ForeignReferenceType",
+    "ImplementationOnlyDeprecated",
+    "ImplicitStrongCapture",
+    "InconsistentImportAccess",
+    "IsolatedConformances",
+    "MemberImportVisibility",
+    "MissingModuleOnKnownPaths",
+    "ModuleNotTestable",
+    "ModuleSelfImport",
+    "ModuleVersionMissing",
+    "MultipleInheritance",
+    "MutableGlobalVariable",
+    "NominalTypes",
+    "NonisolatedNonsendingByDefault",
+    "NonSendableExitingActor",
+    "NonSendableInAsyncConformanceOrOverride",
+    "NonSendableObjCInterop",
+    "NonSendableSuperclass",
+    "NoUsage",
+    "NoUseUnstructuredThrowingTask",
+    "OldSuppressedAssociatedTypes",
+    "OpaqueTypeInference",
+    "OptionObsoletedByModuleSelectors",
+    "OSLog",
+    "PackageModuleLoadedFromSDK",
+    "PropertyWrappers",
+    "ProtocolTypeNonConformance",
+    "ResultBuilderMethods",
+    "SendableClosureCaptures",
+    "SendableMetatypes",
+    "SendingClosureRisksDataRace",
+    "SendingRisksDataRace",
+    "SPIImportIgnored",
+    "StrictMemorySafety",
+    "StringInterpolationConformance",
+    "TemporaryPointers",
+    "TrailingClosureMatching",
+    "UnavailableSendableConformance",
+    "UnknownWarningGroup",
+    "UnsupportedScopedImport",
+    "UnusedImportAccess",
+    "UselessAvailabilityCheck",
+    "UselessConditionalStatement",
+    "WeakMutability",
+  ]
+  // Diagnostics to opt-out of errors from the list above
+  let excludedDiagnostics: Set<String> = [
+    // Deprecation warnings are common when new SDKs release and shouldn't block a build before
+    // being fixed.
+    "DeprecatedDeclaration"
+  ]
+  settings.append(
+    contentsOf: diagnosticGroups.subtracting(excludedDiagnostics).map({
+      .treatWarning($0, as: .error)
+    })
+  )
+  target.swiftSettings = settings
 }

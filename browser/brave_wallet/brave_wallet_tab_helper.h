@@ -10,13 +10,12 @@
 #include <string>
 #include <utility>
 
-#include "base/containers/flat_map.h"
-#include "base/containers/flat_set.h"
 #include "base/gtest_prod_util.h"
 #include "brave/components/brave_wallet/common/brave_wallet.mojom.h"
 #include "brave/components/brave_wallet/common/buildflags/buildflags.h"
-#include "content/public/browser/web_contents_user_data.h"
+#include "chrome/browser/ui/tabs/contents_observing_tab_feature.h"
 #include "mojo/public/cpp/bindings/unique_receiver_set.h"
+#include "ui/base/unowned_user_data/scoped_unowned_user_data.h"
 #include "url/gurl.h"
 
 static_assert(BUILDFLAG(ENABLE_BRAVE_WALLET));
@@ -27,19 +26,26 @@ class Widget;
 
 namespace content {
 class BrowserContext;
-struct GlobalRenderFrameHostId;
 class WebContents;
 
 }  // namespace content
+
+namespace tabs {
+class TabInterface;
+}  // namespace tabs
 
 namespace brave_wallet {
 
 class WalletBubbleManagerDelegate;
 
-class BraveWalletTabHelper
-    : public content::WebContentsUserData<BraveWalletTabHelper> {
+// Serves the wallet providers of a tab's frames. Owned by BraveTabFeatures.
+class BraveWalletTabHelper : public tabs::ContentsObservingTabFeature {
  public:
-  explicit BraveWalletTabHelper(content::WebContents* web_contents);
+  DECLARE_USER_DATA(BraveWalletTabHelper);
+
+  static BraveWalletTabHelper* From(tabs::TabInterface* tab);
+
+  explicit BraveWalletTabHelper(tabs::TabInterface& tab);
   ~BraveWalletTabHelper() override;
 
   static void BindEthereumProvider(
@@ -54,13 +60,9 @@ class BraveWalletTabHelper
       content::RenderFrameHost* const frame_host,
       mojo::PendingReceiver<mojom::CardanoProvider> receiver);
 
-  void AddSolanaConnectedAccount(const content::GlobalRenderFrameHostId& id,
-                                 const std::string& account);
-  void RemoveSolanaConnectedAccount(const content::GlobalRenderFrameHostId& id,
-                                    const std::string& account);
-  bool IsSolanaAccountConnected(const content::GlobalRenderFrameHostId& id,
-                                const std::string& account);
-  void ClearSolanaConnectedAccounts(const content::GlobalRenderFrameHostId& id);
+  static void BindPolkadotProvider(
+      content::RenderFrameHost* const frame_host,
+      mojo::PendingReceiver<mojom::PolkadotProvider> receiver);
 
   // TODO(https://github.com/brave/brave-browser/issues/55073): split this tab
   // helper.
@@ -82,21 +84,11 @@ class BraveWalletTabHelper
 
  private:
   FRIEND_TEST_ALL_PREFIXES(BraveWalletTabHelperUnitTest, GetApproveBubbleURL);
-  FRIEND_TEST_ALL_PREFIXES(BraveWalletTabHelperUnitTest,
-                           SolanaConnectedAccount);
-  friend class content::WebContentsUserData<BraveWalletTabHelper>;
 
-  // This set is used to maintain connected status for each frame, it is a
-  // separate non persistent status from site permission. It depends on if a
-  // site successfully call connect or not, calling disconnect will remove
-  // itself from this set. Note that site permission is required for a site to
-  // do connect, if an user reject the connect request, connect would fail. On
-  // the other hand, if the user approve the connect request, site permission
-  // will be saved and future connect from the same site will not ask user for
-  // permission again until the permission is removed.
-  // Each RenderFrameHost has its own connection set.
-  base::flat_map<content::GlobalRenderFrameHostId, base::flat_set<std::string>>
-      solana_connected_accounts_;
+  // tabs::ContentsObservingTabFeature:
+  void OnDiscardContents(tabs::TabInterface* tab,
+                         content::WebContents* old_contents,
+                         content::WebContents* new_contents) override;
 
 #if !BUILDFLAG(IS_ANDROID)
   void ShowBubbleImpl(GURL url);
@@ -111,8 +103,9 @@ class BraveWalletTabHelper
   mojo::UniqueReceiverSet<mojom::EthereumProvider> ethereum_provider_receivers_;
   mojo::UniqueReceiverSet<mojom::SolanaProvider> solana_provider_receivers_;
   mojo::UniqueReceiverSet<mojom::CardanoProvider> cardano_provider_receivers_;
+  mojo::UniqueReceiverSet<mojom::PolkadotProvider> polkadot_provider_receivers_;
 
-  WEB_CONTENTS_USER_DATA_KEY_DECL();
+  ui::ScopedUnownedUserData<BraveWalletTabHelper> scoped_unowned_user_data_;
 };
 
 }  // namespace brave_wallet

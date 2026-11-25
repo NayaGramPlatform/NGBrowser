@@ -12,7 +12,6 @@
 #include "base/strings/strcat.h"
 #include "chrome/browser/prefs/session_startup_pref.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
@@ -26,6 +25,7 @@
 #include "content/public/browser/web_ui.h"
 #include "content/public/browser/webui_config.h"
 #include "content/public/browser/webui_config_map.h"
+#include "content/public/common/child_process_id.h"
 #include "content/public/common/url_constants.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
@@ -34,7 +34,7 @@
 #include "content/public/test/web_ui_browsertest_util.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "ui/base/window_open_disposition.h"
+#include "ui/base/mojom/window_open_disposition.mojom.h"
 #include "ui/webui/untrusted_web_ui_controller.h"
 #include "url/gurl.h"
 #include "url/origin.h"
@@ -169,7 +169,7 @@ class WebUISubdomainBrowserTest : public InProcessBrowserTest {
     content::TestNavigationObserver observer(url);
     observer.StartWatchingNewWebContents();
     EXPECT_TRUE(ui_test_utils::NavigateToURLWithDisposition(
-        browser(), url, WindowOpenDisposition::NEW_FOREGROUND_TAB,
+        browser(), url, ui::mojom::WindowOpenDisposition::kNewForegroundTab,
         ui_test_utils::BROWSER_TEST_WAIT_FOR_LOAD_STOP));
     observer.Wait();
     EXPECT_TRUE(observer.last_navigation_succeeded())
@@ -316,13 +316,13 @@ IN_PROC_BROWSER_TEST_F(WebUISubdomainBrowserTest,
 
   // Navigating between two subdomains within a single tab also swaps processes,
   // even though both subdomains share a WebUI type (their common config).
-  const int process_before =
-      tab_a->GetPrimaryMainFrame()->GetProcess()->GetDeprecatedID();
+  const content::ChildProcessId process_before =
+      tab_a->GetPrimaryMainFrame()->GetProcess()->GetID();
   ASSERT_EQ(tab_a, browser()->tab_strip_model()->GetWebContentsAt(1));
   browser()->tab_strip_model()->ActivateTabAt(1);
   ASSERT_EQ(tab_a, NavigateActiveTab(url_b));
   EXPECT_NE(process_before,
-            tab_a->GetPrimaryMainFrame()->GetProcess()->GetDeprecatedID());
+            tab_a->GetPrimaryMainFrame()->GetProcess()->GetID());
   EXPECT_FALSE(tab_a->IsCrashed());
 }
 
@@ -339,24 +339,29 @@ IN_PROC_BROWSER_TEST_F(WebUISubdomainBrowserTest,
   EXPECT_FALSE(web_contents->IsCrashed());
   EXPECT_FALSE(web_contents->GetWebUI());
 
+  // Nor through a deeper subdomain of it.
+  EXPECT_FALSE(NavigateActiveTabAndGetSuccess(
+      PageURL(base::StrCat({"a.b.", kNoSubdomainsHost}))));
+  EXPECT_FALSE(web_contents->IsCrashed());
+  EXPECT_FALSE(web_contents->GetWebUI());
+
   // The browser is still usable afterwards.
   EXPECT_EQ(
       kTestPageTitle,
       NavigateActiveTab(PageURL("instance-a", kSubdomainsHost))->GetTitle());
 }
 
-// Only single-label subdomains resolve: `a.b.host` has no config registered for
-// its direct parent `b.host`, so it must fail cleanly.
-IN_PROC_BROWSER_TEST_F(WebUISubdomainBrowserTest,
-                       MultiLabelSubdomainDoesNotLoad) {
-  const GURL url = content::GetChromeUntrustedUIURL(
-      base::StrCat({"a.b.", kSubdomainsHost, "/", kTestPage}));
-  content::WebContents* web_contents = GetActiveWebContents();
+// Subdomains resolve at any depth: `a.b.host` has no config registered for its
+// direct parent `b.host`, so the lookup walks up to `host`, whose config serves
+// it and is handed the full host to validate.
+IN_PROC_BROWSER_TEST_F(WebUISubdomainBrowserTest, MultiLabelSubdomainLoads) {
+  const GURL url = PageURL(base::StrCat({"a.b.", kSubdomainsHost}));
+  content::WebContents* web_contents = NavigateActiveTab(url);
 
-  EXPECT_FALSE(NavigateActiveTabAndGetSuccess(url));
-  EXPECT_FALSE(web_contents->IsCrashed());
-  EXPECT_FALSE(web_contents->GetWebUI());
-  EXPECT_TRUE(subdomains_config().controller_urls().empty());
+  EXPECT_EQ(kTestPageTitle, web_contents->GetTitle());
+  EXPECT_THAT(subdomains_config().controller_urls(), testing::ElementsAre(url));
+  EXPECT_EQ(url::Origin::Create(url).Serialize(),
+            content::EvalJs(web_contents, "self.origin"));
 }
 
 // History and reloads keep working on a subdomain: each entry re-resolves the

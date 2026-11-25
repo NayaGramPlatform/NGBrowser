@@ -5,10 +5,8 @@
 
 #include "brave/components/brave_rewards/core/engine/credentials/credentials_util.h"
 
-#include <memory>
 #include <utility>
 
-#include "brave/components/brave_rewards/core/engine/rewards_callbacks.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace brave_rewards::internal::credential {
@@ -99,7 +97,7 @@ class RewardsPromotionUtilTest : public testing::Test {
 TEST_F(RewardsPromotionUtilTest, UnBlindCredsWorksCorrectly) {
   auto unblinded_encoded_tokens = UnBlindCreds(GetCredsBatch());
 
-  EXPECT_TRUE(unblinded_encoded_tokens.has_value());
+  ASSERT_TRUE(unblinded_encoded_tokens.has_value());
   EXPECT_EQ(unblinded_encoded_tokens->size(), 20u);
 }
 
@@ -109,7 +107,7 @@ TEST_F(RewardsPromotionUtilTest, UnBlindCredsCredsNotCorrect) {
 
   auto unblinded_encoded_tokens = UnBlindCreds(std::move(creds));
 
-  EXPECT_FALSE(unblinded_encoded_tokens.has_value());
+  ASSERT_FALSE(unblinded_encoded_tokens.has_value());
   EXPECT_EQ(unblinded_encoded_tokens.error(),
             "Failed to verify and unblind batch DLEQ proof");
 }

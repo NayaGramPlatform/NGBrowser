@@ -36,6 +36,18 @@ TEST(StorageUtilsUnitTest, IsWireguardActive) {
   EXPECT_TRUE(IsWireguardActive());
 }
 
+TEST(StorageUtilsUnitTest, IsLanTrafficAllowed) {
+  registry_util::RegistryOverrideManager registry_overrides;
+  registry_overrides.OverrideRegistry(HKEY_CURRENT_USER);
+  // Default value is true, matching the registered default of
+  // prefs::kBraveVPNWireguardAllowLanTraffic, so no seeding is needed.
+  EXPECT_TRUE(IsLanTrafficAllowed());
+  SetAllowLanTraffic(false);
+  EXPECT_FALSE(IsLanTrafficAllowed());
+  SetAllowLanTraffic(true);
+  EXPECT_TRUE(IsLanTrafficAllowed());
+}
+
 TEST(StorageUtilsUnitTest, GetLastUsedConfigPath) {
   registry_util::RegistryOverrideManager registry_overrides;
   registry_overrides.OverrideRegistry(HKEY_LOCAL_MACHINE);
@@ -47,7 +59,7 @@ TEST(StorageUtilsUnitTest, GetLastUsedConfigPath) {
   base::FilePath test_config_path(L"C:\\value");
   EXPECT_TRUE(wireguard::UpdateLastUsedConfigPath(test_config_path));
   auto last_config = wireguard::GetLastUsedConfigPath();
-  EXPECT_TRUE(last_config.has_value());
+  ASSERT_TRUE(last_config.has_value());
   EXPECT_EQ(last_config.value(), test_config_path);
 }
 
@@ -77,7 +89,7 @@ TEST(StorageUtilsUnitTest, WriteConnectionState) {
   EXPECT_FALSE(GetConnectionState());
   WriteConnectionState(1);
   auto value = GetConnectionState();
-  EXPECT_TRUE(value.has_value());
+  ASSERT_TRUE(value.has_value());
   EXPECT_EQ(value.value(), 1);
 }
 

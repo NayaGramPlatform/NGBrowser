@@ -2,12 +2,12 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at https://mozilla.org/MPL/2.0/.
-"""The engine's stack of open steps.
-"""
+"""The engine's stack of open steps."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 import attr
 import gevent
@@ -16,6 +16,9 @@ from engine_types import PerGreenletState
 
 if TYPE_CHECKING:
     from step_data import StepData
+
+# Receives each step as it closes, with the output properties it exported.
+StepFinaliser = Callable[['StepData', dict[str, Any]], None]
 
 
 @attr.s(slots=True)
@@ -38,9 +41,14 @@ class _ActiveStep:
     # Greenlets spawned while this entry was the innermost parent.
     greenlets: list = attr.ib(factory=list)
 
-    def close(self) -> None:
-        """Wait for the work spawned under this step."""
+    def close(self, on_finalise: StepFinaliser | None) -> None:
+        """Wait for the work spawned under this step, then finalise it."""
         gevent.wait(self.greenlets)
+        if self.step_data is None:
+            return
+        properties = self.step_data.presentation.finalize()
+        if on_finalise is not None:
+            on_finalise(self.step_data, properties)
 
 
 class _Steps(PerGreenletState):
@@ -75,8 +83,11 @@ class StepStack:
     same property, by routing both through the engine.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, on_finalise: StepFinaliser | None = None) -> None:
         self._storage = _Steps()
+        # Told about every step as it closes, which is when its presentation is
+        # finalised and its output properties exported.
+        self._on_finalise = on_finalise
         # namespace tokens -> {requested step name: times used}, so a repeated
         # name within one namespace can be given a distinct one. Shared by the
         # whole run rather than per greenlet, so concurrent steps cannot end up
@@ -112,12 +123,14 @@ class StepStack:
         used = self._step_names.setdefault(namespace, {})
         count = used.setdefault(name, 0)
         used[name] += 1
-        return namespace + (name if not count else f'{name} ({count + 1})', )
+        return namespace + (name if not count else f'{name} ({count + 1})',)
 
-    def push(self,
-             step_data: StepData,
-             name_tokens: tuple[str, ...],
-             is_parent: bool = False) -> None:
+    def push(
+        self,
+        step_data: StepData,
+        name_tokens: tuple[str, ...],
+        is_parent: bool = False,
+    ) -> None:
         """Make *step_data* the tip of this greenlet's stack."""
         self._stack.append(_ActiveStep(step_data, name_tokens, is_parent))
 
@@ -132,7 +145,7 @@ class StepStack:
 
     def pop(self) -> None:
         """Close the tip and drop it, leaving the entry beneath it as the tip."""
-        self._stack.pop().close()
+        self._stack.pop().close(self._on_finalise)
 
     def close_non_parent_step(self) -> None:
         """Close the tip, unless it is a parent nesting step.
@@ -143,7 +156,7 @@ class StepStack:
         """
         if self._stack[-1].is_parent:
             return
-        self._stack.pop().close()
+        self._stack.pop().close(self._on_finalise)
 
     def register_greenlet(self, greenlet: gevent.Greenlet) -> None:
         """Attribute *greenlet* to the tip, to be waited for when it closes."""
@@ -156,4 +169,4 @@ class StepStack:
         is what waits for work the recipe spawned but never collected.
         """
         self.close_non_parent_step()
-        self._stack[-1].close()
+        self._stack[-1].close(self._on_finalise)

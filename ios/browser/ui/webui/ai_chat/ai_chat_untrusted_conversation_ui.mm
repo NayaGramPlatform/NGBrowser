@@ -50,6 +50,7 @@
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "third_party/abseil-cpp/absl/strings/str_format.h"
+#include "ui/base/mojom/window_open_disposition.mojom.h"
 #include "url/url_constants.h"
 
 namespace {
@@ -83,13 +84,6 @@ class UIHandler : public ai_chat::mojom::UntrustedUIHandler {
   void OpenSearchURL(const std::string& search_query) override {
     OpenURL(GURL("https://search.brave.com/search?q=" +
                  base::EscapeQueryParamValue(search_query, true)));
-  }
-
-  void OpenURLFromResponse(const GURL& url) override {
-    if (!url.is_valid() || !url.SchemeIs(url::kHttpsScheme)) {
-      return;
-    }
-    OpenURL(url);
   }
 
   void GoPremium() override {
@@ -155,7 +149,9 @@ class UIHandler : public ai_chat::mojom::UntrustedUIHandler {
   void BindConversationHandler(
       const std::string& conversation_id,
       mojo::PendingReceiver<ai_chat::mojom::UntrustedConversationHandler>
-          untrusted_conversation_handler_receiver) override {
+          untrusted_conversation_handler_receiver,
+      mojo::PendingReceiver<ai_chat::mojom::UntrustedConversationUserActions>
+          user_actions_receiver) override {
     if (conversation_id.empty()) {
       return;
     }
@@ -173,6 +169,9 @@ class UIHandler : public ai_chat::mojom::UntrustedUIHandler {
         base::BindOnce(
             [](mojo::PendingReceiver<
                    ai_chat::mojom::UntrustedConversationHandler> receiver,
+               mojo::PendingReceiver<
+                   ai_chat::mojom::UntrustedConversationUserActions>
+                   user_actions_receiver,
                ai_chat::ConversationHandler* conversation_handler) {
               if (!conversation_handler) {
                 DVLOG(0)
@@ -181,8 +180,14 @@ class UIHandler : public ai_chat::mojom::UntrustedUIHandler {
                 return;
               }
               conversation_handler->Bind(std::move(receiver));
+              // //ios/web exposes no per-frame user activation (nothing in
+              // ios/web/public; web::UserInteractionState is internal and
+              // per-WKWebView), so there's nothing to gate on here yet.
+              conversation_handler->BindUserActions(
+                  std::move(user_actions_receiver), /*gesture_filter=*/nullptr);
             },
-            std::move(untrusted_conversation_handler_receiver)));
+            std::move(untrusted_conversation_handler_receiver),
+            std::move(user_actions_receiver)));
   }
 
   void BindUntrustedUI(
@@ -202,7 +207,7 @@ class UIHandler : public ai_chat::mojom::UntrustedUIHandler {
     web_ui_->GetWebState()->OpenURL({
         url,
         web::Referrer(),
-        WindowOpenDisposition::NEW_FOREGROUND_TAB,
+        ui::mojom::WindowOpenDisposition::kNewForegroundTab,
         ui::PAGE_TRANSITION_LINK,
         false,
     });

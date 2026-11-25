@@ -5,7 +5,6 @@
 
 #include "brave/components/omnibox/browser/brave_on_device_head_provider.h"
 
-#include <memory>
 #include <string_view>
 
 #include "base/base_paths.h"
@@ -14,6 +13,7 @@
 #include "base/memory/scoped_refptr.h"
 #include "base/path_service.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/test/run_until.h"
 #include "brave/components/omnibox/browser/brave_fake_autocomplete_provider_client.h"
 #include "brave/components/omnibox/browser/brave_omnibox_prefs.h"
 #include "components/omnibox/browser/autocomplete_input.h"
@@ -48,8 +48,9 @@ class BraveOnDeviceHeadProviderTest : public testing::Test,
     auto* update_listener = OnDeviceModelUpdateListener::GetInstance();
     if (update_listener) {
       update_listener->OnHeadModelUpdate(file_path);
+      ASSERT_TRUE(base::test::RunUntil(
+          [&] { return !update_listener->head_model_filename().empty(); }));
     }
-    task_environment_.RunUntilIdle();
   }
 
   void OnProviderUpdate(bool updated_matches,

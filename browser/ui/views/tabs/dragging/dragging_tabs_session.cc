@@ -13,6 +13,7 @@
 #include "chrome/browser/ui/views/tabs/dragging/tab_drag_context.h"
 #include "chrome/browser/ui/views/tabs/tab.h"
 #include "ui/gfx/geometry/point.h"
+#include "ui/views/view.h"
 
 DraggingTabsSession::DraggingTabsSession(
     DragSessionData drag_data,
@@ -20,18 +21,19 @@ DraggingTabsSession::DraggingTabsSession(
     TabDragPositioningDelegate& drag_position_delegate,
     bool initial_move,
     gfx::Point point_in_screen)
-    : DraggingTabsSessionChromium(drag_data,
-                                  attached_context,
-                                  drag_position_delegate,
-                                  initial_move,
-                                  point_in_screen) {}
+    : DraggingTabsSession_ChromiumImpl(drag_data,
+                                       attached_context,
+                                       drag_position_delegate,
+                                       initial_move,
+                                       point_in_screen) {}
 
 DraggingTabsSession::~DraggingTabsSession() {}
 
 gfx::Point DraggingTabsSession::GetAttachedDragPoint(
     gfx::Point point_in_screen) {
   if (!is_showing_vertical_tabs_) {
-    return DraggingTabsSessionChromium::GetAttachedDragPoint(point_in_screen);
+    return DraggingTabsSession_ChromiumImpl::GetAttachedDragPoint(
+        point_in_screen);
   }
 
   gfx::Point tab_loc(point_in_screen);
@@ -45,7 +47,7 @@ gfx::Point DraggingTabsSession::GetAttachedDragPoint(
 }
 
 void DraggingTabsSession::MoveAttached(gfx::Point point_in_screen) {
-  DraggingTabsSessionChromium::MoveAttached(point_in_screen);
+  DraggingTabsSession_ChromiumImpl::MoveAttached(point_in_screen);
   if (!is_showing_vertical_tabs_) {
     return;
   }
@@ -60,14 +62,15 @@ void DraggingTabsSession::MoveAttached(gfx::Point point_in_screen) {
 std::optional<tab_groups::TabGroupId>
 DraggingTabsSession::CalculateGroupForDraggedTabs(int to_index) {
   if (!is_showing_vertical_tabs_) {
-    return DraggingTabsSessionChromium::CalculateGroupForDraggedTabs(to_index);
+    return DraggingTabsSession_ChromiumImpl::CalculateGroupForDraggedTabs(
+        to_index);
   }
 
   TabStripModel* attached_model = attached_context_->GetTabStripModel();
 
   // If a group is moved, the drag cannot be inserted into another group.
   for (const TabDragData& tab_drag_datum : drag_data_.tab_drag_data_) {
-    if (tab_drag_datum.view_type == TabSlotView::ViewType::kTabGroupHeader) {
+    if (tab_drag_datum.is_group_header) {
       return std::nullopt;
     }
   }
@@ -113,13 +116,13 @@ DraggingTabsSession::CalculateGroupForDraggedTabs(int to_index) {
   // next of the gap. If the tab is centered in the gap, make the tab
   // ungrouped.
 
-  const TabSlotView* top_most_selected_tab =
+  const views::View* top_most_selected_tab =
       drag_position_delegate_->GetTabAt(selected_unpinned[0]);
 
   const int buffer = top_most_selected_tab->height() / 4;
 
   const auto tab_bounds_in_drag_context_coords = [this](int model_index) {
-    const TabSlotView* const tab =
+    const views::View* const tab =
         drag_position_delegate_->GetTabAt(model_index);
     return ToEnclosingRect(views::View::ConvertRectToTarget(
         tab->parent(), base::to_address(attached_context_),

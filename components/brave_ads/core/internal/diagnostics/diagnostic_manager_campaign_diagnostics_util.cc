@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <optional>
+#include <map>
 #include <string>
 #include <utility>
 #include <vector>
@@ -21,8 +22,6 @@
 #include "brave/components/brave_ads/core/internal/ads_core/ads_core_util.h"
 #include "brave/components/brave_ads/core/internal/creatives/creative_daypart_info.h"
 #include "brave/components/brave_ads/core/internal/creatives/new_tab_page_ads/creative_new_tab_page_ad_wallpaper_type.h"
-#include "brave/components/brave_ads/core/internal/creatives/new_tab_page_ads/creative_new_tab_page_ads_database_table.h"
-#include "brave/components/brave_ads/core/internal/creatives/notification_ads/creative_notification_ads_database_table.h"
 #include "brave/components/brave_ads/core/internal/serving/eligible_ads/exclusion_rules/subdivision_targeting_exclusion_rule.h"
 #include "brave/components/brave_ads/core/internal/user_engagement/ad_events/ad_events_database_table.h"
 #include "brave/components/brave_ads/core/mojom/brave_ads.mojom.h"
@@ -31,6 +30,38 @@
 namespace brave_ads {
 
 namespace {
+
+std::string ToString(mojom::NewTabPageAdCampaignType mojom_campaign_type) {
+  switch (mojom_campaign_type) {
+    case mojom::NewTabPageAdCampaignType::kUndefined:
+      return "Undefined";
+    case mojom::NewTabPageAdCampaignType::kFree:
+      return "Free";
+    case mojom::NewTabPageAdCampaignType::kPaid:
+      return "Paid";
+    case mojom::NewTabPageAdCampaignType::kBarter:
+      return "Barter";
+    case mojom::NewTabPageAdCampaignType::kMakeGood:
+      return "Make Good";
+    case mojom::NewTabPageAdCampaignType::kHouse:
+      return "House";
+    case mojom::NewTabPageAdCampaignType::kCause:
+      return "Cause";
+    case mojom::NewTabPageAdCampaignType::kFixed:
+      return "Fixed";
+    case mojom::NewTabPageAdCampaignType::kTrial:
+      return "Trial";
+    case mojom::NewTabPageAdCampaignType::kPreemptive:
+      return "Preemptive";
+    case mojom::NewTabPageAdCampaignType::kAffiliate:
+      return "Affiliate";
+    case mojom::NewTabPageAdCampaignType::kSurvey:
+      return "Survey";
+    case mojom::NewTabPageAdCampaignType::kProduct:
+      return "Product";
+  }
+  NOTREACHED();
+}
 
 std::string ToString(mojom::NewTabPageAdMetricType mojom_metric_type) {
   switch (mojom_metric_type) {
@@ -125,7 +156,9 @@ struct CreativeSetInfo {
   // segment (see `creatives_builder.cc`), so the distinct segments across
   // its rows are its targeting list.
   base::flat_set<std::string> segments;
-  absl::flat_hash_map<std::string, CreativeInfo> creatives_by_instance_id;
+  // Ordered by key rather than `absl::flat_hash_map` so the UI's rendered
+  // order is stable across repeated loads of the same underlying data.
+  std::map<std::string, CreativeInfo> creatives_by_instance_id;
 };
 
 // Aggregates every creative ad belonging to the same campaign into a single
@@ -139,8 +172,11 @@ struct CampaignInfo {
   int daily_cap = 0;
   int priority = 0;
   double pass_through_rate = 0.0;
+  std::string campaign_type;
   std::string metric_type;
-  absl::flat_hash_map<std::string, CreativeSetInfo> creative_sets_by_id;
+  // Ordered by key rather than `absl::flat_hash_map` so the UI's rendered
+  // order is stable across repeated loads of the same underlying data.
+  std::map<std::string, CreativeSetInfo> creative_sets_by_id;
   // The catalog's own geo-targeting for this campaign, as opposed to the
   // device's own locale-derived country; shown on the Resources tab's
   // Catalog card since it's the more meaningful "what region is this data
@@ -224,7 +260,9 @@ void BuildCampaigns(GetCampaignsDiagnosticsCallback callback,
       BuildServedImpressionTimestamps(ad_events);
 
   size_t active_ad_count = 0;
-  absl::flat_hash_map<std::string, CampaignInfo> campaigns;
+  // Ordered by key rather than `absl::flat_hash_map` so the UI's rendered
+  // order is stable across repeated loads of the same underlying data.
+  std::map<std::string, CampaignInfo> campaigns;
 
   for (const auto& creative_ad : creative_ads) {
     if (!exclusion_rule.ShouldInclude(creative_ad)) {
@@ -240,6 +278,7 @@ void BuildCampaigns(GetCampaignsDiagnosticsCallback callback,
     campaign.daily_cap = creative_ad.daily_cap;
     campaign.priority = creative_ad.priority;
     campaign.pass_through_rate = creative_ad.pass_through_rate;
+    campaign.campaign_type = ToString(creative_ad.campaign_type);
     campaign.metric_type = ToString(creative_ad.metric_type);
     campaign.geo_targets.insert(creative_ad.geo_targets.cbegin(),
                                 creative_ad.geo_targets.cend());
@@ -347,6 +386,7 @@ void BuildCampaigns(GetCampaignsDiagnosticsCallback callback,
         base::DictValue()
             .Set("Advertiser ID", campaign.advertiser_id)
             .Set("Campaign ID", campaign_id)
+            .Set("Type", campaign.campaign_type)
             .Set("Daily Cap", campaign.daily_cap)
             .Set("Daily Cap Served",
                  CountServedImpressions(campaign_timestamps, base::Days(1)))

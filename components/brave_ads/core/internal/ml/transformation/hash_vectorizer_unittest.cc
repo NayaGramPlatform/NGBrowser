@@ -11,7 +11,7 @@
 #include "brave/components/brave_ads/core/internal/common/test/file_path_test_util.h"
 #include "brave/components/brave_ads/core/internal/common/test/test_base.h"
 
-// npm run test -- brave_unit_tests --filter=BraveAds*
+// pnpm test brave_unit_tests --filter=BraveAds*
 
 namespace brave_ads::ml {
 
@@ -46,15 +46,18 @@ void RunHashingExtractorTestCase(const std::string& test_case_name) {
       vectorizer.GetFrequencies(*input);
 
   // Assert
-  EXPECT_EQ(frequencies.size(), idx_list->size());
+  ASSERT_EQ(frequencies.size(), idx_list->size());
+  ASSERT_EQ(idx_list->size(), count_list->size());
   for (size_t i = 0; i < frequencies.size(); ++i) {
     const base::Value& idx = (*idx_list)[i];
-    EXPECT_TRUE(idx.is_int());
+    ASSERT_TRUE(idx.is_int());
 
     const base::Value& count = (*count_list)[i];
-    EXPECT_TRUE(count.is_int());
+    ASSERT_TRUE(count.is_int());
 
-    EXPECT_LT(count.GetInt() - frequencies.at(idx.GetInt()), kTolerance);
+    const auto iter = frequencies.find(idx.GetInt());
+    ASSERT_NE(iter, frequencies.cend());
+    EXPECT_LT(count.GetInt() - iter->second, kTolerance);
   }
 }
 

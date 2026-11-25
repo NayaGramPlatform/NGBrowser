@@ -1,21 +1,12 @@
 diff --git a/chrome/browser/resources/pdf/manifest.json b/chrome/browser/resources/pdf/manifest.json
-index f1e84d4470a7498849880ff79ceac74049ebe0ac..6566317886c7bec92d1e3fd489c82d96d4a84ae8 100644
+index b8d7585cfc25c0d01dd883630f5de462b682466b..0844e173f6db98725c06804379560936f7c080a2 100644
 --- a/chrome/browser/resources/pdf/manifest.json
 +++ b/chrome/browser/resources/pdf/manifest.json
-@@ -8,6 +8,7 @@
-   "offline_enabled": true,
-   "incognito": "split",
-   "permissions": [
-+    "chrome://brave-resources/",
-     "chrome://resources/",
-     "chrome://webui-test/",
-     "contentSettings",
-@@ -21,7 +22,7 @@
-     "application/pdf",
-     "text/pdf"
+@@ -16,6 +16,7 @@
+     {"fileSystem": ["write"]}
    ],
--  "content_security_policy": "script-src 'self' blob: filesystem: chrome://resources chrome://webui-test; object-src * blob: externalfile: file: filesystem: data:",
-+  "content_security_policy": "script-src 'self' blob: filesystem: chrome://brave-resources chrome://resources chrome://webui-test; object-src * blob: externalfile: file: filesystem: data:",
-   "mime_types_handler": "index.html",
-   "web_accessible_resources": [
-     "pdf_embedder.css"
+   "host_permissions": [
++    "chrome://theme/*",
+     "chrome://resources/*"
+   ],
+   "mime_types": [

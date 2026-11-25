@@ -81,8 +81,20 @@ brave_grit("brave_generated_resources_grit") {
     "brave_generated_resources.pak",
   ]
 
+  if (translate_genders) {
+    grit_flags = [ "--translate-genders" ]
+  }
+
+  # grit clones every data_package <output> node per gender, including the
+  # lang-less "brave_generated_resources.pak" above.
+  foreach(gender_suffix, gender_suffixes - [ "" ]) {
+    outputs += [ "brave_generated_resources${gender_suffix}.pak" ]
+  }
+
   foreach(locale, all_chrome_locales) {
-    outputs += [ "brave_generated_resources_$locale.pak" ]
+    foreach(gender_suffix, gender_suffixes) {
+      outputs += [ "brave_generated_resources_${locale}${gender_suffix}.pak" ]
+    }
   }
 }
 
@@ -105,7 +117,7 @@ source_set("browser_tests") {
       "//chrome/browser",
       "//chrome/browser/desktop_to_mobile_promos:utils",
       "//chrome/browser/domain_reliability",
-      "//chrome/browser/ui",
+      "//chrome/browser/ui:browser_window_header",
       "//chrome/common:non_code_constants",
       "//chrome/test",
       "//chrome/test:test_support",
@@ -138,16 +150,16 @@ source_set("unit_tests") {
     "//chrome/browser:browser_features",
     "//chrome/browser/devtools",
     "//chrome/browser/enterprise",
+    "//chrome/browser/glic/public:features",
     "//chrome/browser/media/webrtc",
     "//chrome/browser/policy:policy_util",
     "//chrome/browser/preloading",
-    "//chrome/browser/ttc",
-    "//chrome/browser/ui",
+    "//chrome/browser/ttc/core",
     "//chrome/browser/ui:ui_features",
     "//chrome/browser/ui/omnibox",
     "//components/attribution_reporting:features",
     "//components/autofill/core/common",
-    "//components/browser_actuator/internal:features",
+    "//components/browser_actuator/internal/transport:features",
     "//components/browser_actuator/public:feature_list",
     "//components/browsing_data/core",
     "//components/commerce/core:feature_list",
@@ -162,7 +174,6 @@ source_set("unit_tests") {
     "//components/feed:feature_list",
     "//components/heap_profiling/in_process",
     "//components/history_clusters/core",
-    "//components/history_embeddings/content",
     "//components/language/core/common",
     "//components/lens",
     "//components/manta",
@@ -217,6 +228,8 @@ source_set("unit_tests") {
       ":command_ids",
       "//brave/components/commands/common",
       "//chrome/app:command_ids",
+      "//chrome/browser/child_module",
+      "//chrome/browser/default_browser",
       "//chrome/browser/sharing_hub",
       "//chrome/browser/ui:accelerator_table",
       "//chrome/browser/ui/toasts",

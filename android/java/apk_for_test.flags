@@ -24,7 +24,6 @@
 -keep class org.chromium.chrome.browser.media.ui.ChromeMediaNotificationControllerDelegate { *; }
 -keep class org.chromium.chrome.browser.media.ui.MediaSessionTabHelper { *; }
 -keep class org.chromium.components.browser_ui.notifications.BraveForegroundServiceUtils { *; }
--keep class org.chromium.chrome.browser.media.ui.BraveMediaNotificationControllerDelegate { *; }
 -keep class org.chromium.chrome.browser.media.ui.BraveMediaSessionTabHelper { *; }
 
 -keep class org.chromium.chrome.browser.bookmarks.BookmarkBridge {
@@ -89,12 +88,6 @@
     public <init>(...);
 }
 
--keep class org.chromium.chrome.browser.sync.settings.ManageSyncSettings {
-    *** mGoogleActivityControls;
-    *** mSyncEncryption;
-    *** mSyncEverything;
-}
-
 -keep class org.chromium.chrome.browser.search_engines.settings.SearchEngineAdapter {
     *** mProfile;
     *** getSearchEngineSourceType(...);
@@ -122,12 +115,10 @@
 }
 
 -keep class org.chromium.chrome.browser.ntp_customization.NtpCustomizationUtils {
-    *** isInNarrowWindowOnLff(...);
     *** isNtpThemeCustomizationEnabled(...);
 }
 
 -keep class org.chromium.chrome.browser.ntp_customization.BraveNtpCustomizationUtils {
-    *** isInNarrowWindowOnLff(...);
     *** isNtpThemeCustomizationEnabled(...);
 }
 
@@ -567,8 +558,6 @@
 -keep class org.chromium.chrome.browser.multiwindow.MultiWindowUtils {
     *** shouldShowManageWindowsMenu(...);
     *** isLinkNavigationToOtherWindowSupported(...);
-    *** isLinkNavigationToNewWindowSupported(...);
-    *** isLinkNavigationToIncognitoWindowSupported(...);
     *** isMoveToOtherWindowSupported(...);
     *** canEnterMultiWindowMode(...);
     <init>(...);
@@ -602,7 +591,6 @@
 
 -keep class org.chromium.chrome.browser.omnibox.LocationBarCoordinator {
     *** mLocationBarMediator;
-    *** mUrlBar;
     public <init>(...);
 }
 
@@ -690,13 +678,15 @@
 
 -keep class org.chromium.chrome.browser.BraveApplicationImplBase
 
--keep class org.chromium.chrome.browser.dom_distiller.ReaderModeManager {
+-keep class org.chromium.chrome.browser.reader_mode.ReaderModeManager {
     *** mTab;
     <init>(...);
+    *** shouldUseReaderModeMessages(...);
 }
 
--keep class org.chromium.chrome.browser.dom_distiller.BraveReaderModeManager {
+-keep class org.chromium.chrome.browser.reader_mode.BraveReaderModeManager {
     <init>(...);
+    *** shouldUseReaderModeMessages(...);
 }
 
 -keep class org.chromium.chrome.browser.crash.ChromePureJavaExceptionReporter {
@@ -730,10 +720,6 @@
 
 -keep class org.chromium.chrome.browser.BraveAppHooks {
     public <init>(...);
-}
-
--keep class org.chromium.chrome.browser.tab.TabBrowserControlsConstraintsHelper {
-    *** getObservableConstraints(...);
 }
 
 -keep class org.chromium.components.cached_flags.CachedFlag {
@@ -955,9 +941,13 @@
 
 -keep class org.chromium.chrome.browser.omnibox.suggestions.editurl.BraveEditUrlSuggestionProcessorBase
 
--keep class org.chromium.chrome.browser.suggestions.tile.MostVisitedTilesLayout
+-keep class org.chromium.chrome.browser.suggestions.tile.MostVisitedTilesLayout {
+    *** triggerCustomizationIph(...);
+}
 
--keep class org.chromium.chrome.browser.suggestions.tile.BraveMostVisitedTilesLayoutBase
+-keep class org.chromium.chrome.browser.suggestions.tile.BraveMostVisitedTilesLayoutBase {
+    *** triggerCustomizationIph(...);
+}
 
 -keep class org.chromium.chrome.browser.hub.HubManagerImpl {
     public <init>(...);
@@ -976,10 +966,6 @@
 
 -keep class org.chromium.chrome.browser.ui.system.BraveStatusBarColorController {
     public <init>(...);
-}
-
--keep class org.chromium.chrome.browser.omnibox.styles.OmniboxResourceProvider {
-    *** getToolbarSidePaddingForNtp(...);
 }
 
 -keep class org.chromium.chrome.browser.password_manager.PasswordManagerHelper {

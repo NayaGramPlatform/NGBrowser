@@ -16,6 +16,7 @@
 #include "brave/components/brave_wallet/browser/cardano/cardano_provider_impl.h"
 #include "brave/components/brave_wallet/browser/ethereum_provider_impl.h"
 #include "brave/components/brave_wallet/browser/permission_utils.h"
+#include "brave/components/brave_wallet/browser/polkadot/polkadot_provider_impl.h"
 #include "brave/components/brave_wallet/browser/solana_provider_impl.h"
 #include "brave/components/brave_wallet/common/common_utils.h"
 #include "brave/components/brave_wallet/common/web_ui_constants.h"
@@ -23,6 +24,7 @@
 #include "components/permissions/permission_request.h"
 #include "components/permissions/permission_request_manager.h"
 #include "components/permissions/request_type.h"
+#include "components/tabs/public/tab_interface.h"
 #include "components/user_prefs/user_prefs.h"
 #include "content/public/browser/global_routing_id.h"
 #include "content/public/browser/web_contents.h"
@@ -30,7 +32,6 @@
 
 #if !BUILDFLAG(IS_ANDROID)
 #include "brave/browser/ui/brave_wallet/wallet_bubble_manager_delegate.h"
-#include "components/tabs/public/tab_interface.h"
 #endif
 
 namespace brave_wallet {
@@ -44,17 +45,18 @@ std::unique_ptr<BraveWalletProviderDelegate> CreateDelegate(
                                                            host_id);
 }
 
-#if !BUILDFLAG(IS_ANDROID)
-bool IsWebContentsActive(content::WebContents& web_contents) {
-  auto* tab = tabs::TabInterface::MaybeGetFromContents(&web_contents);
-  return tab && tab->IsActivated();
-}
-#endif
-
 }  // namespace
 
-BraveWalletTabHelper::BraveWalletTabHelper(content::WebContents* web_contents)
-    : content::WebContentsUserData<BraveWalletTabHelper>(*web_contents) {}
+DEFINE_USER_DATA(BraveWalletTabHelper);
+
+// static
+BraveWalletTabHelper* BraveWalletTabHelper::From(tabs::TabInterface* tab) {
+  return tab ? Get(tab->GetUnownedUserDataHost()) : nullptr;
+}
+
+BraveWalletTabHelper::BraveWalletTabHelper(tabs::TabInterface& tab)
+    : tabs::ContentsObservingTabFeature(tab),
+      scoped_unowned_user_data_(tab.GetUnownedUserDataHost(), *this) {}
 
 BraveWalletTabHelper::~BraveWalletTabHelper() {
 #if !BUILDFLAG(IS_ANDROID)
@@ -88,11 +90,16 @@ void BraveWalletTabHelper::BindEthereumProvider(
     return;
   }
 
-  auto* tab_helper = BraveWalletTabHelper::FromWebContents(web_contents);
+  auto* tab_helper = BraveWalletTabHelper::From(
+      tabs::TabInterface::MaybeGetFromContents(web_contents));
   if (!tab_helper) {
     return;
   }
   url::Origin origin = frame_host->GetLastCommittedOrigin();
+  if (!IsValidDappOrigin(origin)) {
+    return;
+  }
+
   tab_helper->ethereum_provider_receivers_.Add(
       std::make_unique<EthereumProviderImpl>(
           host_content_settings_map, brave_wallet_service,
@@ -120,12 +127,17 @@ void BraveWalletTabHelper::BindSolanaProvider(
   content::WebContents* web_contents =
       content::WebContents::FromRenderFrameHost(frame_host);
 
-  auto* tab_helper = BraveWalletTabHelper::FromWebContents(web_contents);
+  auto* tab_helper = BraveWalletTabHelper::From(
+      tabs::TabInterface::MaybeGetFromContents(web_contents));
   if (!tab_helper) {
     return;
   }
 
   url::Origin origin = frame_host->GetLastCommittedOrigin();
+  if (!IsValidDappOrigin(origin)) {
+    return;
+  }
+
   tab_helper->solana_provider_receivers_.Add(
       std::make_unique<SolanaProviderImpl>(
           *host_content_settings_map, brave_wallet_service,
@@ -156,12 +168,17 @@ void BraveWalletTabHelper::BindCardanoProvider(
   content::WebContents* web_contents =
       content::WebContents::FromRenderFrameHost(frame_host);
 
-  auto* tab_helper = BraveWalletTabHelper::FromWebContents(web_contents);
+  auto* tab_helper = BraveWalletTabHelper::From(
+      tabs::TabInterface::MaybeGetFromContents(web_contents));
   if (!tab_helper) {
     return;
   }
 
   url::Origin origin = frame_host->GetLastCommittedOrigin();
+  if (!IsValidDappOrigin(origin)) {
+    return;
+  }
+
   tab_helper->cardano_provider_receivers_.Add(
       std::make_unique<CardanoProviderImpl>(
           *brave_wallet_service,
@@ -171,33 +188,59 @@ void BraveWalletTabHelper::BindCardanoProvider(
       std::move(receiver));
 }
 
-void BraveWalletTabHelper::AddSolanaConnectedAccount(
-    const content::GlobalRenderFrameHostId& id,
-    const std::string& account) {
-  solana_connected_accounts_[id].insert(account);
-}
-
-void BraveWalletTabHelper::RemoveSolanaConnectedAccount(
-    const content::GlobalRenderFrameHostId& id,
-    const std::string& account) {
-  auto it = solana_connected_accounts_.find(id);
-  if (it == solana_connected_accounts_.end()) {
+// static
+void BraveWalletTabHelper::BindPolkadotProvider(
+    content::RenderFrameHost* const frame_host,
+    mojo::PendingReceiver<mojom::PolkadotProvider> receiver) {
+  if (!IsPolkadotDAppSupportEnabled()) {
     return;
   }
-  it->second.erase(account);
+  auto* brave_wallet_service = BraveWalletServiceFactory::GetServiceForContext(
+      frame_host->GetBrowserContext());
+  if (!brave_wallet_service) {
+    return;
+  }
+  content::WebContents* web_contents =
+      content::WebContents::FromRenderFrameHost(frame_host);
+
+  auto* tab_helper = BraveWalletTabHelper::From(
+      tabs::TabInterface::MaybeGetFromContents(web_contents));
+  if (!tab_helper) {
+    return;
+  }
+
+  url::Origin origin = frame_host->GetLastCommittedOrigin();
+  if (!IsValidDappOrigin(origin)) {
+    return;
+  }
+
+  tab_helper->polkadot_provider_receivers_.Add(
+      std::make_unique<PolkadotProviderImpl>(
+          *brave_wallet_service->keyring_service(),
+          *brave_wallet_service->GetPolkadotWalletService(),
+          base::BindRepeating(&CreateDelegate, web_contents,
+                              frame_host->GetGlobalId()),
+          origin),
+      std::move(receiver));
 }
 
-bool BraveWalletTabHelper::IsSolanaAccountConnected(
-    const content::GlobalRenderFrameHostId& id,
-    const std::string& account) {
-  auto it = solana_connected_accounts_.find(id);
-  return it == solana_connected_accounts_.end() ? false
-                                                : it->second.contains(account);
-}
-
-void BraveWalletTabHelper::ClearSolanaConnectedAccounts(
-    const content::GlobalRenderFrameHostId& id) {
-  solana_connected_accounts_.erase(id);
+void BraveWalletTabHelper::OnDiscardContents(
+    tabs::TabInterface* tab,
+    content::WebContents* old_contents,
+    content::WebContents* new_contents) {
+  // The providers, connections and bubble belong to the old contents' frames.
+#if !BUILDFLAG(IS_ANDROID)
+  if (IsShowingBubble()) {
+    CloseBubble();
+  }
+  wallet_bubble_manager_delegate_.reset();
+#endif  // !BUILDFLAG(IS_ANDROID)
+  ethereum_provider_receivers_.Clear();
+  solana_provider_receivers_.Clear();
+  cardano_provider_receivers_.Clear();
+  polkadot_provider_receivers_.Clear();
+  tabs::ContentsObservingTabFeature::OnDiscardContents(tab, old_contents,
+                                                       new_contents);
 }
 
 #if !BUILDFLAG(IS_ANDROID)
@@ -205,11 +248,11 @@ void BraveWalletTabHelper::ShowBubbleImpl(GURL url) {
   // Dapp requests always use the bubble for this PoC. Contextual side panel
   // hosting is limited to the base wallet panel URL (no in-panel navigation).
   wallet_bubble_manager_delegate_ =
-      WalletBubbleManagerDelegate::MaybeCreate(&GetWebContents(), url);
+      WalletBubbleManagerDelegate::MaybeCreate(web_contents(), url);
   if (!wallet_bubble_manager_delegate_) {
     return;
   }
-  if (!IsWebContentsActive(GetWebContents())) {
+  if (!tab().IsActivated()) {
     return;
   }
   wallet_bubble_manager_delegate_->ShowBubble();
@@ -267,7 +310,7 @@ bool BraveWalletTabHelper::IsBubbleClosedForTesting() {
 
 GURL BraveWalletTabHelper::GetBubbleURL() {
   auto* manager =
-      permissions::PermissionRequestManager::FromWebContents(&GetWebContents());
+      permissions::PermissionRequestManager::FromWebContents(web_contents());
   if (!manager) {
     return GURL();
   }
@@ -283,7 +326,9 @@ GURL BraveWalletTabHelper::GetBubbleURL() {
        manager->Requests()[0]->request_type() !=
            permissions::RequestType::kBraveSolana &&
        manager->Requests()[0]->request_type() !=
-           permissions::RequestType::kBraveCardano)) {
+           permissions::RequestType::kBraveCardano &&
+       manager->Requests()[0]->request_type() !=
+           permissions::RequestType::kBravePolkadot)) {
     return webui_url;
   }
 
@@ -327,7 +372,5 @@ GURL BraveWalletTabHelper::GetApproveBubbleURL() {
 }
 
 #endif  // !BUILDFLAG(IS_ANDROID)
-
-WEB_CONTENTS_USER_DATA_KEY_IMPL(BraveWalletTabHelper);
 
 }  // namespace brave_wallet

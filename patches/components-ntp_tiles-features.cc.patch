@@ -1,8 +1,8 @@
 diff --git a/components/ntp_tiles/features.cc b/components/ntp_tiles/features.cc
-index 5885dde354d76e56db14ccbb49e7a55029e54f84..780b68504de05433b65eb1011889f451defe8115 100644
+index ae212679da4d67980c9127362bb293df2162d8e8..906cc98bf088b7b40fb5839bb582bbe942fa230f 100644
 --- a/components/ntp_tiles/features.cc
 +++ b/components/ntp_tiles/features.cc
-@@ -13,13 +13,13 @@ namespace ntp_tiles {
+@@ -12,12 +12,12 @@ namespace ntp_tiles {
  
  const char kPopularSitesFieldTrialName[] = "NTPPopularSites";
  
@@ -18,5 +18,4 @@ index 5885dde354d76e56db14ccbb49e7a55029e54f84..780b68504de05433b65eb1011889f451
 -             base::FEATURE_ENABLED_BY_DEFAULT);
 +             base::FEATURE_DISABLED_BY_DEFAULT);
  
- BASE_FEATURE(kPopularSitesRefreshUs, base::FEATURE_DISABLED_BY_DEFAULT);
- 
+ }  // namespace ntp_tiles

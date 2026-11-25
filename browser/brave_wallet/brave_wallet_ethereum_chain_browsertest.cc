@@ -7,6 +7,7 @@
 #include <optional>
 
 #include "base/notreached.h"
+#include "base/test/run_until.h"
 #include "brave/browser/brave_wallet/brave_wallet_service_factory.h"
 #include "brave/browser/brave_wallet/brave_wallet_tab_helper.h"
 #include "brave/components/brave_wallet/browser/brave_wallet_service.h"
@@ -16,12 +17,12 @@
 #include "brave/components/brave_wallet/browser/test_utils.h"
 #include "brave/components/brave_wallet/common/brave_wallet.mojom.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_commands.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/network_session_configurator/common/network_switches.h"
+#include "components/tabs/public/tab_interface.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
 #include "content/public/test/content_mock_cert_verifier.h"
@@ -126,14 +127,8 @@ class TestJsonRpcServiceObserver
   void ChainChangedEvent(const std::string& chain_id,
                          brave_wallet::mojom::CoinType coin,
                          const std::optional<::url::Origin>& origin) override {
-    chain_changed_called_ = true;
     EXPECT_EQ(chain_id, expected_chain_id_);
     EXPECT_EQ(coin, expected_coin_);
-  }
-
-  bool chain_changed_called() {
-    base::RunLoop().RunUntilIdle();
-    return chain_changed_called_;
   }
 
   ::mojo::PendingRemote<brave_wallet::mojom::JsonRpcServiceObserver>
@@ -145,7 +140,6 @@ class TestJsonRpcServiceObserver
   std::string expected_chain_id_;
   brave_wallet::mojom::CoinType expected_coin_;
   std::string expected_error_;
-  bool chain_changed_called_ = false;
   mojo::Receiver<brave_wallet::mojom::JsonRpcServiceObserver>
       observer_receiver_{this};
 };
@@ -271,7 +265,11 @@ class BraveWalletEthereumChainTest : public InProcessBrowserTest {
 
   std::string GetPendingSwitchChainRequestId() {
     auto requests = GetJsonRpcService()->GetPendingSwitchChainRequestsSync();
-    EXPECT_EQ(1u, requests.size());
+    if (requests.size() != 1u) {
+      ADD_FAILURE() << "expected one pending switch-chain request, got "
+                    << requests.size();
+      return std::string();
+    }
     return requests[0]->request_id;
   }
 
@@ -286,18 +284,21 @@ IN_PROC_BROWSER_TEST_F(BraveWalletEthereumChainTest, AddEthereumChainApproved) {
   base::RunLoop loop;
   content::WebContents* contents =
       browser()->tab_strip_model()->GetActiveWebContents();
-  auto* tab_helper =
-      brave_wallet::BraveWalletTabHelper::FromWebContents(contents);
+  auto* tab_helper = brave_wallet::BraveWalletTabHelper::From(
+      tabs::TabInterface::MaybeGetFromContents(contents));
   tab_helper->SetShowBubbleCallbackForTesting(loop.QuitClosure());
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), url));
   WaitForLoadStop(contents);
   loop.Run();
 
-  ASSERT_TRUE(brave_wallet::BraveWalletTabHelper::FromWebContents(contents)
+  ASSERT_TRUE(brave_wallet::BraveWalletTabHelper::From(
+                  tabs::TabInterface::MaybeGetFromContents(contents))
                   ->IsShowingBubble());
   CallAndWaitForEthereumChainRequestCompleted(
       kSomeChainId, true, brave_wallet::mojom::CoinType::ETH, "");
   const url::Origin origin = url::Origin::Create(url);
+  ASSERT_EQ(1u,
+            GetJsonRpcService()->GetPendingSwitchChainRequestsSync().size());
   GetJsonRpcService()->NotifySwitchChainRequestProcessed(
       GetPendingSwitchChainRequestId(), true);
   auto result_first = EvalJs(contents, kScriptWaitForEvent);
@@ -321,13 +322,14 @@ IN_PROC_BROWSER_TEST_F(BraveWalletEthereumChainTest, AddEthereumChainRejected) {
   content::WebContents* contents =
       browser()->tab_strip_model()->GetActiveWebContents();
   base::RunLoop loop;
-  auto* tab_helper =
-      brave_wallet::BraveWalletTabHelper::FromWebContents(contents);
+  auto* tab_helper = brave_wallet::BraveWalletTabHelper::From(
+      tabs::TabInterface::MaybeGetFromContents(contents));
   tab_helper->SetShowBubbleCallbackForTesting(loop.QuitClosure());
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), url));
   WaitForLoadStop(contents);
   loop.Run();
-  ASSERT_TRUE(brave_wallet::BraveWalletTabHelper::FromWebContents(contents)
+  ASSERT_TRUE(brave_wallet::BraveWalletTabHelper::From(
+                  tabs::TabInterface::MaybeGetFromContents(contents))
                   ->IsShowingBubble());
   GetJsonRpcService()->AddEthereumChainRequestCompleted(kSomeChainId, false);
   auto result_first = EvalJs(contents, kScriptWaitForEvent);
@@ -339,15 +341,16 @@ IN_PROC_BROWSER_TEST_F(BraveWalletEthereumChainTest, AddChainSameOrigin) {
   content::WebContents* contents =
       browser()->tab_strip_model()->GetActiveWebContents();
   base::RunLoop loop;
-  auto* tab_helper =
-      brave_wallet::BraveWalletTabHelper::FromWebContents(contents);
+  auto* tab_helper = brave_wallet::BraveWalletTabHelper::From(
+      tabs::TabInterface::MaybeGetFromContents(contents));
   tab_helper->SetShowBubbleCallbackForTesting(loop.QuitClosure());
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), url));
   WaitForLoadStop(contents);
   loop.Run();
   ASSERT_TRUE(tab_helper->IsShowingBubble());
   tab_helper->CloseBubble();
-  base::RunLoop().RunUntilIdle();
+  ASSERT_TRUE(
+      base::test::RunUntil([&] { return !tab_helper->IsShowingBubble(); }));
   ASSERT_FALSE(tab_helper->IsShowingBubble());
   auto result_first = EvalJs(contents, kScriptRunAndCheckAddChainResult);
   ASSERT_FALSE(tab_helper->IsShowingBubble());
@@ -360,15 +363,16 @@ IN_PROC_BROWSER_TEST_F(BraveWalletEthereumChainTest,
   content::WebContents* contentsA =
       browser()->tab_strip_model()->GetActiveWebContents();
   base::RunLoop loop;
-  auto* tab_helperA =
-      brave_wallet::BraveWalletTabHelper::FromWebContents(contentsA);
+  auto* tab_helperA = brave_wallet::BraveWalletTabHelper::From(
+      tabs::TabInterface::MaybeGetFromContents(contentsA));
   tab_helperA->SetShowBubbleCallbackForTesting(loop.QuitClosure());
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), urlA));
   WaitForLoadStop(contentsA);
   loop.Run();
   ASSERT_TRUE(tab_helperA->IsShowingBubble());
   tab_helperA->CloseBubble();
-  base::RunLoop().RunUntilIdle();
+  ASSERT_TRUE(
+      base::test::RunUntil([&] { return !tab_helperA->IsShowingBubble(); }));
   ASSERT_FALSE(tab_helperA->IsShowingBubble());
 
   chrome::NewTab(browser(), NewTabTypes::kNewTabCommand);
@@ -376,8 +380,8 @@ IN_PROC_BROWSER_TEST_F(BraveWalletEthereumChainTest,
   GURL urlB = GetWalletEthereumChainPageURL("b.com");
   EXPECT_TRUE(content::NavigateToURL(web_contentsB, urlB));
   WaitForLoadStop(web_contentsB);
-  auto* tab_helperB =
-      brave_wallet::BraveWalletTabHelper::FromWebContents(web_contentsB);
+  auto* tab_helperB = brave_wallet::BraveWalletTabHelper::From(
+      tabs::TabInterface::MaybeGetFromContents(web_contentsB));
   ASSERT_FALSE(tab_helperB->IsShowingBubble());
   auto rejected_same_id = EvalJs(web_contentsB, kScriptWaitForEvent);
   EXPECT_EQ(base::Value(false), rejected_same_id);
@@ -393,15 +397,16 @@ IN_PROC_BROWSER_TEST_F(BraveWalletEthereumChainTest,
   content::WebContents* contentsA =
       browser()->tab_strip_model()->GetActiveWebContents();
   base::RunLoop loop;
-  auto* tab_helperA =
-      brave_wallet::BraveWalletTabHelper::FromWebContents(contentsA);
+  auto* tab_helperA = brave_wallet::BraveWalletTabHelper::From(
+      tabs::TabInterface::MaybeGetFromContents(contentsA));
   tab_helperA->SetShowBubbleCallbackForTesting(loop.QuitClosure());
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), urlA));
   WaitForLoadStop(contentsA);
   loop.Run();
   ASSERT_TRUE(tab_helperA->IsShowingBubble());
   tab_helperA->CloseBubble();
-  base::RunLoop().RunUntilIdle();
+  ASSERT_TRUE(
+      base::test::RunUntil([&] { return !tab_helperA->IsShowingBubble(); }));
   ASSERT_FALSE(tab_helperA->IsShowingBubble());
 
   chrome::NewTab(browser(), NewTabTypes::kNewTabCommand);
@@ -409,8 +414,8 @@ IN_PROC_BROWSER_TEST_F(BraveWalletEthereumChainTest,
   GURL urlB = GetWalletEthereumChainPageURL("b.com", "id=0x11");
 
   base::RunLoop loopB;
-  auto* tab_helperB =
-      brave_wallet::BraveWalletTabHelper::FromWebContents(web_contentsB);
+  auto* tab_helperB = brave_wallet::BraveWalletTabHelper::From(
+      tabs::TabInterface::MaybeGetFromContents(web_contentsB));
   tab_helperB->SetShowBubbleCallbackForTesting(loopB.QuitClosure());
   // Put same chain in new origin
   EXPECT_TRUE(content::NavigateToURL(web_contentsB, urlB));
@@ -423,11 +428,12 @@ IN_PROC_BROWSER_TEST_F(BraveWalletEthereumChainTest,
   CallAndWaitForEthereumChainRequestCompleted(
       "0x11", true, brave_wallet::mojom::CoinType::ETH, "");
   const url::Origin origin = url::Origin::Create(urlB);
+  ASSERT_EQ(1u,
+            GetJsonRpcService()->GetPendingSwitchChainRequestsSync().size());
   GetJsonRpcService()->NotifySwitchChainRequestProcessed(
       GetPendingSwitchChainRequestId(), false);
   auto rejected_same_id = EvalJs(web_contentsB, kScriptWaitForEvent);
   EXPECT_EQ(base::Value(false), rejected_same_id);
-  base::RunLoop().RunUntilIdle();
   // Chain should still exist though
   ASSERT_FALSE(GetAllEthCustomChains().empty());
   EXPECT_EQ(GetAllEthCustomChains().front()->chain_id, "0x11");
@@ -445,15 +451,16 @@ IN_PROC_BROWSER_TEST_F(BraveWalletEthereumChainTest, AddDifferentChainsSwitch) {
   base::RunLoop loopA;
   content::WebContents* contentsA =
       browser()->tab_strip_model()->GetActiveWebContents();
-  auto* tab_helperA =
-      brave_wallet::BraveWalletTabHelper::FromWebContents(contentsA);
+  auto* tab_helperA = brave_wallet::BraveWalletTabHelper::From(
+      tabs::TabInterface::MaybeGetFromContents(contentsA));
   tab_helperA->SetShowBubbleCallbackForTesting(loopA.QuitClosure());
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), urlA));
   WaitForLoadStop(contentsA);
   loopA.Run();
   ASSERT_TRUE(tab_helperA->IsShowingBubble());
   tab_helperA->CloseBubble();
-  base::RunLoop().RunUntilIdle();
+  ASSERT_TRUE(
+      base::test::RunUntil([&] { return !tab_helperA->IsShowingBubble(); }));
   ASSERT_FALSE(tab_helperA->IsShowingBubble());
 
   chrome::NewTab(browser(), NewTabTypes::kNewTabCommand);
@@ -461,8 +468,8 @@ IN_PROC_BROWSER_TEST_F(BraveWalletEthereumChainTest, AddDifferentChainsSwitch) {
   GURL urlB = GetWalletEthereumChainPageURL("b.com", "id=0x11");
 
   base::RunLoop loop;
-  auto* tab_helperB =
-      brave_wallet::BraveWalletTabHelper::FromWebContents(web_contentsB);
+  auto* tab_helperB = brave_wallet::BraveWalletTabHelper::From(
+      tabs::TabInterface::MaybeGetFromContents(web_contentsB));
   tab_helperB->SetShowBubbleCallbackForTesting(loop.QuitClosure());
   // Put same chain in new origin
   EXPECT_TRUE(content::NavigateToURL(web_contentsB, urlB));
@@ -474,11 +481,12 @@ IN_PROC_BROWSER_TEST_F(BraveWalletEthereumChainTest, AddDifferentChainsSwitch) {
   CallAndWaitForEthereumChainRequestCompleted(
       "0x11", true, brave_wallet::mojom::CoinType::ETH, "");
   const url::Origin origin = url::Origin::Create(urlB);
+  ASSERT_EQ(1u,
+            GetJsonRpcService()->GetPendingSwitchChainRequestsSync().size());
   GetJsonRpcService()->NotifySwitchChainRequestProcessed(
       GetPendingSwitchChainRequestId(), true);
   auto rejected_same_id = EvalJs(web_contentsB, kScriptWaitForEvent);
   EXPECT_EQ(base::Value(true), rejected_same_id);
-  base::RunLoop().RunUntilIdle();
   ASSERT_FALSE(GetAllEthCustomChains().empty());
   EXPECT_EQ(GetAllEthCustomChains().front()->chain_id, "0x11");
   EXPECT_EQ(GetJsonRpcService()->GetChainIdSync(
@@ -490,8 +498,8 @@ IN_PROC_BROWSER_TEST_F(BraveWalletEthereumChainTest, AddChainAndCloseTab) {
   GURL urlA = GetWalletEthereumChainPageURL();
   content::WebContents* contentsA =
       browser()->tab_strip_model()->GetActiveWebContents();
-  auto* tab_helperA =
-      brave_wallet::BraveWalletTabHelper::FromWebContents(contentsA);
+  auto* tab_helperA = brave_wallet::BraveWalletTabHelper::From(
+      tabs::TabInterface::MaybeGetFromContents(contentsA));
   base::RunLoop loopA;
   tab_helperA->SetShowBubbleCallbackForTesting(loopA.QuitClosure());
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), urlA));
@@ -499,7 +507,8 @@ IN_PROC_BROWSER_TEST_F(BraveWalletEthereumChainTest, AddChainAndCloseTab) {
   loopA.Run();
   ASSERT_TRUE(tab_helperA->IsShowingBubble());
   tab_helperA->CloseBubble();
-  base::RunLoop().RunUntilIdle();
+  ASSERT_TRUE(
+      base::test::RunUntil([&] { return !tab_helperA->IsShowingBubble(); }));
   ASSERT_FALSE(tab_helperA->IsShowingBubble());
 
   chrome::NewTab(browser(), NewTabTypes::kNewTabCommand);
@@ -507,8 +516,8 @@ IN_PROC_BROWSER_TEST_F(BraveWalletEthereumChainTest, AddChainAndCloseTab) {
   GURL urlB = GetWalletEthereumChainPageURL("b.com", "id=0x11");
 
   base::RunLoop loop;
-  auto* tab_helperB =
-      brave_wallet::BraveWalletTabHelper::FromWebContents(web_contentsB);
+  auto* tab_helperB = brave_wallet::BraveWalletTabHelper::From(
+      tabs::TabInterface::MaybeGetFromContents(web_contentsB));
   tab_helperB->SetShowBubbleCallbackForTesting(loop.QuitClosure());
   EXPECT_TRUE(content::NavigateToURL(web_contentsB, urlB));
   WaitForLoadStop(web_contentsB);
@@ -529,15 +538,16 @@ IN_PROC_BROWSER_TEST_F(BraveWalletEthereumChainTest, AddBrokenChain) {
   content::WebContents* contents =
       browser()->tab_strip_model()->GetActiveWebContents();
   base::RunLoop loop;
-  auto* tab_helper =
-      brave_wallet::BraveWalletTabHelper::FromWebContents(contents);
+  auto* tab_helper = brave_wallet::BraveWalletTabHelper::From(
+      tabs::TabInterface::MaybeGetFromContents(contents));
   tab_helper->SetShowBubbleCallbackForTesting(loop.QuitClosure());
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), url));
   WaitForLoadStop(contents);
   loop.Run();
   ASSERT_TRUE(tab_helper->IsShowingBubble());
   tab_helper->CloseBubble();
-  base::RunLoop().RunUntilIdle();
+  ASSERT_TRUE(
+      base::test::RunUntil([&] { return !tab_helper->IsShowingBubble(); }));
   ASSERT_FALSE(tab_helper->IsShowingBubble());
   auto result_first = EvalJs(contents, kScriptRunEmptyAndCheckChainResult);
   ASSERT_FALSE(tab_helper->IsShowingBubble());
@@ -552,7 +562,6 @@ IN_PROC_BROWSER_TEST_F(BraveWalletEthereumChainTest, CheckIncognitoTab) {
       private_browser->tab_strip_model()->GetActiveWebContents();
   WaitForLoadStop(contents);
   EXPECT_EQ(url, contents->GetURL());
-  base::RunLoop().RunUntilIdle();
   EXPECT_EQ(content::EvalJs(contents, "document.title;"),
             "PAGE_SCRIPT_STARTED");
   auto result_first = EvalJs(contents, "window.ethereum != null");

@@ -20,7 +20,7 @@ function delay(ms: number) {
 const sampleBackground =
   'https://brave.com/static-assets/images/coding-background-texture.jpg'
 
-const sponsoredBackgrounds = {
+const newTabTakeoverBackgrounds = {
   image: {
     wallpaperType: '',
     imageUrl: sampleBackground,
@@ -33,6 +33,8 @@ const sponsoredBackgrounds = {
       imageUrl: sampleBackground,
     },
     metricType: NewTabPageAdMetricType.kConfirmation,
+    shouldDisplayNewTabTakeoverDisclosure: true,
+    shouldAutoDisplayNewTabTakeoverDisclosure: true,
   },
 
   richMedia: {
@@ -47,6 +49,8 @@ const sponsoredBackgrounds = {
       imageUrl: '',
     },
     metricType: NewTabPageAdMetricType.kConfirmation,
+    shouldDisplayNewTabTakeoverDisclosure: true,
+    shouldAutoDisplayNewTabTakeoverDisclosure: true,
   },
 
   none: null,
@@ -65,7 +69,7 @@ export function createBackgroundStore() {
       },
     ],
     backgroundRandomValue: Math.random(),
-    sponsoredImageBackground: sponsoredBackgrounds.none,
+    newTabTakeoverBackground: newTabTakeoverBackgrounds.none,
   })
 
   store.update({
@@ -79,8 +83,8 @@ export function createBackgroundStore() {
       store.update({ backgroundsEnabled: enabled })
     },
 
-    setSponsoredImagesEnabled(enabled) {
-      store.update({ sponsoredImagesEnabled: enabled })
+    setNewTabTakeoversEnabled(enabled) {
+      store.update({ newTabTakeoversEnabled: enabled })
     },
 
     selectBackground(type, value) {
@@ -112,12 +116,20 @@ export function createBackgroundStore() {
       }))
     },
 
-    notifySponsoredImageLoadError() {},
+    notifyNewTabTakeoverLoadError() {},
 
-    notifySponsoredImageLogoClicked() {},
+    notifyNewTabTakeoverLogoClicked() {},
 
-    notifySponsoredRichMediaEvent(type) {
+    notifyNewTabTakeoverRichMediaEvent(type) {
       console.log('richMediaEvent', type)
+    },
+
+    notifyNewTabTakeoverDisclosureLearnMoreClicked() {
+      console.log('newTabTakeoverDisclosureLearnMoreClicked')
+    },
+
+    notifyNewTabTakeoverDisclosureAutoDisplayed() {
+      console.log('newTabTakeoverDisclosureTooltipAutoDisplayed')
     },
   }
 
@@ -126,16 +138,16 @@ export function createBackgroundStore() {
   return store
 }
 
-export function updateSponsoredBackground(
+export function updateNewTabTakeoverBackground(
   store: BackgroundStore,
   type: 'none' | 'image' | 'rich',
 ) {
   store.update({
-    sponsoredImageBackground:
+    newTabTakeoverBackground:
       type === 'rich'
-        ? sponsoredBackgrounds.richMedia
+        ? newTabTakeoverBackgrounds.richMedia
         : type === 'image'
-          ? sponsoredBackgrounds.image
-          : sponsoredBackgrounds.none,
+          ? newTabTakeoverBackgrounds.image
+          : newTabTakeoverBackgrounds.none,
   })
 }

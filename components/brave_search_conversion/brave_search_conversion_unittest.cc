@@ -7,7 +7,6 @@
 
 #include "base/feature_list.h"
 #include "base/metrics/field_trial.h"
-#include "base/metrics/field_trial_param_associator.h"
 #include "base/test/scoped_feature_list.h"
 #include "brave/components/brave_origin/buildflags/buildflags.h"
 #include "brave/components/brave_search_conversion/features.h"
@@ -92,9 +91,10 @@ TEST_F(BraveSearchConversionTest, ConversionTypeTest) {
 
   ConfigureBingAsDefaultProvider();
 
-  feature_list.InitAndEnableFeatureWithParameters(
-      brave_search_conversion::features::kOmniboxBanner,
-      {{brave_search_conversion::features::kBannerTypeParamName, "type_B"}});
+  feature_list.InitWithFeaturesAndParameters(
+      {{brave_search_conversion::features::kOmniboxBanner,
+        {{brave_search_conversion::features::kBannerTypeParamName, "type_B"}}}},
+      {brave_search_conversion::features::kOmniboxDDGBanner});
   EXPECT_EQ(ConversionType::kBannerTypeB,
             GetConversionType(
                 &pref_service_,
@@ -145,8 +145,9 @@ TEST_F(BraveSearchConversionTest, ConversionTypeTest) {
 
   feature_list.Reset();
 
-  feature_list.InitAndEnableFeature(
-      brave_search_conversion::features::kOmniboxDDGBanner);
+  feature_list.InitWithFeatures(
+      {brave_search_conversion::features::kOmniboxDDGBanner},
+      {brave_search_conversion::features::kOmniboxBanner});
 
   ConfigureBingAsDefaultProvider();
 

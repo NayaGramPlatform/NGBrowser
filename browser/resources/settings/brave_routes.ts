@@ -29,6 +29,9 @@ export default function addBraveRoutes(r: Partial<SettingsRoutes>) {
       r.IMPORT_DATA.isNavigableDialog = true
       r.IMPORT_DATA.section = 'getStarted'
     }
+    if (loadTimeData.getBoolean('isBraveAccountEnabled')) {
+      r.BRAVE_ACCOUNT = r.GET_STARTED.createChild('/braveAccount')
+    }
   }
   if (pageVisibility.origin) {
     r.ORIGIN = r.BASIC.createSection('/origin', 'origin')
@@ -75,10 +78,6 @@ export default function addBraveRoutes(r: Partial<SettingsRoutes>) {
         delete r.FONTS
     }
     r.FONTS = r.BRAVE_CONTENT.createChild('/fonts')
-  }
-  if (pageVisibility.surveyPanelist && r.PRIVACY) {
-    r.BRAVE_SURVEY_PANELIST =
-      r.PRIVACY.createChild('/surveyPanelist')
   }
   if (r.SEARCH) {
     r.DEFAULT_SEARCH = r.SEARCH.createChild('defaultSearch')
@@ -154,7 +153,8 @@ export default function addBraveRoutes(r: Partial<SettingsRoutes>) {
   if (r.SYNC) {
     delete r.SYNC
   }
-  // Delete identity docs and travel autofill routes
+  // Delete identity docs and travel autofill routes. Also remove their views in
+  // autofill_page_index.html.ts.lit_mangler.ts.
   if (r.IDENTITY_DOCS) {
     delete r.IDENTITY_DOCS
   }

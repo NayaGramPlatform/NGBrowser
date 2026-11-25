@@ -8,14 +8,26 @@
 #include "base/check_deref.h"
 #include "brave/browser/ui/focus_mode/focus_mode_utils.h"
 #include "brave/browser/ui/tabs/public/vertical_tab_controller.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "ui/views/view.h"
+
+DEFINE_USER_DATA(TabStripPlacementCoordinator);
+
+// static
+TabStripPlacementCoordinator* TabStripPlacementCoordinator::From(
+    BrowserWindowInterface* browser) {
+  return Get(CHECK_DEREF(browser).GetUnownedUserDataHost());
+}
 
 TabStripPlacementCoordinator::TabStripPlacementCoordinator(
     base::PassKey<BraveBrowserView>,
     BrowserWindowInterface* browser_window_interface,
     views::View* tab_strip_region_view)
     : browser_window_interface_(CHECK_DEREF(browser_window_interface)),
-      tab_strip_region_view_(CHECK_DEREF(tab_strip_region_view)) {
+      tab_strip_region_view_(CHECK_DEREF(tab_strip_region_view)),
+      scoped_unowned_user_data_(
+          browser_window_interface->GetUnownedUserDataHost(),
+          *this) {
   auto* original_parent = tab_strip_region_view_->parent();
   CHECK(original_parent);
 
@@ -50,17 +62,26 @@ void TabStripPlacementCoordinator::ClearPlacement(PlacementKind kind) {
 void TabStripPlacementCoordinator::UpdatePlacement() {
   auto* browser = base::to_address(browser_window_interface_);
 
+  // Don't move an attached tab strip into an unattached parent (e.g. a vertical
+  // tab strip container still under construction): it would detach without ever
+  // re-attaching. Moving an already-unattached tab strip (e.g. during teardown)
+  // is fine either way.
+  auto can_apply_placement = [&](const Placement& placement) {
+    return placement.parent && (placement.parent->GetWidget() ||
+                                !tab_strip_region_view_->GetWidget());
+  };
+
   auto get_placement = [&]() -> const Placement& {
-    if (auto* vtc = VerticalTabController::FromBrowser(browser);
+    if (auto* vtc = VerticalTabController::From(browser);
         vtc && vtc->ShouldShowBraveVerticalTabs()) {
       auto& placement = placements_[PlacementKind::kVerticalTabStrip];
-      if (placement.parent) {
+      if (can_apply_placement(placement)) {
         return placement;
       }
     }
     if (IsFocusModeEnabled(browser)) {
       auto& placement = placements_[PlacementKind::kFocusMode];
-      if (placement.parent) {
+      if (can_apply_placement(placement)) {
         return placement;
       }
     }
@@ -69,15 +90,11 @@ void TabStripPlacementCoordinator::UpdatePlacement() {
 
   auto placement = get_placement();
   auto* parent = placement.parent.get();
+  if (!can_apply_placement(placement)) {
+    return;
+  }
 
-  if (parent && parent != tab_strip_region_view_->parent()) {
-    // The following remove-then-add sequence is required in order to trigger
-    // AddedToWidget in BraveTabStrip, which calls SetAvailableWidthCallback as
-    // appropriate for the current tab strip orientation.
-    if (tab_strip_region_view_->parent()) {
-      tab_strip_region_view_->parent()->RemoveChildView(
-          base::to_address(tab_strip_region_view_));
-    }
+  if (parent != tab_strip_region_view_->parent()) {
     size_t max_index = parent->children().size();
     size_t add_at = std::min(placement.index.value_or(max_index), max_index);
     parent->AddChildViewAt(base::to_address(tab_strip_region_view_), add_at);

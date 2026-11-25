@@ -1,0 +1,13 @@
+diff --git a/chrome/browser/ui/views/bookmarks/bookmark_menu_delegate.cc b/chrome/browser/ui/views/bookmarks/bookmark_menu_delegate.cc
+index cc36829c8c9e8a0dbbb47506b6c015318bed1fcc..83177a70750a369387c273a2316b869a0ca1a860 100644
+--- a/chrome/browser/ui/views/bookmarks/bookmark_menu_delegate.cc
++++ b/chrome/browser/ui/views/bookmarks/bookmark_menu_delegate.cc
+@@ -78,7 +78,7 @@ namespace {
+ 
+ // Max width of a menu. There does not appear to be an OS value for this, yet
+ // both IE and FF restrict the max width of a menu.
+-const int kMaxMenuWidth = 400;
++const int kMaxMenuWidth = 500;
+ 
+ ui::ImageModel GetFaviconForNode(BookmarkModel* model,
+                                  const BookmarkNode* node) {

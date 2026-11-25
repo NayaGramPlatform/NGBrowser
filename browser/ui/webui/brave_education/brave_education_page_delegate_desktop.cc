@@ -11,8 +11,8 @@
 #include "brave/components/ai_chat/core/common/buildflags/buildflags.h"
 #include "brave/components/brave_rewards/core/buildflags/buildflags.h"
 #include "brave/components/brave_vpn/common/buildflags/buildflags.h"
-#include "chrome/browser/ui/browser_window/public/browser_window_features.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
+#include "ui/base/mojom/window_open_disposition.mojom.h"
 
 #if BUILDFLAG(ENABLE_BRAVE_REWARDS)
 #include "brave/browser/ui/brave_rewards/rewards_panel_coordinator.h"
@@ -34,14 +34,14 @@ BraveEducationPageDelegateDesktop::~BraveEducationPageDelegateDesktop() =
 
 void BraveEducationPageDelegateDesktop::OpenURL(
     const GURL& url,
-    WindowOpenDisposition disposition) {
+    ui::mojom::WindowOpenDisposition disposition) {
   window_interface_->OpenGURL(url, disposition);
 }
 
 void BraveEducationPageDelegateDesktop::OpenRewardsPanel() {
 #if BUILDFLAG(ENABLE_BRAVE_REWARDS)
-  auto* panel_coordinator =
-      window_interface_->GetFeatures().rewards_panel_coordinator();
+  auto* panel_coordinator = brave_rewards::RewardsPanelCoordinator::From(
+      base::to_address(window_interface_));
   if (panel_coordinator) {
     panel_coordinator->OpenRewardsPanel();
   }
@@ -50,8 +50,8 @@ void BraveEducationPageDelegateDesktop::OpenRewardsPanel() {
 
 void BraveEducationPageDelegateDesktop::OpenVPNPanel() {
 #if BUILDFLAG(ENABLE_BRAVE_VPN)
-  window_interface_->GetFeatures().brave_vpn_controller()->ShowBraveVPNBubble(
-      /* show_select */ false);
+  BraveVPNController::From(base::to_address(window_interface_))
+      ->ShowBraveVPNBubble(/* show_select */ false);
 #endif
 }
 

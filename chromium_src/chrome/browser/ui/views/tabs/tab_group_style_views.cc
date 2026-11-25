@@ -11,13 +11,7 @@
 #include "chrome/browser/ui/tabs/features.h"
 #include "third_party/skia/include/core/SkPathBuilder.h"
 
-#define TabGroupUnderline BraveTabGroupUnderline
-#define TabGroupStyleViews TabGroupStyleViews_ChromiumImpl
-
 #include <chrome/browser/ui/views/tabs/tab_group_style_views.cc>
-
-#undef TabGroupStyleViews
-#undef TabGroupUnderline
 
 bool TabGroupStyleViews::TabGroupUnderlineShouldBeHidden() const {
   return false;
@@ -64,7 +58,7 @@ SkPath TabGroupStyleViews::GetUnderlinePath(gfx::Rect local_bounds) const {
 }
 
 bool TabGroupStyleViews::ShouldShowBraveVerticalTabs() const {
-  auto* vertical_tab_controller = VerticalTabController::FromBrowser(
+  auto* vertical_tab_controller = VerticalTabController::From(
       tab_group_views_->GetBrowserWindowInterface());
   return vertical_tab_controller &&
          vertical_tab_controller->ShouldShowBraveVerticalTabs();

@@ -9,15 +9,11 @@
 #include <string>
 
 #include "base/feature_list.h"
-#include "base/functional/callback_forward.h"
-#include "base/functional/callback_helpers.h"
 #include "base/metrics/field_trial.h"
-#include "base/metrics/field_trial_param_associator.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/mock_callback.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
-#include "base/time/time.h"
 #include "brave/components/brave_origin/buildflags/buildflags.h"
 #include "brave/components/brave_search/browser/prefs.h"
 #include "brave/components/brave_search/common/features.h"
@@ -25,7 +21,6 @@
 #include "brave/components/brave_search_conversion/utils.h"
 #include "brave/components/l10n/common/test/scoped_default_locale.h"
 #include "components/prefs/pref_registry_simple.h"
-#include "components/prefs/pref_service.h"
 #include "components/prefs/testing_pref_service.h"
 #include "components/search_engines/search_engines_test_environment.h"
 #include "components/search_engines/template_url.h"
@@ -166,6 +161,12 @@ TEST_F(BraveSearchDefaultHostTest, DisallowsAfterMaxTimesAsked) {
 #if !BUILDFLAG(IS_BRAVE_ORIGIN_BRANDED)
 TEST_F(BraveSearchDefaultHostTest, CanSetDefaultAlwaysTestWithSearchPromotion) {
   base::test::ScopedFeatureList feature_list;
+  // Promotion features are explicitly disabled so the test doesn't depend on
+  // their default state.
+  feature_list.InitWithFeatures(
+      {}, {brave_search_conversion::features::kOmniboxBanner,
+           brave_search_conversion::features::kOmniboxDDGBanner,
+           brave_search_conversion::features::kNTP});
 
   brave_l10n::test::ScopedDefaultLocale scoped_default_locale{"en_US"};
 
@@ -192,9 +193,12 @@ TEST_F(BraveSearchDefaultHostTest, CanSetDefaultAlwaysTestWithSearchPromotion) {
   host->GetCanSetDefaultSearchProvider(third.Get());
   host->GetCanSetDefaultSearchProvider(fourth.Get());
 
-  feature_list.InitAndEnableFeatureWithParameters(
-      brave_search_conversion::features::kOmniboxBanner,
-      {{brave_search_conversion::features::kBannerTypeParamName, "type_C"}});
+  feature_list.Reset();
+  feature_list.InitWithFeaturesAndParameters(
+      {{brave_search_conversion::features::kOmniboxBanner,
+        {{brave_search_conversion::features::kBannerTypeParamName, "type_C"}}}},
+      {brave_search_conversion::features::kOmniboxDDGBanner,
+       brave_search_conversion::features::kNTP});
   host->SetCanAlwaysSetDefault();
 
   // Can set after calling SetCanAlwaysSetDefault() with omnibox banner
@@ -203,6 +207,10 @@ TEST_F(BraveSearchDefaultHostTest, CanSetDefaultAlwaysTestWithSearchPromotion) {
   host->GetCanSetDefaultSearchProvider(fifth.Get());
 
   feature_list.Reset();
+  feature_list.InitWithFeatures(
+      {}, {brave_search_conversion::features::kOmniboxBanner,
+           brave_search_conversion::features::kOmniboxDDGBanner,
+           brave_search_conversion::features::kNTP});
   host->SetCanAlwaysSetDefault();
 
   // Can't set if promotion feature is disabled.
@@ -210,7 +218,10 @@ TEST_F(BraveSearchDefaultHostTest, CanSetDefaultAlwaysTestWithSearchPromotion) {
   host->GetCanSetDefaultSearchProvider(sixth.Get());
 
   feature_list.Reset();
-  feature_list.InitAndEnableFeature(brave_search_conversion::features::kNTP);
+  feature_list.InitWithFeatures(
+      {brave_search_conversion::features::kNTP},
+      {brave_search_conversion::features::kOmniboxBanner,
+       brave_search_conversion::features::kOmniboxDDGBanner});
   host->SetCanAlwaysSetDefault();
 
   // Can set if ntp promotion feature is enabled.

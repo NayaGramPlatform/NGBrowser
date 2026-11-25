@@ -9,7 +9,10 @@ import android.annotation.SuppressLint;
 import android.content.Context;
 import android.util.AttributeSet;
 import android.view.View;
+import android.view.View.MeasureSpec;
 import android.widget.GridLayout;
+
+import org.chromium.chrome.browser.user_education.UserEducationHelper;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -29,11 +32,17 @@ public class BraveMostVisitedTilesLayoutBase extends TilesLinearLayout {
         mUseFixedLayout = useFixedLayout;
     }
 
+    // Deleted from MostVisitedTilesLayout via bytecode so this no-op takes over, suppressing the
+    // upstream "pin shortcuts" IPH (https://github.com/brave/brave-browser/issues/61925); Brave
+    // has its own NTP top-sites tooltip.
+    public void triggerCustomizationIph(UserEducationHelper userEducationHelper) {}
+
     @SuppressLint("DrawAllocation")
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         int childCount = getChildCount();
-        if (mUseFixedLayout && widthMeasureSpec > 0 && childCount > FIXED_COLUMNS_COUNT) {
+        int measuredWidth = MeasureSpec.getSize(widthMeasureSpec);
+        if (mUseFixedLayout && measuredWidth > 0 && childCount > FIXED_COLUMNS_COUNT) {
             int numColumns = FIXED_COLUMNS_COUNT;
             if (getColumnCount() < numColumns) {
                 setColumnCount(numColumns);
@@ -45,7 +54,7 @@ public class BraveMostVisitedTilesLayoutBase extends TilesLinearLayout {
 
             List<View> dividerList = new ArrayList<>();
 
-            int tileViewWidth = widthMeasureSpec / numColumns;
+            int tileViewWidth = measuredWidth / numColumns;
             for (int i = 0; i < childCount; i++) {
                 View tileView = getChildAt(i);
 

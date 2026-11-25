@@ -3,7 +3,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this file,
 // You can obtain one at https://mozilla.org/MPL/2.0/.
 
-// This page contains a copy of Svelte (via @brave/leo) which will attempt
+// This page contains a copy of Svelte (via @brave/nala) which will attempt
 // to register its own trusted-types policy which duplicates the one registered
 // by the main page.
 import '$web-common/disableDuplicateSvelteTrustedPolicies'
@@ -12,14 +12,14 @@ import { createRoot } from 'react-dom/client'
 import * as React from 'react'
 import { SignInPage, ManagePage } from './content/email_aliases_manage_page'
 import { StyleSheetManager } from 'styled-components'
-import { setIconBasePath } from '@brave/leo/react/icon'
+import { setIconBasePath } from '@brave/nala/react/icon'
 import {
   EmailAliasesMetrics,
   EmailAliasesServiceInterface,
   EmailAliasesServiceObserverInterface,
   EmailAliasesServiceObserverReceiver,
   EmailAliasesService,
-} from 'gen/brave/components/email_aliases/email_aliases.mojom.m'
+} from 'gen/brave/components/email_aliases/email_aliases.mojom-webui.js'
 import {
   useEmailAliases,
   useBraveAccountState,
@@ -39,11 +39,12 @@ export const ManagePageConnected = ({
   bindObserver: (observer: EmailAliasesServiceObserverInterface) => () => void
   metrics?: ReturnType<typeof EmailAliasesMetrics.getRemote>
 }) => {
-  const { aliasesUpdate } = useEmailAliases(bindObserver)
+  const { aliasesUpdate, accountInfo } = useEmailAliases(bindObserver)
   return (
     <ManagePage
       authEmail={authEmail}
       aliasesUpdate={aliasesUpdate}
+      aliasLimit={accountInfo.maxAliasesCount}
       emailAliasesService={emailAliasesService}
       metrics={metrics}
     />

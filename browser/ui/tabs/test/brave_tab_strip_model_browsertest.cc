@@ -4,15 +4,21 @@
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "base/run_loop.h"
-#include "brave/components/constants/pref_names.h"
+#include "build/build_config.h"
 #include "chrome/app/chrome_command_ids.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_commands.h"
+#include "chrome/browser/ui/tabs/tab_strip_model.h"
+#include "chrome/common/pref_names.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "components/prefs/pref_service.h"
+#include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "content/public/test/browser_test.h"
+
+#if !BUILDFLAG(IS_ANDROID)
+#include "brave/browser/ui/tabs/public/tab_cycling_controller.h"
+#endif
 
 namespace {
 
@@ -63,21 +69,21 @@ IN_PROC_BROWSER_TEST_F(BraveTabStripModelTest, MRUCyclingBasic) {
   TabVisibilityWaiter tab_visibility_waiter(
       tab_strip_model->GetWebContentsAt(0));
   // Normal next tab expected by default, 2 -> 0
-  chrome::ExecuteCommand(browser(), IDC_SELECT_NEXT_TAB);
+  chrome::ExecuteCommand(browser(), IDC_CYCLE_TO_NEXT_TAB);
   EXPECT_EQ(tab_strip_model->active_index(), 0);
   tab_visibility_waiter.WaitForTabToBecomeVisible();
 
   // Activate MRU cycling
-  browser()->GetProfile()->GetPrefs()->SetBoolean(kMRUCyclingEnabled, true);
+  browser()->GetProfile()->GetPrefs()->SetBoolean(prefs::kCtrlTabMru, true);
 
   // MRU cycling, 0 -> 2
-  chrome::ExecuteCommand(browser(), IDC_SELECT_NEXT_TAB);
+  chrome::ExecuteCommand(browser(), IDC_CYCLE_TO_NEXT_TAB);
   EXPECT_EQ(tab_strip_model->active_index(), 2);
   // Ctrl is not being released 2 -> 1
-  chrome::ExecuteCommand(browser(), IDC_SELECT_NEXT_TAB);
+  chrome::ExecuteCommand(browser(), IDC_CYCLE_TO_NEXT_TAB);
   EXPECT_EQ(tab_strip_model->active_index(), 1);
   // 1 -> 2
-  chrome::ExecuteCommand(browser(), IDC_SELECT_PREVIOUS_TAB);
+  chrome::ExecuteCommand(browser(), IDC_CYCLE_TO_PREV_TAB);
   EXPECT_EQ(tab_strip_model->active_index(), 2);
 }
 
@@ -87,7 +93,7 @@ IN_PROC_BROWSER_TEST_F(BraveTabStripModelTest, MRUCyclingBasic) {
 // second Ctrl + tab should restart mru cycling.
 IN_PROC_BROWSER_TEST_F(BraveTabStripModelTest, TabClosingWhileMRUCycling) {
   // Activate MRU cycling
-  browser()->GetProfile()->GetPrefs()->SetBoolean(kMRUCyclingEnabled, true);
+  browser()->GetProfile()->GetPrefs()->SetBoolean(prefs::kCtrlTabMru, true);
 
   TabStripModel* tab_strip_model = browser()->tab_strip_model();
 
@@ -105,14 +111,14 @@ IN_PROC_BROWSER_TEST_F(BraveTabStripModelTest, TabClosingWhileMRUCycling) {
   // MRU should be 3 > 2 > 1 > 0
 
   // MRU cycling, 3 -> 2
-  chrome::ExecuteCommand(browser(), IDC_SELECT_NEXT_TAB);
+  chrome::ExecuteCommand(browser(), IDC_CYCLE_TO_NEXT_TAB);
   EXPECT_EQ(tab_strip_model->active_index(), 2);
   // Again, force visibility to update its last active timestamp.
   tab_strip_model->GetWebContentsAt(2)->WasShown();
   // MRU should be 2 > 1 > 0 > 3
 
   // MRU cycling, 2 -> 1
-  chrome::ExecuteCommand(browser(), IDC_SELECT_NEXT_TAB);
+  chrome::ExecuteCommand(browser(), IDC_CYCLE_TO_NEXT_TAB);
   EXPECT_EQ(tab_strip_model->active_index(), 1);
   // MRU should be 1 > 0 > 3 > 2. No point in updating visibility since we are
   // going to close the tab.
@@ -126,7 +132,23 @@ IN_PROC_BROWSER_TEST_F(BraveTabStripModelTest, TabClosingWhileMRUCycling) {
   // MRU should be 1 (former 2) > 2 (former 3) > 0
 
   // New MRU cycling is started, 1 -> 2
-  chrome::ExecuteCommand(browser(), IDC_SELECT_NEXT_TAB);
+  chrome::ExecuteCommand(browser(), IDC_CYCLE_TO_NEXT_TAB);
   EXPECT_EQ(tab_strip_model->active_index(), 2);
   // MRU should be: 2 > 0 > 1
 }
+
+#if !BUILDFLAG(IS_ANDROID)
+IN_PROC_BROWSER_TEST_F(BraveTabStripModelTest, MRUCyclingEndsWhenTabsChange) {
+  browser()->GetProfile()->GetPrefs()->SetBoolean(prefs::kCtrlTabMru, true);
+  chrome::NewTab(browser(), NewTabTypes::kNewTabCommand);
+  auto* controller = TabCyclingController::From(browser());
+  ASSERT_TRUE(controller);
+
+  chrome::ExecuteCommand(browser(), IDC_CYCLE_TO_NEXT_TAB);
+  EXPECT_TRUE(controller->is_cycling());
+
+  chrome::NewTab(browser(), NewTabTypes::kNewTabCommand);
+  EXPECT_FALSE(controller->is_cycling());
+}
+
+#endif  // !BUILDFLAG(IS_ANDROID)

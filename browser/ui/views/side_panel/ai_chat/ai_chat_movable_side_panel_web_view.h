@@ -10,6 +10,8 @@
 
 #include "components/web_modal/web_contents_modal_dialog_manager_delegate.h"
 #include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/mojom/window_open_disposition.mojom-forward.h"
+#include "ui/base/page_transition_types.h"
 #include "ui/views/controls/webview/unhandled_keyboard_event_handler.h"
 #include "ui/views/controls/webview/webview.h"
 #include "url/gurl.h"
@@ -25,6 +27,7 @@ class NavigationHandle;
 class RenderFrameHost;
 class WebContents;
 struct OpenURLParams;
+struct Referrer;
 }  // namespace content
 
 namespace input {
@@ -95,7 +98,7 @@ class AIChatMovableSidePanelWebView
       content::WebContents* source,
       std::unique_ptr<content::WebContents> new_contents,
       const GURL& target_url,
-      WindowOpenDisposition disposition,
+      ui::mojom::WindowOpenDisposition disposition,
       const blink::mojom::WindowFeatures& window_features,
       bool user_gesture,
       bool* was_blocked) override;
@@ -109,6 +112,17 @@ class AIChatMovableSidePanelWebView
                       const blink::mojom::FileChooserParams& params) override;
   bool HandleKeyboardEvent(content::WebContents* source,
                            const input::NativeWebKeyboardEvent& event) override;
+
+  // content::WebContentsObserver:
+  // Records the opener for `AddNewContents`.
+  void DidOpenRequestedURL(content::WebContents* new_contents,
+                           content::RenderFrameHost* source_render_frame_host,
+                           const GURL& url,
+                           const content::Referrer& referrer,
+                           ui::mojom::WindowOpenDisposition disposition,
+                           ui::PageTransition transition,
+                           bool started_from_context_menu,
+                           bool renderer_initiated) override;
 
   // web_modal::WebContentsModalDialogManagerDelegate:
   web_modal::WebContentsModalDialogHost* GetWebContentsModalDialogHost(

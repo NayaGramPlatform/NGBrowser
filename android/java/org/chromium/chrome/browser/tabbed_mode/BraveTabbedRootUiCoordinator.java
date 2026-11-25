@@ -143,7 +143,8 @@ public class BraveTabbedRootUiCoordinator extends TabbedRootUiCoordinator {
             @Nullable BottomBarHostManager bottomBarHostManager,
             VerticalTabsActionDelegate verticalTabsActionDelegate,
             Supplier<Boolean> urlBarVisibleSupplier,
-            Runnable onTabLayoutAvailable) {
+            Runnable onTabLayoutAvailable,
+            BooleanSupplier isWarmOnResumeSupplier) {
         super(
                 activity,
                 onOmniboxFocusChangedListener,
@@ -200,7 +201,8 @@ public class BraveTabbedRootUiCoordinator extends TabbedRootUiCoordinator {
                 bottomBarHostManager,
                 verticalTabsActionDelegate,
                 urlBarVisibleSupplier,
-                onTabLayoutAvailable);
+                onTabLayoutAvailable,
+                isWarmOnResumeSupplier);
 
         mBraveActivity = activity;
         mHubManagerSupplier = hubManagerSupplier;
@@ -251,7 +253,7 @@ public class BraveTabbedRootUiCoordinator extends TabbedRootUiCoordinator {
                                             .getDimensionPixelSize(
                                                     R.dimen.brave_bottom_toolbar_height)
                                     * -1;
-                    if (EdgeToEdgeUtils.isEdgeToEdgeBottomChinEnabled(mBraveActivity)
+                    if (EdgeToEdgeUtils.isEdgeToEdgeBottomChinSupportedByDevice(mBraveActivity)
                             && mBraveEdgeToEdgeControllerSupplier.get() != null) {
                         bottomToolbarHeight -=
                                 mBraveEdgeToEdgeControllerSupplier.get().getBottomInsetPx();

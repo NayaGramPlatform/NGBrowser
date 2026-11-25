@@ -11,15 +11,19 @@
 #include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
+#include "base/test/run_until.h"
+#include "base/test/scoped_feature_list.h"
 #include "brave/browser/ui/browser_commands.h"
 #include "brave/browser/ui/tabs/brave_tab_prefs.h"
 #include "brave/browser/ui/tabs/test/shared_pinned_tab_service_browsertest.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser_commands.h"
+#include "chrome/browser/ui/browser_tabrestore.h"
 #include "chrome/browser/ui/browser_tabstrip.h"
 #include "chrome/browser/ui/browser_web_contents_delegate/browser_web_contents_delegate.h"
 #include "chrome/browser/ui/browser_window.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface_iterator.h"
+#include "chrome/browser/ui/browser_window/public/create_browser_window.h"
 #include "chrome/browser/ui/browser_window/public/global_browser_collection.h"
 #include "chrome/browser/ui/navigator/browser_navigator_params.h"
 #include "chrome/browser/ui/tabs/features.h"
@@ -28,12 +32,13 @@
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/test/base/platform_browser_test.h"
 #include "components/prefs/pref_service.h"
+#include "components/sessions/core/serialized_navigation_entry.h"
+#include "components/sessions/core/serialized_user_agent_override.h"
 #include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/navigation_entry.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
 #include "net/dns/mock_host_resolver.h"
-#include "ui/base/window_open_disposition.h"
 
 SharedPinnedTabServiceBrowserTest::SharedPinnedTabServiceBrowserTest()
     : feature_list_(tabs::kBraveSharedPinnedTabs) {}
@@ -45,8 +50,13 @@ BrowserWindowInterface* SharedPinnedTabServiceBrowserTest::CreateNewBrowser() {
   auto* new_browser =
       chrome::OpenEmptyWindow(browser()->GetProfile(),
                               /*should_trigger_session_restore= */ false);
-  browsers_.push_back(new_browser->GetWeakPtr());
+  TrackBrowser(new_browser);
   return new_browser;
+}
+
+void SharedPinnedTabServiceBrowserTest::TrackBrowser(
+    BrowserWindowInterface* browser) {
+  browsers_.push_back(browser->GetWeakPtr());
 }
 
 SharedPinnedTabService* SharedPinnedTabServiceBrowserTest::GetForBrowser(
@@ -186,6 +196,83 @@ IN_PROC_BROWSER_TEST_F(SharedPinnedTabServiceBrowserTest, PinAndUnpinTabs) {
       tab_strip_model_2->GetWebContentsAt(0)));
 }
 
+class SharedPinnedTreeTabServiceBrowserTest
+    : public SharedPinnedTabServiceBrowserTest {
+ public:
+  SharedPinnedTreeTabServiceBrowserTest() {
+    tree_feature_list_.InitAndEnableFeature(tabs::kBraveTreeTab);
+  }
+
+ private:
+  base::test::ScopedFeatureList tree_feature_list_;
+};
+
+IN_PROC_BROWSER_TEST_F(SharedPinnedTreeTabServiceBrowserTest,
+                       UnpinSharedTabViaContextMenu_KeepsTabAndRemovesDummy) {
+  auto* prefs = browser()->GetProfile()->GetPrefs();
+  prefs->SetBoolean(brave_tabs::kVerticalTabsEnabled, true);
+  prefs->SetBoolean(brave_tabs::kTreeTabsEnabled, true);
+
+  auto* model = browser()->tab_strip_model();
+  auto* other_model = CreateNewBrowser()->GetTabStripModel();
+  auto* contents = model->GetWebContentsAt(0);
+  auto* service = GetForBrowser(browser());
+
+  // Don't Show() browser() here. On Linux its activation completes late, after
+  // a deactivation caused by the other window, so OnBrowserActivated() can run
+  // between the unpin below and the service's posted OnTabUnpinned().
+  // SynchronizeNewBrowser() then treats the unpinned browser as out of sync and
+  // inserts a new dummy tab at index 0.
+  model->SetTabPinned(0, true);
+  ASSERT_TRUE(service->IsSharedContents(contents));
+  ASSERT_EQ(2, other_model->count());
+
+  // The context-menu command moves the tab through a detached tree node.
+  model->ExecuteContextMenuCommand(0, TabStripModel::CommandTogglePinned);
+  EXPECT_EQ(contents, model->GetWebContentsAt(0));
+  EXPECT_FALSE(model->IsTabPinned(0));
+
+  ASSERT_TRUE(
+      base::test::RunUntil([&]() { return other_model->count() == 1; }));
+  EXPECT_EQ(contents, model->GetWebContentsAt(0));
+  EXPECT_FALSE(service->IsSharedContents(contents));
+  EXPECT_FALSE(service->IsDummyContents(contents));
+}
+
+// An activation of the browser between an unpin and the service's deferred
+// handling of it must not make the service think the browser is out of sync.
+IN_PROC_BROWSER_TEST_F(
+    SharedPinnedTreeTabServiceBrowserTest,
+    ActivateBrowserBeforeUnpinIsHandled_DoesNotAddStrayDummy) {
+  auto* prefs = browser()->GetProfile()->GetPrefs();
+  prefs->SetBoolean(brave_tabs::kVerticalTabsEnabled, true);
+  prefs->SetBoolean(brave_tabs::kTreeTabsEnabled, true);
+
+  auto* model = browser()->tab_strip_model();
+  auto* other_model = CreateNewBrowser()->GetTabStripModel();
+  auto* contents = model->GetWebContentsAt(0);
+  auto* service = GetForBrowser(browser());
+
+  model->SetTabPinned(0, true);
+  ASSERT_TRUE(service->IsSharedContents(contents));
+  ASSERT_EQ(2, other_model->count());
+
+  // Unpinning defers the service's handling to a posted task. Activate the
+  // browser before that task runs, as a late window activation can.
+  model->ExecuteContextMenuCommand(0, TabStripModel::CommandTogglePinned);
+  ASSERT_FALSE(model->IsTabPinned(0));
+  service->OnBrowserActivated(browser());
+  EXPECT_EQ(1, model->count());
+
+  ASSERT_TRUE(
+      base::test::RunUntil([&]() { return other_model->count() == 1; }));
+  EXPECT_EQ(1, model->count());
+  EXPECT_EQ(contents, model->GetWebContentsAt(0));
+  EXPECT_FALSE(model->IsTabPinned(0));
+  EXPECT_FALSE(service->IsSharedContents(contents));
+  EXPECT_FALSE(service->IsDummyContents(contents));
+}
+
 IN_PROC_BROWSER_TEST_F(SharedPinnedTabServiceBrowserTest, ActivatePinnedTab) {
   // Precondition
   auto* browser_1 = browser();
@@ -296,6 +383,44 @@ IN_PROC_BROWSER_TEST_F(SharedPinnedTabServiceBrowserTest, SynchronizeURL) {
 }
 
 IN_PROC_BROWSER_TEST_F(SharedPinnedTabServiceBrowserTest,
+                       SynchronizeBlockedState) {
+  // Given that there're multiple windows with shared pinned tabs
+  auto* browser_1 = browser();
+  auto* tab_strip_model_1 = browser_1->tab_strip_model();
+  tab_strip_model_1->SetTabPinned(0, /* pinned= */ true);
+  auto* shared_pinned_tab_service = GetForBrowser(browser_1);
+  ASSERT_TRUE(shared_pinned_tab_service);
+
+  auto* browser_2 = CreateNewBrowser();
+  auto* tab_strip_model_2 = browser_2->tab_strip_model();
+  WaitUntil(base::BindLambdaForTesting(
+      [&]() { return tab_strip_model_2->count() > 1; }));
+  ASSERT_TRUE(tab_strip_model_2->IsTabPinned(0));
+  auto* dummy_contents = tab_strip_model_2->GetWebContentsAt(0);
+  ASSERT_TRUE(shared_pinned_tab_service->IsDummyContents(dummy_contents));
+  EXPECT_FALSE(
+      shared_pinned_tab_service->GetTabDataForDummyContents(0, dummy_contents)
+          ->blocked);
+
+  // When the shared pinned tab gets blocked, e.g. by a modal dialog,
+  tab_strip_model_1->SetTabBlocked(0, /* blocked= */ true);
+
+  // Then the dummy pinned tab should reflect it, so it shows the attention
+  // icon.
+  EXPECT_TRUE(
+      shared_pinned_tab_service->GetTabDataForDummyContents(0, dummy_contents)
+          ->blocked);
+
+  // When the shared pinned tab gets unblocked,
+  tab_strip_model_1->SetTabBlocked(0, /* blocked= */ false);
+
+  // Then the dummy pinned tab should reflect it too.
+  EXPECT_FALSE(
+      shared_pinned_tab_service->GetTabDataForDummyContents(0, dummy_contents)
+          ->blocked);
+}
+
+IN_PROC_BROWSER_TEST_F(SharedPinnedTabServiceBrowserTest,
                        CloseWindowWhenAllTabsAreSharedPinnedTabs) {
   // Given that there're multiple windows with shared pinned tabs
   auto* browser_1 = browser();
@@ -359,6 +484,52 @@ IN_PROC_BROWSER_TEST_F(SharedPinnedTabServiceBrowserTest, PreferenceChanged) {
   EXPECT_EQ(3, browser_2->tab_strip_model()->count());
   EXPECT_TRUE(browser_2->tab_strip_model()->IsTabPinned(0));
   EXPECT_TRUE(browser_2->tab_strip_model()->IsTabPinned(1));
+}
+
+// On session restore, each shared contents comes back in the window that last
+// owned it. Activating such a window must only add the shared pinned tabs it's
+// missing, not duplicate the ones it already holds.
+IN_PROC_BROWSER_TEST_F(SharedPinnedTabServiceBrowserTest,
+                       RestoredWindowOwningSharedTab_DoesNotDuplicate) {
+  auto* service = GetForBrowser(browser());
+  auto* model_1 = browser()->tab_strip_model();
+  ASSERT_TRUE(
+      content::NavigateToURL(model_1->GetActiveWebContents(),
+                             https_server()->GetURL("a.com", "/index.html")));
+  model_1->SetTabPinned(0, /* pinned= */ true);
+  ASSERT_TRUE(service->IsSharedContents(model_1->GetWebContentsAt(0)));
+
+  // Restore a window like session restore does: tabs are added before the
+  // window is shown and activated.
+  auto* browser_2 = CreateBrowserWindow(BrowserWindowCreateParams(
+      browser()->GetProfile(), /*from_user_gesture=*/true));
+  TrackBrowser(browser_2);
+  sessions::SerializedNavigationEntry navigation;
+  navigation.set_index(0);
+  navigation.set_virtual_url(https_server()->GetURL("b.com", "/index.html"));
+  navigation.set_transition_type(ui::PAGE_TRANSITION_TYPED);
+  chrome::AddRestoredTab(browser_2, base::span_from_ref(navigation),
+                         /*tab_index=*/0,
+                         /*selected_navigation=*/0, /*extension_app_id=*/"",
+                         /*group=*/std::nullopt, /*select=*/false, /*pin=*/true,
+                         base::TimeTicks(), base::Time(), nullptr,
+                         sessions::SerializedUserAgentOverride(), {},
+                         /*from_session_restore=*/true,
+                         /*is_active_browser=*/true);
+  auto* model_2 = browser_2->tab_strip_model();
+  auto* restored_contents = model_2->GetWebContentsAt(0);
+  ASSERT_TRUE(service->IsSharedContents(restored_contents));
+  ASSERT_EQ(2, model_1->IndexOfFirstNonPinnedTab());
+
+  service->OnBrowserActivated(browser_2);
+
+  // Both windows have exactly the two shared pinned tabs, in the same order.
+  EXPECT_EQ(2, model_1->IndexOfFirstNonPinnedTab());
+  EXPECT_EQ(2, model_2->IndexOfFirstNonPinnedTab());
+  EXPECT_EQ(restored_contents, model_2->GetWebContentsAt(0));
+  EXPECT_TRUE(service->IsDummyContents(model_2->GetWebContentsAt(1)));
+  EXPECT_TRUE(service->IsDummyContents(model_1->GetWebContentsAt(0)));
+  EXPECT_TRUE(service->IsSharedContents(model_1->GetWebContentsAt(1)));
 }
 
 #if !BUILDFLAG(IS_MAC)

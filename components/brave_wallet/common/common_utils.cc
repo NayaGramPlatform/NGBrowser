@@ -7,8 +7,6 @@
 
 #include <stddef.h>
 
-#include <ostream>
-#include <ranges>
 #include <utility>
 
 #include "base/check.h"
@@ -68,8 +66,8 @@ bool IsPolkadotEnabled() {
   return base::FeatureList::IsEnabled(features::kBraveWalletPolkadotFeature);
 }
 
-bool IsPolkadotAssetDiscoveryEnabled() {
-  return IsPolkadotEnabled() && features::kPolkadotAssetDiscovery.Get();
+bool IsPolkadotDAppSupportEnabled() {
+  return IsPolkadotEnabled() && features::kPolkadotDAppSupport.Get();
 }
 
 bool IsWalletDebugEnabled() {
@@ -100,12 +98,16 @@ bool IsAccountHidingEnabled() {
       features::kBraveWalletAccountHidingFeature);
 }
 
-bool IsSnapsFeatureEnabled() {
-#if BUILDFLAG(ENABLE_SNAPS)
-  return base::FeatureList::IsEnabled(features::kBraveWalletSnapsFeature);
+bool IsSnapFeatureEnabled() {
+#if BUILDFLAG(ENABLE_SNAP)
+  return base::FeatureList::IsEnabled(features::kBraveWalletSnapFeature);
 #else
   return false;
 #endif
+}
+
+bool IsCardStackUiEnabled() {
+  return base::FeatureList::IsEnabled(features::kBraveWalletCardStackUiFeature);
 }
 
 bool IsEthereumKeyring(mojom::KeyringId keyring_id) {
@@ -431,7 +433,8 @@ std::vector<mojom::KeyringId> GetEnabledKeyrings() {
 
 bool CoinSupportsDapps(mojom::CoinType coin) {
   return coin == mojom::CoinType::ETH || coin == mojom::CoinType::SOL ||
-         coin == mojom::CoinType::ADA;
+         coin == mojom::CoinType::ADA ||
+         (coin == mojom::CoinType::DOT && IsPolkadotDAppSupportEnabled());
 }
 
 bool IsDeprecatedAddressBasedCoin(mojom::CoinType coin) {
@@ -567,6 +570,14 @@ mojom::AccountIdPtr MakeIndexBasedAccountId(mojom::CoinType coin,
 
 bool IsHTTPSOrLocalhostURL(const std::string& url_string) {
   return net::IsHTTPSOrLocalhostURL(GURL(url_string));
+}
+
+bool IsValidDappOrigin(const url::Origin& origin) {
+  if (origin.opaque()) {
+    return false;
+  }
+  return origin.scheme() == url::kHttpsScheme ||
+         origin.scheme() == url::kHttpScheme;
 }
 
 }  // namespace brave_wallet

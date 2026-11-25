@@ -254,10 +254,6 @@ enum TransactionParser {
         // gasFeeCapValueFormatted="0.000000000000101965"
         return .init(
           transaction: transaction,
-          namedFromAddress: NamedAddresses.name(
-            for: fromAccountInfo.address,
-            accounts: accountInfos
-          ),
           fromAccountInfo: fromAccountInfo,
           namedToAddress: NamedAddresses.name(for: filTxData.to, accounts: accountInfos),
           toAddress: filTxData.to,
@@ -282,7 +278,6 @@ enum TransactionParser {
         )
       } else if let btcTxData = transaction.txDataUnion.btcTxData {  // BTC send tx
         // Require 8 decimals precision for BTC parsing
-        let namedFromAccount = fromAccountInfo.name
         let fromValue = "\(btcTxData.amount)"
         let fromValueFormatted =
           formatter.decimalString(
@@ -308,7 +303,6 @@ enum TransactionParser {
         // fromValueFormatted="0.00001"
         return .init(
           transaction: transaction,
-          namedFromAddress: namedFromAccount,
           fromAccountInfo: fromAccountInfo,
           namedToAddress: "",
           toAddress: btcTxData.to,
@@ -331,7 +325,6 @@ enum TransactionParser {
         )
       } else if let zecTxData = transaction.txDataUnion.zecTxData {  // ZEC send tx
         // Require 8 decimals precision for ZEC parsing
-        let namedFromAccount = fromAccountInfo.name
         let fromValue = "\(zecTxData.amount)"
         let fromValueFormatted =
           formatter.decimalString(
@@ -357,7 +350,6 @@ enum TransactionParser {
         // fromValueFormatted="0.00001"
         return .init(
           transaction: transaction,
-          namedFromAddress: namedFromAccount,
           fromAccountInfo: fromAccountInfo,
           namedToAddress: "",
           toAddress: zecTxData.to,
@@ -401,10 +393,6 @@ enum TransactionParser {
         // fromValueFormatted="0.1234"
         return .init(
           transaction: transaction,
-          namedFromAddress: NamedAddresses.name(
-            for: fromAccountInfo.address,
-            accounts: accountInfos
-          ),
           fromAccountInfo: fromAccountInfo,
           namedToAddress: NamedAddresses.name(
             for: transaction.ethTxToAddress,
@@ -466,10 +454,6 @@ enum TransactionParser {
       // token.symbol="DAI"
       return .init(
         transaction: transaction,
-        namedFromAddress: NamedAddresses.name(
-          for: fromAccountInfo.address,
-          accounts: accountInfos
-        ),
         fromAccountInfo: fromAccountInfo,
         namedToAddress: NamedAddresses.name(for: toAddress, accounts: accountInfos),
         toAddress: toAddress,
@@ -568,10 +552,6 @@ enum TransactionParser {
       // minBuyAmountFiat = "$6.67"
       return .init(
         transaction: transaction,
-        namedFromAddress: NamedAddresses.name(
-          for: fromAccountInfo.address,
-          accounts: accountInfos
-        ),
         fromAccountInfo: fromAccountInfo,
         namedToAddress: NamedAddresses.name(
           for: transaction.ethTxToAddress,
@@ -644,10 +624,6 @@ enum TransactionParser {
       // approvalAmount="0.01"
       return .init(
         transaction: transaction,
-        namedFromAddress: NamedAddresses.name(
-          for: fromAccountInfo.address,
-          accounts: accountInfos
-        ),
         fromAccountInfo: fromAccountInfo,
         namedToAddress: NamedAddresses.name(
           for: transaction.ethTxToAddress,
@@ -696,10 +672,6 @@ enum TransactionParser {
 
       return .init(
         transaction: transaction,
-        namedFromAddress: NamedAddresses.name(
-          for: fromAccountInfo.address,
-          accounts: accountInfos
-        ),
         fromAccountInfo: fromAccountInfo,  // The caller, which may not be the owner
         namedToAddress: NamedAddresses.name(for: toAddress, accounts: accountInfos),
         toAddress: toAddress,
@@ -749,10 +721,6 @@ enum TransactionParser {
       // fromValueFormatted="0.1234"
       return .init(
         transaction: transaction,
-        namedFromAddress: NamedAddresses.name(
-          for: fromAccountInfo.address,
-          accounts: accountInfos
-        ),
         fromAccountInfo: fromAccountInfo,
         namedToAddress: NamedAddresses.name(for: toAddress, accounts: accountInfos),
         toAddress: toAddress,
@@ -826,10 +794,6 @@ enum TransactionParser {
       // fromValueFormatted="0.1234"
       return .init(
         transaction: transaction,
-        namedFromAddress: NamedAddresses.name(
-          for: fromAccountInfo.address,
-          accounts: accountInfos
-        ),
         fromAccountInfo: fromAccountInfo,
         namedToAddress: NamedAddresses.name(for: toAddress, accounts: accountInfos),
         toAddress: toAddress,
@@ -967,10 +931,6 @@ enum TransactionParser {
       }
       return .init(
         transaction: transaction,
-        namedFromAddress: NamedAddresses.name(
-          for: fromAccountInfo.address,
-          accounts: accountInfos
-        ),
         fromAccountInfo: fromAccountInfo,
         namedToAddress: NamedAddresses.name(for: toAddress ?? "", accounts: accountInfos),
         toAddress: toAddress ?? "",
@@ -990,7 +950,6 @@ enum TransactionParser {
       // fromValue="1000000"
       // fromValueFormatted="1"
       // toAddress="addr1q9an3mmyq6xqc24vfjlwyua3mc0nuneg3hradpsuey9u5scqqu6nsqvj9nk"
-      let namedFromAccount = fromAccountInfo.name
       let fromValue = "\(cardanoTxData.sendingLovelace)"
       let fromValueFormatted =
         formatter.decimalString(
@@ -1008,7 +967,6 @@ enum TransactionParser {
         ) ?? "$0.00"
       return .init(
         transaction: transaction,
-        namedFromAddress: namedFromAccount,
         fromAccountInfo: fromAccountInfo,
         namedToAddress: "",
         toAddress: cardanoTxData.to,
@@ -1039,7 +997,6 @@ enum TransactionParser {
       // fromValue="1000000"
       // fromValueFormatted="1"
       // toAddress="addr1q9an3mmyq6xqc24vfjlwyua3mc0nuneg3hradpsuey9u5scqqu6nsqvj9nk"
-      let namedFromAccount = fromAccountInfo.name
       let fromValue = "\(sendToken.value)"
       let fromToken = token(
         for: sendToken.tokenIdHex,
@@ -1064,7 +1021,6 @@ enum TransactionParser {
       }
       return .init(
         transaction: transaction,
-        namedFromAddress: namedFromAccount,
         fromAccountInfo: fromAccountInfo,
         namedToAddress: "",
         toAddress: cardanoTxData.to,
@@ -1076,6 +1032,32 @@ enum TransactionParser {
             fromAmount: fromValueFormatted,
             fromFiat: fromFiat,
             fromTokenMetadata: nil,
+            gasFee: gasFee(
+              from: transaction,
+              network: txNetwork,
+              assetRatios: assetRatios,
+              currencyFormatter: currencyFormatter
+            )
+          )
+        )
+      )
+    case .erc721SetApprovalForAll:
+      // txArgs[0] is the operator being granted / revoked access to the
+      // collection, txArgs[1] is `approved` encoded as "0x1" or "0x0".
+      guard let spenderAddress = transaction.txArgs[safe: 0],
+        transaction.txArgs[safe: 1] != nil
+      else {
+        return nil
+      }
+      return .init(
+        transaction: transaction,
+        fromAccountInfo: fromAccountInfo,
+        namedToAddress: "",
+        toAddress: spenderAddress,
+        network: txNetwork,
+        details: .erc721SetApprovalForAll(
+          .init(
+            spenderAddress: spenderAddress,
             gasFee: gasFee(
               from: transaction,
               network: txNetwork,
@@ -1185,6 +1167,7 @@ struct ParsedTransaction: Equatable {
     case ethSwap(EthSwapDetails)
     case ethErc20Approve(EthErc20ApproveDetails)
     case erc721Transfer(Eth721TransferDetails)
+    case erc721SetApprovalForAll(Eth721SetApprovalForAllDetails)
     case solSystemTransfer(SendDetails)
     case solSplTokenTransfer(SendDetails)
     case solDappTransaction(SolanaTxDetails)
@@ -1199,8 +1182,6 @@ struct ParsedTransaction: Equatable {
   /// The transaction
   let transaction: BraveWallet.TransactionInfo
 
-  /// Account name for the from address of the transaction
-  let namedFromAddress: String
   /// `AccountInfo` sending from
   let fromAccountInfo: BraveWallet.AccountInfo
 
@@ -1234,6 +1215,8 @@ struct ParsedTransaction: Equatable {
       return details.gasFee
     case .erc721Transfer(let details):
       return details.gasFee
+    case .erc721SetApprovalForAll(let details):
+      return details.gasFee
     case .filSend(let details):
       return details.gasFee
     case .btcSend(let details),
@@ -1264,7 +1247,6 @@ struct ParsedTransaction: Equatable {
 
   init() {
     self.transaction = .init()
-    self.namedFromAddress = ""
     self.fromAccountInfo = .init()
     self.namedToAddress = ""
     self.toAddress = ""
@@ -1274,7 +1256,6 @@ struct ParsedTransaction: Equatable {
 
   init(
     transaction: BraveWallet.TransactionInfo,
-    namedFromAddress: String,
     fromAccountInfo: BraveWallet.AccountInfo,
     namedToAddress: String,
     toAddress: String,
@@ -1282,7 +1263,6 @@ struct ParsedTransaction: Equatable {
     details: Details
   ) {
     self.transaction = transaction
-    self.namedFromAddress = namedFromAddress
     self.fromAccountInfo = fromAccountInfo
     self.namedToAddress = namedToAddress
     self.toAddress = toAddress
@@ -1292,7 +1272,7 @@ struct ParsedTransaction: Equatable {
 
   /// Determines if the given query matches the `ParsedTransaction`.
   func matches(_ query: String) -> Bool {
-    if namedFromAddress.localizedCaseInsensitiveContains(query)
+    if fromAccountInfo.name.localizedCaseInsensitiveContains(query)
       || namedToAddress.localizedCaseInsensitiveContains(query)
       || toAddress.localizedCaseInsensitiveContains(query)
       || transaction.txHash.localizedCaseInsensitiveContains(query)
@@ -1317,6 +1297,8 @@ struct ParsedTransaction: Equatable {
       return ethErc20ApproveDetails.token?.matches(query) == true
     case .erc721Transfer(let eth721TransferDetails):
       return eth721TransferDetails.fromToken?.matches(query) == true
+    case .erc721SetApprovalForAll(let details):
+      return details.spenderAddress.localizedCaseInsensitiveContains(query) == true
     case .solDappTransaction(let solanaTxDetails),
       .solSwapTransaction(let solanaTxDetails):
       return solanaTxDetails.symbol?.localizedCaseInsensitiveContains(query) == true
@@ -1413,6 +1395,13 @@ struct Eth721TransferDetails: Equatable {
   let owner: String
   /// The token id
   let tokenId: String
+  /// Gas fee for the transaction
+  let gasFee: GasFee?
+}
+
+struct Eth721SetApprovalForAllDetails: Equatable {
+  /// The operator being granted or revoked access to the collection
+  let spenderAddress: String
   /// Gas fee for the transaction
   let gasFee: GasFee?
 }
@@ -1537,7 +1526,10 @@ extension ParsedTransaction {
       if let token = details.fromToken {
         return [token]
       }
-    case .solDappTransaction, .solSwapTransaction, .other:
+    case .erc721SetApprovalForAll,
+      .solDappTransaction,
+      .solSwapTransaction,
+      .other:
       break
     }
     return []
@@ -1604,6 +1596,8 @@ extension BraveWallet.TransactionInfo {
     case .ethFilForwarderTransfer:
       break
     case .cardanoSendLovelace, .cardanoSendToken:
+      break
+    case .erc721SetApprovalForAll:
       break
     @unknown default:
       break

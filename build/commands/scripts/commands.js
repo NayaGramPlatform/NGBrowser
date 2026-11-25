@@ -6,16 +6,17 @@
 // Check environment before doing anything.
 import '../lib/checkEnvironment.js'
 
-import { program, Option } from 'commander'
+import { Option } from 'commander'
+import { program } from '../lib/program.ts'
 import path from 'node:path'
 import fs from 'fs-extra'
 import config from '../lib/config.ts'
-import util from '../lib/util.js'
+import util from '../lib/util.ts'
 import { buildFuzzer, runFuzzer } from '../lib/fuzzer.js'
 import versions from '../lib/versions.js'
 import start from '../lib/start.js'
 import applyPatches from '../lib/applyPatches.js'
-import updatePatches from './updatePatches.js'
+import updatePatches from './updatePatches.ts'
 import pullL10n from '../lib/pullL10n.js'
 import pushL10n from '../lib/pushL10n.js'
 import chromiumRebaseL10n from '../lib/chromiumRebaseL10n.js'
@@ -60,6 +61,7 @@ program
     '--print-patch-failures-in-json',
     'Emits a JSON structure with a list of patch files that failed to apply',
   )
+  .apply(buildOptions.supportQuiet)
   .apply(buildOptions.supportBuildConfigArg)
   .action(applyPatches)
 
@@ -103,7 +105,7 @@ program
 
     config.update(options)
     // ignore use_no_gn_gen when updating the symlink
-    delete config.use_no_gn_gen
+    config.use_no_gn_gen = undefined
     const currentLink = options.symlink_dir
     if (!currentLink) {
       console.error('Symlink directory is required')
@@ -215,6 +217,7 @@ program
     '--no-plaster-check',
     'Allows regenerating patches, even for plaster managed sources.',
   )
+  .apply(buildOptions.supportQuiet)
   .action(updatePatches)
 
 program.command('mass_rename').action(util.massRename)

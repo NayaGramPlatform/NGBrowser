@@ -1,0 +1,13 @@
+diff --git a/chrome/browser/ui/views/tabs/vertical/vertical_tab_strip_focus_swipe_controller.cc b/chrome/browser/ui/views/tabs/vertical/vertical_tab_strip_focus_swipe_controller.cc
+index 2f35459f4e33c9f28c3e60c8e4356f4d73fcc354..d29ec550219835106655bf8efdd60b4148b4b4e2 100644
+--- a/chrome/browser/ui/views/tabs/vertical/vertical_tab_strip_focus_swipe_controller.cc
++++ b/chrome/browser/ui/views/tabs/vertical/vertical_tab_strip_focus_swipe_controller.cc
+@@ -15,7 +15,7 @@
+ #include "ui/events/event.h"
+ 
+ VerticalTabStripFocusSwipeController::VerticalTabStripFocusSwipeController(
+-    VerticalTabStripRegionView* region_view)
++    VerticalTabStripRegionView_ChromiumImpl* region_view)
+     : region_view_(region_view) {
+   CHECK(region_view_);
+   CHECK(region_view_->tab_strip_model());

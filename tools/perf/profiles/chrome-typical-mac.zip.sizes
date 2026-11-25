@@ -1,29 +1,28 @@
-Total size 82062K
+Total size 92751K
 
-GROUP chromium [57936K total]
-  2585K listdata.json 9.5220.3721 [ActorSafetyLists]
+GROUP chromium [68204K total]
+  2575K listdata.json 9.8200.9609 [ActorSafetyLists]
      2K Amount Extraction Heuristic Regexes 4 [AmountExtractionHeuristicRegexes]
      2K captcha_providers.json 8.5419.4434 [CaptchaProviders]
-  1381K crl-set-16862837415826904238.data 10778 [CertificateRevocation]
+  9326K crl-set-5215617749062403297.data 10909 [CertificateRevocation]
     31K chromeCommerceHeuristics 2023.3.30.1305 [CommerceHeuristics]
-   253K Crowd Deny 2026.9.14.61 [Crowd Deny]
-     9K fileTypePolicies 145.0.7584.0 [FileTypePolicies]
-    13K First Party Sets 2025.7.24.0 [FirstPartySetsPreloaded]
-     7K history_search_strings_farmhashed.binarypb 6.7431.9692 [HistorySearch]
+   231K Crowd Deny 2026.11.12.125 [Crowd Deny]
+     9K fileTypePolicies 159.0.8152.0 [FileTypePolicies]
      9K MEI Preload 1.1.0.3 [MEIPreload]
   7744K OnDeviceHeadSuggestENUS500000 20251024.824731831.14 [OnDeviceHeadSuggestModel]
-   125K Model Manifest 1.20260913.2 [OptimizationGuideModelsManifest]
-   552K Optimization Hints 743 [OptimizationHints]
+    33K Geolocation Permission Predictions Model 2026.11.17.1601 [OptGuidePredictionModels]
+   128K Model Manifest 1.20261108.2 [OptimizationGuideModelsManifest]
+   547K Optimization Hints 779 [OptimizationHints]
      1K Origin Trials Updates 1.0.0.20 [OriginTrials]
-   419K pkiMetadata 1778 [PKIMetadata]
+   426K pkiMetadata 1839 [PKIMetadata]
      4K sslErrorAssistant 7 [SSLErrorAssistant]
-   181K safetyTips 3091 [SafetyTips]
-   425K Subresource Filtering Rules 9.72.0 [Subresource Filter]
-    11K trustToken 2026.8.3.1 [TrustTokenKeyCommitments]
- 22814K WASM TTS Engine 20260826.1 [WasmTtsEngine]
- 19714K WidevineCdm 4.10.3050.0 [WidevineCdm]
+   176K safetyTips 3092 [SafetyTips]
+   426K Subresource Filtering Rules 9.74.0 [Subresource Filter]
+     6K trustToken 2026.10.12.1 [TrustTokenKeyCommitments]
+ 24935K WASM TTS Engine 20261029.1 [WasmTtsEngine]
+ 19942K WidevineCdm 4.10.3112.0 [WidevineCdm]
   1642K zxcvbnData 3 [ZxcvbnData]
 
-GROUP large_files [18017K total]
-  1872K Safe Browsing/ChromeExtMalware.store.32_13433962876451912
- 16144K Safe Browsing/UrlSoceng.store.4_13433962876643508
+GROUP large_files [17637K total]
+  1825K Safe Browsing/ChromeExtMalware.store.32_13439406065005196
+ 15811K Safe Browsing/UrlSoceng.store.4_13439406065211113

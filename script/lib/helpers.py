@@ -6,9 +6,7 @@
 from __future__ import print_function
 from builtins import range
 import os
-import sys
-import urllib.request
-from .config import get_raw_version, get_env_var
+from .config import get_raw_version
 
 BRAVE_REPO = "brave/brave-browser"
 BRAVE_CORE_REPO = "brave/brave-core"
@@ -56,19 +54,24 @@ def get_release(repo, tag, allow_published_release_updates=False):
         if len(releases) > 1:
             raise UserWarning(
                 "[INFO] More then one draft with the tag '{}' "
-                "found, not sure which one to merge with.".format(tag))
+                "found, not sure which one to merge with.".format(tag)
+            )
         release = releases[0]
         if not allow_published_release_updates and not release['draft']:
-            raise UserWarning("[INFO] Release with tag '{}' is already "
-                              "published, aborting.".format(tag))
+            raise UserWarning(
+                "[INFO] Release with tag '{}' is already "
+                "published, aborting.".format(tag)
+            )
 
     return release
 
 
 def release_channel():
     channel = os.environ['CHANNEL']
-    message = ('Error: Please set the $CHANNEL '
-               'environment variable, which is your release channel')
+    message = (
+        'Error: Please set the $CHANNEL '
+        'environment variable, which is your release channel'
+    )
     assert channel, message
     return channel
 
@@ -87,8 +90,11 @@ def retry_func(try_func, catch, retries, catch_func=None):
             ret = try_func(count)
             break
         except catch as e:
-            print('[ERROR] Caught exception {}, {} retries left. {}'.format(
-                catch, count, e.message))
+            print(
+                '[ERROR] Caught exception {}, {} retries left. {}'.format(
+                    catch, count, e.message
+                )
+            )
             if catch_func:
                 catch_func(count)
             if count >= retries:

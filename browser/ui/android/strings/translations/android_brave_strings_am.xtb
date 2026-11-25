@@ -80,6 +80,7 @@
 <translation id="8982438328166986164">በእርስዎ ዕልባቶች እና የአሰሳ ታሪክ ላይ በመመስረት የድር ጣቢያ ጥቆማዎችን ያሳያል።</translation>
 <translation id="924029461438529367">የፍለጋ ምክሮችን አሳይ</translation>
 <translation id="9148058034647219655">ውጣ</translation>
+<translation id="2139186145475833000">ወደ መነሻ ማያ ገጽ ያክሉ</translation>
 <translation id="7534079972563542000">የማይቆሙ ጎራዎች</translation>
 <translation id="6486983549008741930">ይዘት ማጣራት</translation>
 <translation id="2398817776566547893">ክልላዊ እና ቋንቋ-ተኮር መከታተያዎችን እና ብስጭቶችን የሚከለክሉ ብጁ ማጣሪያዎችን ያንቁ</translation>
@@ -193,9 +194,6 @@
 <translation id="5668852698659986622">የተደገፉ ማስታወቂያዎችን አንቃ</translation>
 <translation id="431194936581466649">Brave ገለልተኛ የሆነ፣ ተጠቃሚን ቅድሚያ የሚሰጥ ድር ለመገንባት ያለውን ተልእኮ በተደገፉ ማስታወቂያዎች ይደግፉ። የማስታወቂያ አፈጻጸምን በግል እንለካለን፣ እርስዎን ሳንለይ።</translation>
 <translation id="1939813747486101115">ስለ Sponsored Ads ተጨማሪ ይማሩ</translation>
-<translation id="8347743943525229984">የBrave ምርመራዎችን ፍቀድ</translation>
-<translation id="6022939994702081659">እንድትረዱ Brave የኢንዱስትሪ መሪነት ሥራ ለየድር ግልጋሎትና ለክፍተት የተቀመጡ መዘምበር ቆጥሮች</translation>
-<translation id="7746496306508543965">ስለ Brave እሴቶች ተጨማሪ ተማሩ</translation>
 <translation id="410351446219883937">ራስ-አጫውት</translation>
 <translation id="7445411102860286510">ጣቢያዎች ድምፀ-ከል የተደረገባቸው ቪዲዮዎችን በራስ-ሰር እንዲያጫውቱ ይፍቀዱላቸው (የሚመከር)</translation>
 <translation id="7837721118676387834">ለአንድ የተወሰነ ጣቢያ ድምጸ-ከል የተደረጉ ቪዲዮዎችን በራስ-ሰር ማጫወትን ይፍቀዱ።</translation>
@@ -292,7 +290,7 @@
 <translation id="2569646144216067185">የቃላት ብዛት፡ <ph name="WORD_COUNT"/></translation>
 <translation id="7507533586185621084">የተሳሳተ የማመሳሰል ኮድ</translation>
 <translation id="8284063834901328650">የተሳሳተ የማመሳሰል QR ኮድ</translation>
-<translation id="859506441384380749">ይህ ኮድ የተፈጠረው ከአገልግሎት ውጭ በሆነው የ Brave ስሪት ነው፣ እባክዎ መጀመሪያ ሌላው መሳሪያዎን ያሻሽሉ።</translation>
+<translation id="4002014583969312635">ይህ ኮድ የቆየ የBrave ስሪት በሚያስኬድ መሣሪያ ላይ የተፈጠረ ይመስላል። እባክዎ በሌላኛው መሣሪያዎ ላይ ወደ የቅርብ ጊዜው የBrave ስሪት ያዘምኑ፣ ከዚያም አዲስ የማመሳሰል ኮድ ይፍጠሩ።</translation>
 <translation id="3132642509209154999">ይህ ኮድ ጊዜው አልፎበታል። እባክዎ በሌላኛው መሳሪያዎ ላይ አዲስ ይፍጠሩና እንደገና ይሞክሩ።</translation>
 <translation id="2859229680945501779">ይህ ኮድ ልክ ያልሆነ ነው። እባክዎ ሰዓቱ እና የሰዓት ዞን በመሳሪያዎ ላይ በትክክል መዘጋጀታቸውን ያረጋግጡ።</translation>
 <translation id="3149880132460839085">የብሬቭ ማመሳሰል</translation>
@@ -338,8 +336,6 @@
 <translation id="8185825081026121627">ግላዊነትን የሚጠብቁ ደፋር ወሮታዎች ማስታወቂያዎችን ለማየት መሰረታዊ የትኩረት ምልክትን ያግኙ ፡፡</translation>
 <translation id="5321518976657560663">ስህተተን እንደገና ሙላ</translation>
 <translation id="4114170343590425996">የ Brave ሽልማቶች ሲዘጋጁ የተፈጠረ ስህተት አለ። እባክዎ Brave ን እንደገና በማስጀመር ደግመው ይሞክሩ።</translation>
-<translation id="6417420737057016607">የብሬቭ ማስታቂያዎች</translation>
-<translation id="5611966874859284786">Brave ጥቅም ላይ በማይውልበት ጊዜ የማሳወቂያ ማስታወቂያዎችን አሳይ</translation>
 <translation id="5717636703619499822"><ph name="BEGIN_LINK1"/>የ Brave Rewards መረጃዎችን ዳግም አስጀምር…<ph name="END_LINK1"/></translation>
 <translation id="1830919318137227284"><ph name="BEGIN_LINK1"/>የ Brave ማስታወቂያዎችን መረጃ ያጽዱ…<ph name="END_LINK1"/></translation>
 <translation id="8293206222192510085">ዕልባት ያክሉ</translation>
@@ -398,6 +394,13 @@
 <translation id="8793108040181436796">ምግብሮች</translation>
 <translation id="8643377320501056697">ከፍተኛ ጣቢያዎችን አሳይ</translation>
 <translation id="7275773481201277457">የ Brave ስታቲስቲክስ አሳይ</translation>
+<translation id="8516804522688861636">በተደጋጋሚ የተጎበኙ ሳይቶችን አሳይ</translation>
+<translation id="4546260624932151782">ተወዳጆችን አሳይ</translation>
+<translation id="5313967007315987356">ጣቢያ አክል</translation>
+<translation id="1773147648972887693">በተደጋጋሚ የተጎበኙን አሳይ</translation>
+<translation id="7134741506051403308">መግብሩን ደብቅ</translation>
+<translation id="1247759249260562308">ተወዳጅ ያስተካክሉ</translation>
+<translation id="6387214885349500492">ይህን ተወዳጅ ይሰኩ</translation>
 <translation id="7462178177755090262">መከፈቻ ማብሪያ ማያ</translation>
 <translation id="5365434987337264071">መጨረሻ የተከፈተ ታብ</translation>
 <translation id="6019856124237323989">{HOURS, plural, =1 {ከ<ph name="HOURS_ONE"/> ሰአት ዝምታ በኋላ አዲስ ታብ} other {ከ<ph name="HOURS_MANY"/> ሰአታት ዝምታ በኋላ አዲስ ታብ}}</translation>
@@ -962,6 +965,7 @@
 <translation id="6365389672683343144">የእርስዎ Brave VPN ደንበኝነት ምዝገባ በአንድሮይድ፣ iOS እና ዴስክቶፕ ላይ እስከ 5 የሚደርሱ መሳሪያዎችን መጠበቅ ይችላል። የ Google Play ደንበኝነት ምዝገባዎን ከ Brave መለያዎ ጋር ያገናኙት።</translation>
 <translation id="6610899852831463073">ደህንነቱ የተጠበቀ አሰሳን ማንቃት አልተቻለም</translation>
 <translation id="7954263306665462056">ደህንነቱ የተጠበቀ አሰሳ በመሳሪያዎ ላይ ተሰናክሏል። እሱን ለማንቃት  የGoogle Play አገልግሎቶች መጫኑንና የተዘመነ መሆኑን ያረጋግጡ።</translation>
+<translation id="6417420737057016607">የብሬቭ ማስታቂያዎች</translation>
 <translation id="7748944510530490017">የመጀመሪያ ደረጃ አውታረ መረብ</translation>
 <translation id="2781668117338732220">ሁለተኛ አውታረ መረቦች</translation>
 <translation id="282560918037172384">አውታረመረቦችን ይሞክሩ</translation>
@@ -988,6 +992,13 @@
 <translation id="7530313002494358590">የBrave ባህሪን ማንቃት ወይም ማቦዘን ለውጦቹን ለመተግበር አሳሹን እንደገና ማስጀመር ይጠይቃል። Brave Origin ማዘመኑን እንደጨረሰ እባክዎ <ph name="BEGIN_BOLD"/>አሁን እንደገና አስጀምር<ph name="END_BOLD"/> የሚለውን ይንኩ።</translation>
 <translation id="1028940738207645746">እርግጠኛ ነዎት ሁሉንም ቅንጅቶች ወደ ነባሪ ሊመልሱ ይፈልጋሉ?</translation>
 <translation id="5939518447894949180">ዳግም አስጀምር</translation>
+<translation id="3222790865318305905">የማግበር ገደብ ላይ ደርሷል</translation>
+<translation id="3787857711016546034">ማጭበርበርን ለመከላከል፣ የOrigin ማግበሮች በፍጥነት የተገደቡ ናቸው። ነገር ግን የOrigin ፍቃድዎን በተጨማሪ መሣሪያዎች ላይ ለመጠቀም ሁልጊዜ ተጨማሪ ማግበሮችን መጠየቅ ይችላሉ። ተጨማሪ ማግበሮችን ይጠይቁ የሚለውን አማራጭ ጠቅ ያድርጉ፣ ወይም ለእገዛ <ph name="CONTACT_SUPPORT"/>።</translation>
+<translation id="6760819753412779585">ድጋፍ ሰችን ያነጋግሩ</translation>
+<translation id="571697836019670200">ተጨማሪ ማግበሮችን ይጠይቁ</translation>
+<translation id="9019545131475425538">በማስኬድ ላይ…</translation>
+<translation id="7242700630179071243">ለማግበር ዝግጁ</translation>
+<translation id="5463918917265356202">Brave Origin አሁን በዚህ መሣሪያ ላይ ንቁ ነው። ባህሪውን መጠቀም ለመጀመር፣ አሳሹን እንደገና ማስጀመር ያስፈልግዎታል። አሁን እንደገና ማስጀመር ይፈልጋሉ?</translation>
 <translation id="8554205386170195281">ግዥ</translation>
 <translation id="8613144770663526433">በBrave Wallet ይግቡ</translation>
 <translation id="3696514931437952995">እርስዎ ወደ <ph name="ORIGIN"/>እየገቡ ነው። Brave ዋሌት የእርስዎን የዋሌት አድራሻ ከ<ph name="ORIGIN"/>ጋር ያጋራል።</translation>

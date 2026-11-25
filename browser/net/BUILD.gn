@@ -22,6 +22,7 @@ source_set("browser_tests") {
 
   sources = [
     "brave_accept_header_browsertest.cc",
+    "brave_net_error_tab_helper_browsertest.cc",
     "brave_network_delegate_browsertest.cc",
     "brave_network_delegate_hsts_fingerprinting_browsertest.cc",
     "brave_proxying_url_loader_factory_browsertest.cc",
@@ -29,6 +30,7 @@ source_set("browser_tests") {
     "brave_site_hacks_network_delegate_helper_browsertest.cc",
     "brave_system_request_handler_browsertest.cc",
     "brave_user_agent_network_delegate_helper_browsertest.cc",
+    "off_the_record_network_context_browsertest.cc",
   ]
   deps = [
     "//brave/components/brave_shields/core/browser",
@@ -44,13 +46,25 @@ source_set("browser_tests") {
     "//chrome/browser",
     "//chrome/browser:browser_process",
     "//chrome/browser/content_settings:content_settings_factory",
+    "//chrome/browser/image_fetcher",
+    "//chrome/browser/net",
     "//chrome/browser/profiles:profile",
-    "//chrome/browser/ui",
     "//chrome/browser/ui/navigator",
+    "//chrome/common",
     "//chrome/test:test_support",
+    "//chrome/test/base:chrome_test_utils",
+    "//chrome/test/base:profile_lifecycle_test_utils",
     "//components/content_settings/core/browser",
     "//components/content_settings/core/browser:cookie_settings",
+    "//components/embedder_support",
+    "//components/error_page/common",
+    "//components/image_fetcher/core",
     "//components/prefs",
+    "//components/proxy_config",
+    "//components/tabs:public",
+    "//content/test:test_support",
+    "//net",
+    "//net:test_support",
     "//services/network/public/cpp",
     "//testing/gmock",
   ]
@@ -60,7 +74,6 @@ source_set("browser_tests") {
   if (is_android) {
     deps += [
       "//chrome/test:test_support_ui_android",
-      "//net:test_support",
       "//net/traffic_annotation:test_support",
     ]
   }
@@ -101,13 +114,16 @@ source_set("unit_tests") {
 
   deps = [
     ":features",
+    "//base/test:test_support",
+    "//brave/browser:browser_process",
     "//brave/components/brave_ads/buildflags",
     "//brave/components/brave_component_updater/browser",
     "//brave/components/brave_rewards/core",
     "//brave/components/brave_rewards/core:features",
     "//brave/components/brave_shields/content/browser",
-    "//brave/components/brave_shields/content/test:test_support",
+    "//brave/components/brave_shields/core/browser",
     "//brave/components/brave_shields/core/common",
+    "//brave/components/brave_shields/core/test:test_support",
     "//brave/components/brave_user_agent/browser",
     "//brave/components/brave_user_agent/common",
     "//brave/components/geolocation",
@@ -115,10 +131,14 @@ source_set("unit_tests") {
     "//brave/components/query_filter/browser/test_support",
     "//brave/components/query_filter/common",
     "//brave/components/static_redirect_helper",
+    "//chrome/browser/net",
     "//chrome/browser/prefs",
     "//chrome/test:test_support",
+    "//chrome/test/base:chrome_render_view_host_test_harness",
+    "//chrome/test/base:testing_browser_process",
     "//components/sync_preferences:test_support",
     "//content/test:test_support",
+    "//crypto",
     "//net",
     "//net:test_support",
     "//services/network:network_service",
@@ -130,5 +150,9 @@ source_set("unit_tests") {
 
   if (enable_brave_ads) {
     sources += [ "search_ads_header_network_delegate_helper_unittest.cc" ]
+  }
+
+  if (enable_tor) {
+    sources += [ "onion_origin_header_client_unittest.cc" ]
   }
 }

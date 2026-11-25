@@ -1,15 +1,15 @@
 {
   "name": "ng-browser",
-  "version": "1.97.60",
-  "description": "NG Browser - Next-generation privacy web browser engine powered by Brave-Core and NayaGram Platform",
+  "version": "1.102.37",
+  "description": "NG Browser - Next-generation privacy web browser engine powered by Brave-Core, GeckoView, and NayaGram Platform",
   "main": "index.js",
   "type": "module",
   "scripts": {
     "pnpm:devPreinstall": "node ./build/commands/scripts/devPreinstall.ts",
     "help": "node ./build/commands/scripts/commands.js --help",
     "audit_deps": "node ./build/commands/scripts/audit.js -- --audit_dev_deps",
-    "init": "pnpm install --frozen-lockfile && node ./build/commands/scripts/sync.ts --init",
-    "sync": "pnpm install --frozen-lockfile && node ./build/commands/scripts/sync.ts",
+    "init": "pnpm install --frozen-lockfile --yes && node ./build/commands/scripts/sync.ts --init",
+    "sync": "pnpm install --frozen-lockfile --yes && node ./build/commands/scripts/sync.ts",
     "get_build_var": "node ./build/commands/scripts/getBuildVar.ts",
     "delete_string_translations": "node ./build/commands/scripts/commands.js delete_string_translations",
     "create_dist": "node ./build/commands/scripts/build.ts --target=create_dist",
@@ -53,7 +53,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/brave/brave-core.git"
+    "url": "git+https://github.com/NayaGramPlatform/NGBrowser.git"
   },
   "author": "NayaGram Platform <support@nayagram.org>",
   "license": "MPL-2.0",
@@ -63,12 +63,12 @@
   "devEngines": {
     "runtime": {
       "name": "node",
-      "version": ">=24.16.0 <25.0.0",
+      "version": ">=26.13.1 <27.0.0",
       "onFail": "error"
     },
     "packageManager": {
       "name": "pnpm",
-      "version": ">=11.11.0",
+      "version": ">=11.28.11",
       "onFail": "error"
     }
   },
@@ -77,7 +77,7 @@
     "projects": {
       "chrome": {
         "dir": "src",
-        "tag": "155.0.8059.85",
+        "tag": "159.0.8154.34",
         "repository": {
           "url": "https://chromium.googlesource.com/chromium/src.git"
         },
@@ -110,6 +110,7 @@
     "@storybook/types": "8.6.14",
     "@testing-library/jest-dom": "6.9.1",
     "@testing-library/react": "16.3.2",
+    "@testing-library/user-event": "14.6.8",
     "@types/async": "3.2.20",
     "@types/bs58": "4.0.4",
     "@types/chrome": "0.0.241",
@@ -181,9 +182,9 @@
     "react-redux": "8.1.3",
     "recharts": "3.6.0",
     "redux": "4.1.0",
-    "sass-loader": "10.4.1",
+    "sass-loader": "17.0.1",
     "semver": "7.6.2",
-    "storybook": "8.6.17",
+    "storybook": "8.6.19",
     "stream-browserify": "3.0.0",
     "stream-http": "3.2.0",
     "style-loader": "2.0.0",
@@ -205,8 +206,7 @@
   },
   "dependencies": {
     "@brave/brave-ui": "0.40.6",
-    "@brave/leo": "github:brave/leo#ff620e4e53b70dc9868c2215c5cb56e8145e92df",
-    "@brave/leo-sf-symbols": "github:brave/leo-sf-symbols#b5a6139df7ebd3f7d55aa8d6af60a524edab87b0",
+    "@brave/nala": "4.0.0",
     "@brave/wallet-standard-brave": "0.0.16",
     "@dnd-kit/core": "6.3.1",
     "@dnd-kit/sortable": "7.0.1",
@@ -217,6 +217,7 @@
     "@ledgerhq/hw-app-solana": "6.27.1",
     "@ledgerhq/hw-transport-webhid": "6.36.0",
     "@mozilla/readability": "0.6.0",
+    "@polkadot/types": "17.0.1",
     "@reduxjs/toolkit": "1.9.0",
     "@solana/web3.js": "1.98.2",
     "@tanstack/react-query": "5.90.20",
@@ -230,6 +231,7 @@
     "core-js": "3.33.3",
     "darkreader": "4.9.125",
     "date-fns": "2.28.0",
+    "decode-named-character-reference": "1.3.0",
     "events": "3.3.0",
     "history": "4.10.1",
     "jszip": "3.8.0",

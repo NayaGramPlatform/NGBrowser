@@ -18,6 +18,7 @@
 #include "brave/browser/brave_wallet/brave_wallet_tab_helper.h"
 #include "brave/components/brave_wallet/browser/permission_utils.h"
 #include "brave/components/permissions/contexts/brave_wallet_permission_context.h"
+#include "components/tabs/public/tab_interface.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/visibility.h"
 #include "content/public/browser/web_contents.h"
@@ -76,7 +77,8 @@ void BraveWalletProviderDelegateImpl::WalletInteractionDetected() {
 void BraveWalletProviderDelegateImpl::ShowAccountCreation(
     mojom::CoinType type,
     const url::Origin& origin) {
-  DCHECK(type == mojom::CoinType::SOL || type == mojom::CoinType::ADA);
+  DCHECK(type == mojom::CoinType::SOL || type == mojom::CoinType::ADA ||
+         type == mojom::CoinType::DOT);
   ::brave_wallet::ShowAccountCreation(web_contents(), type);
 }
 
@@ -159,57 +161,6 @@ bool BraveWalletProviderDelegateImpl::IsPermissionDenied(mojom::CoinType type) {
   return permissions::BraveWalletPermissionContext::IsPermissionDenied(
       *permission, web_contents->GetBrowserContext(),
       url::Origin::Create(rfh->GetLastCommittedURL()));
-}
-
-void BraveWalletProviderDelegateImpl::AddSolanaConnectedAccount(
-    const std::string& account) {
-  CHECK(web_contents());
-  if (auto* tab_helper =
-          BraveWalletTabHelper::FromWebContents(web_contents())) {
-    tab_helper->AddSolanaConnectedAccount(host_id_, account);
-  }
-}
-
-void BraveWalletProviderDelegateImpl::RemoveSolanaConnectedAccount(
-    const std::string& account) {
-  CHECK(web_contents());
-  if (auto* tab_helper =
-          BraveWalletTabHelper::FromWebContents(web_contents())) {
-    tab_helper->RemoveSolanaConnectedAccount(host_id_, account);
-  }
-}
-
-bool BraveWalletProviderDelegateImpl::IsSolanaAccountConnected(
-    const std::string& account) {
-  CHECK(web_contents());
-  if (auto* tab_helper =
-          BraveWalletTabHelper::FromWebContents(web_contents())) {
-    return tab_helper->IsSolanaAccountConnected(host_id_, account);
-  }
-  return false;
-}
-
-// This is for dapp inside iframe navigates away.
-void BraveWalletProviderDelegateImpl::RenderFrameHostChanged(
-    content::RenderFrameHost* old_host,
-    content::RenderFrameHost* new_host) {
-  if (!old_host || old_host != content::RenderFrameHost::FromID(host_id_)) {
-    return;
-  }
-
-  CHECK(web_contents());
-  if (auto* tab_helper =
-          BraveWalletTabHelper::FromWebContents(web_contents())) {
-    tab_helper->ClearSolanaConnectedAccounts(host_id_);
-  }
-}
-
-void BraveWalletProviderDelegateImpl::PrimaryPageChanged(content::Page& page) {
-  CHECK(web_contents());
-  if (auto* tab_helper =
-          BraveWalletTabHelper::FromWebContents(web_contents())) {
-    tab_helper->ClearSolanaConnectedAccounts(host_id_);
-  }
 }
 
 }  // namespace brave_wallet

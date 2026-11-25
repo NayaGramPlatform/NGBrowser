@@ -9,12 +9,13 @@ import {
   isAccountLoggedIn,
   useEmailAliases,
 } from '../content/use_email_aliases'
-import type { AccountState } from 'gen/brave/components/brave_account/mojom/brave_account.mojom.m'
+import type { AccountState } from 'gen/brave/components/brave_account/mojom/brave_account.mojom-webui.js'
 import {
   Alias,
+  AliasesAccountUpdate,
   AliasesUpdate,
   EmailAliasesServiceObserverInterface,
-} from 'gen/brave/components/email_aliases/email_aliases.mojom.m'
+} from 'gen/brave/components/email_aliases/email_aliases.mojom-webui.js'
 
 const makeLoggedOutAccountState = (): AccountState =>
   ({ loggedOut: {} }) as AccountState
@@ -72,7 +73,7 @@ describe('useEmailAliases', () => {
 
   it('applies alias list updates', () => {
     const aliases: Alias[] = [
-      { email: 'a@brave.com', note: 'n', domains: undefined },
+      { email: 'a@brave.com', note: 'n', domains: null },
     ]
     const { result } = renderHook(() => useEmailAliases(bindObserver))
     expect(lastObserver).toBeDefined()
@@ -94,6 +95,18 @@ describe('useEmailAliases', () => {
     })
 
     expect(result.current.aliasesUpdate).toEqual({ error: 'load failed' })
+  })
+
+  it('applies account limit updates', () => {
+    const { result } = renderHook(() => useEmailAliases(bindObserver))
+
+    act(() => {
+      lastObserver!.onAliasesAccountUpdated({
+        maxAliasesCount: 12,
+      } as AliasesAccountUpdate)
+    })
+
+    expect(result.current.accountInfo.maxAliasesCount).toBe(12)
   })
 
   it('runs bindObserver cleanup on unmount', () => {

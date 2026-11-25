@@ -80,6 +80,7 @@
 <translation id="8982438328166986164">Mostra suggerències de llocs web basades en els teus marcadors i historial de navegació.</translation>
 <translation id="924029461438529367">Mostra suggeriments de cerca</translation>
 <translation id="9148058034647219655">Surt</translation>
+<translation id="2139186145475833000">Afegeix a pantalla d'inici</translation>
 <translation id="7534079972563542000">Unstoppable Domains</translation>
 <translation id="6486983549008741930">Filtració del contingut</translation>
 <translation id="2398817776566547893">Habilita filtres personalitzats que bloquegin elements molestos i rastrejadors regionals i específics de l'idioma</translation>
@@ -193,9 +194,6 @@
 <translation id="5668852698659986622">Activa els anuncis patrocinats</translation>
 <translation id="431194936581466649">Ajuda a donar suport a la missió de Brave de construir una web independent i centrada en l'usuari amb els anuncis patrocinats. Mesurem el rendiment dels anuncis de manera privada, sense identificar-te.</translation>
 <translation id="1939813747486101115">Més informació sobre els anuncis patrocinats</translation>
-<translation id="8347743943525229984">Permetre les enquestes de Brave</translation>
-<translation id="6022939994702081659">Permet que Brave et mostri enllaços a enquestes privades a la pàgina de nova pestanya. Les enquestes ens ajuden a desenvolupar millors característiques i mesurar l'efectivitat de les campanyes publicitàries basades en el navegador.</translation>
-<translation id="7746496306508543965">Més informació sobre les enquestes de Brave</translation>
 <translation id="410351446219883937">Reproducció automàtica</translation>
 <translation id="7445411102860286510">Permet que els llocs web reprodueixin automàticament vídeos silenciats (opció recomanada)</translation>
 <translation id="7837721118676387834">Permet la reproducció automàtica de vídeos silenciats d'un lloc web concret.</translation>
@@ -292,7 +290,7 @@
 <translation id="2569646144216067185">Nombre de paraules: <ph name="WORD_COUNT"/></translation>
 <translation id="7507533586185621084">Codi de sincronització incorrecte</translation>
 <translation id="8284063834901328650">Codi QR de sincronització incorrecte</translation>
-<translation id="859506441384380749">Aquest codi s'ha generat amb una versió obsoleta de Brave, actualitza primer l'altre dispositiu</translation>
+<translation id="4002014583969312635">Sembla que s'ha creat aquest codi en un aparell amb una versió més antiga de Brave. Actualitzeu l'altre aparell amb la versió més recent de Brave i, a continuació, creeu un codi de sincronització nou.</translation>
 <translation id="3132642509209154999">Aquest codi ha caducat. Genera'n un de nou a l'altre dispositiu i torna-ho a provar.</translation>
 <translation id="2859229680945501779">Aquest codi no és vàlid. Comprova que l'hora i la zona horària s'han establert correctament al teu dispositiu.</translation>
 <translation id="3149880132460839085">Sincronització de Brave</translation>
@@ -338,8 +336,6 @@
 <translation id="8185825081026121627">Guanya Basic Attention Tokens veient anuncis de Recompenses de Brave respectuosos amb la privacitat.</translation>
 <translation id="5321518976657560663">Restableix l'error</translation>
 <translation id="4114170343590425996">Hi ha hagut un error mentre reiniciaves Recompenses de Brave. Reinicia Brave i torna-ho a provar.</translation>
-<translation id="6417420737057016607">Anuncis de Brave</translation>
-<translation id="5611966874859284786">Mostra els anuncis de notificacions quan Brave no estigui en ús</translation>
 <translation id="5717636703619499822"><ph name="BEGIN_LINK1"/>Restableix dades de Recompenses de Brave…<ph name="END_LINK1"/></translation>
 <translation id="1830919318137227284"><ph name="BEGIN_LINK1"/>Esborra dades dels Anuncis de Brave…<ph name="END_LINK1"/></translation>
 <translation id="8293206222192510085">Afegeix una adreça d'interès</translation>
@@ -398,6 +394,13 @@ Segur que vols continuar?</translation>
 <translation id="8793108040181436796">Ginys</translation>
 <translation id="8643377320501056697">Mostra llocs destacats</translation>
 <translation id="7275773481201277457">Mostra estadístiques de Brave</translation>
+<translation id="8516804522688861636">Mostra els llocs visitats freqüentment</translation>
+<translation id="4546260624932151782">Mostra els preferits</translation>
+<translation id="5313967007315987356">Afegeix un lloc web</translation>
+<translation id="1773147648972887693">Mostra els visitats freqüentment</translation>
+<translation id="7134741506051403308">Amaga el giny</translation>
+<translation id="1247759249260562308">Edita el preferit</translation>
+<translation id="6387214885349500492">Fixa aquest preferit</translation>
 <translation id="7462178177755090262">Pantalla d'inici</translation>
 <translation id="5365434987337264071">Darrera pestanya oberta</translation>
 <translation id="6019856124237323989">{HOURS, plural, =1 {Nova pestanya després d’<ph name="HOURS_ONE"/> hora d’inactivitat} other {Nova pestanya després de <ph name="HOURS_MANY"/> hores d’inactivitat}}</translation>
@@ -972,6 +975,7 @@ Si no acceptes la sol·licitud, la VPN no es tornarà a connectar i la teva conn
 <translation id="6365389672683343144">La teva subscripció de VPN de Brave pot protegir fins a 5 dispositius, a través d'Android, iOS i escriptori. Vincula la teva subscripció de Google Play al teu compte de Brave.</translation>
 <translation id="6610899852831463073">No es pot activar la navegació segura</translation>
 <translation id="7954263306665462056">La navegació segura s'ha desactivat al teu dispositiu. Per activar-la, assegura't que els serveis de Google Play estiguin instal·lats i actualitzats.</translation>
+<translation id="6417420737057016607">Anuncis de Brave</translation>
 <translation id="7748944510530490017">Xarxes principals</translation>
 <translation id="2781668117338732220">Xarxes secundàries</translation>
 <translation id="282560918037172384">Xarxes de proves</translation>
@@ -998,6 +1002,13 @@ Si no acceptes la sol·licitud, la VPN no es tornarà a connectar i la teva conn
 <translation id="7530313002494358590">Habilitar o inhabilitar una funció de Brave requereix que reinicieu el navegador per aplicar els canvis. Feu clic a <ph name="BEGIN_BOLD"/>Reinicia ara<ph name="END_BOLD"/> una vegada que Brave Origin hagi acabat d'actualitzar-se.</translation>
 <translation id="1028940738207645746">Esteu segur que voleu reiniciar tota la configuració als valors per defecte?</translation>
 <translation id="5939518447894949180">Restableix</translation>
+<translation id="3222790865318305905">S'ha assolit el límit d'activacions</translation>
+<translation id="3787857711016546034">Per evitar fraus, les activacions d'Origin tenen un límit. Però sempre podeu sol·licitar més activacions per utilitzar la vostra llicència d'Origin en més aparells. Només cal fer clic a l'opció Sol·licita més activacions, o <ph name="CONTACT_SUPPORT"/> per obtenir ajuda.</translation>
+<translation id="6760819753412779585">contacta amb l'equip de suport</translation>
+<translation id="571697836019670200">Sol·licita més activacions</translation>
+<translation id="9019545131475425538">Processant…</translation>
+<translation id="7242700630179071243">A punt per activar</translation>
+<translation id="5463918917265356202">Brave Origin ja està actiu en aquest aparell. Per començar a utilitzar la funció, cal que reinicieu el navegador. Voleu reiniciar-lo ara?</translation>
 <translation id="8554205386170195281">Compra</translation>
 <translation id="8613144770663526433">Inicia la sessió amb la cartera de Brave</translation>
 <translation id="3696514931437952995">Estàs iniciant la sessió a <ph name="ORIGIN"/>. La cartera de Brave compartirà l'adreça de la teva cartera amb <ph name="ORIGIN"/>.</translation>

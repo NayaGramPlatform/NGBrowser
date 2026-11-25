@@ -1,16 +1,24 @@
 diff --git a/components/browsing_data/core/browsing_data_utils.h b/components/browsing_data/core/browsing_data_utils.h
-index e6974f6fc1902ae516b1f24e2ebcdd005d9cfed4..1638aee48431a0e1e7b7ec0ede560f308828de4a 100644
+index 43b2630229faad14a4216b991961c9ad24b6abd5..61a24139158570afbe8a6e51a8ff7b5eeda08d3b 100644
 --- a/components/browsing_data/core/browsing_data_utils.h
 +++ b/components/browsing_data/core/browsing_data_utils.h
-@@ -38,7 +38,12 @@ enum class BrowsingDataType {
-   HOSTED_APPS_DATA = 7,
-   // Only for Android:
+@@ -9,6 +9,7 @@
+ #include <string>
+ 
+ #include "base/time/time.h"
++#include "brave/components/ai_chat/core/common/buildflags/buildflags.h"
+ #include "build/build_config.h"
+ #include "components/browsing_data/core/counters/browsing_data_counter.h"
+ #include "net/cookies/cookie_constants.h"
+@@ -40,7 +41,12 @@ enum class BrowsingDataType {
    TABS = 8,
+   // Only for Desktop:
+   SKILLS = 9,
 +#if BUILDFLAG(ENABLE_AI_CHAT)
-+  BRAVE_AI_CHAT = TABS + 1,
++  BRAVE_AI_CHAT = SKILLS + 1,
 +  MAX_VALUE = BRAVE_AI_CHAT,
 +#else
-   MAX_VALUE = TABS,
+   MAX_VALUE = SKILLS,
 +#endif
  };
  // LINT.ThenChange(/chrome/browser/resources/settings/clear_browsing_data_dialog/clear_browsing_data_browser_proxy.ts:BrowsingDataType)

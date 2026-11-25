@@ -32,16 +32,19 @@ namespace brave_ads {
 
 class Ads;
 class AdsClient;
+class AdsFactory;
+
 class AdsServiceImplIOS : public AdsService {
  public:
-  explicit AdsServiceImplIOS(PrefService& prefs);
-
-  AdsClientNotifier* GetAdsClientNotifier();
+  AdsServiceImplIOS(PrefService& prefs,
+                    std::unique_ptr<AdsFactory> ads_factory);
 
   AdsServiceImplIOS(const AdsServiceImplIOS&) = delete;
   AdsServiceImplIOS& operator=(const AdsServiceImplIOS&) = delete;
 
   ~AdsServiceImplIOS() override;
+
+  AdsClientNotifier* GetAdsClientNotifier();
 
   void InitializeAds(const std::string& storage_path,
                      std::unique_ptr<AdsClient> ads_client,
@@ -61,6 +64,8 @@ class AdsServiceImplIOS : public AdsService {
   void NotifyDidInitializeAdsService() const;
   void NotifyDidShutdownAdsService() const;
   void NotifyDidClearAdsServiceData() const;
+
+  bool IsNetworkConnectionAvailable() const;
 
   // AdsService:
   base::WeakPtr<AdsService> GetWeakPtr() override;
@@ -158,8 +163,8 @@ class AdsServiceImplIOS : public AdsService {
 
   bool CanStartBatAdsService() const;
   bool UserHasJoinedBraveRewards() const;
-  void InitializeAds(ResultCallback callback);
-  void InitializeAdsCallback(ResultCallback callback, bool success);
+  void InitializeBatAds(ResultCallback callback);
+  void InitializeBatAdsCallback(ResultCallback callback, bool success);
 
   void ShutdownAdsCallback(ResultCallback callback, bool success);
 
@@ -173,6 +178,8 @@ class AdsServiceImplIOS : public AdsService {
   void MaybeClearAdsData(const std::string& path);
 
   const raw_ref<PrefService> prefs_;
+
+  const std::unique_ptr<AdsFactory> ads_factory_;
 
   PrefChangeRegistrar pref_change_registrar_;
 

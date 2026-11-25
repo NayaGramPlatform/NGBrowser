@@ -1,0 +1,13 @@
+diff --git a/chrome/browser/ui/views/autofill/popup/popup_view_views.cc b/chrome/browser/ui/views/autofill/popup/popup_view_views.cc
+index 51dbb2ca4592526f61b27a1f48e8874818e02500..db6acb26aae1d6d83e333d57d89a7757c5912ba1 100644
+--- a/chrome/browser/ui/views/autofill/popup/popup_view_views.cc
++++ b/chrome/browser/ui/views/autofill/popup/popup_view_views.cc
+@@ -1350,7 +1350,7 @@ void PopupViewViews::InitViews() {
+         ImageFetcherServiceFactory::GetForKey(profile->GetProfileKey())
+             ->GetImageFetcher(
+                 image_fetcher::ImageFetcherConfig::kInMemoryWithDiskCache);
+-    password_favicon_loader_ = std::make_unique<PasswordFaviconLoaderImpl>(
++    password_favicon_loader_ = CreatePasswordFaviconLoader(profile,
+         favicon_service, image_fetcher);
+   }
+ 

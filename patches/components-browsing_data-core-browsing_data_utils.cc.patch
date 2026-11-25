@@ -1,10 +1,10 @@
 diff --git a/components/browsing_data/core/browsing_data_utils.cc b/components/browsing_data/core/browsing_data_utils.cc
-index 719853994a76580bc071ad2d3c5795d57b2797bb..e919bff83e9d4137bee2b9d62d94250317119cb5 100644
+index f7f199c48fd54b209c23f8d55acd4f481731eb3e..7b5a2a71260ca6e9ebcda02e4755045dbf6bd355 100644
 --- a/components/browsing_data/core/browsing_data_utils.cc
 +++ b/components/browsing_data/core/browsing_data_utils.cc
-@@ -387,6 +387,11 @@ bool GetDeletionPreferenceFromDataType(
-     BrowsingDataType data_type,
-     std::string* out_pref) {
+@@ -370,6 +370,11 @@ const char* GetTimePeriodPreferenceName() {
+ bool GetDeletionPreferenceFromDataType(BrowsingDataType data_type,
+                                        std::string* out_pref) {
    switch (data_type) {
 +#if BUILDFLAG(ENABLE_AI_CHAT)
 +    case BrowsingDataType::BRAVE_AI_CHAT:
@@ -14,7 +14,7 @@ index 719853994a76580bc071ad2d3c5795d57b2797bb..e919bff83e9d4137bee2b9d62d942503
      case BrowsingDataType::HISTORY:
        *out_pref = prefs::kDeleteBrowsingHistory;
        return true;
-@@ -420,6 +425,12 @@ bool GetDeletionPreferenceFromDataType(
+@@ -406,6 +411,12 @@ bool GetDeletionPreferenceFromDataType(BrowsingDataType data_type,
  
  std::optional<BrowsingDataType> GetDataTypeFromDeletionPreference(
      const std::string& pref_name) {

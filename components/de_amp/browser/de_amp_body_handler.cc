@@ -27,8 +27,8 @@
 #include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/page_navigator.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
+#include "ui/base/mojom/window_open_disposition.mojom.h"
 #include "ui/base/page_transition_types.h"
-#include "ui/base/window_open_disposition.h"
 
 namespace de_amp {
 
@@ -94,7 +94,7 @@ std::unique_ptr<DeAmpBodyHandler> DeAmpBodyHandler::Create(
     const network::ResourceRequest& request,
     const content::WebContents::Getter& wc_getter) {
   auto* contents = wc_getter.Run();
-  if (!contents) {
+  if (!contents || !request.url.SchemeIsHTTPOrHTTPS()) {
     return nullptr;
   }
   PrefService* prefs =
@@ -221,6 +221,13 @@ bool DeAmpBodyHandler::OpenCanonicalURL(const GURL& new_url) {
     }
   }
 
+  // Never De-AMP a view-source: navigation. Redirecting would replace the
+  // source view with a rendered canonical page, letting an untrusted page move
+  // the user out of view-source.
+  if (entry->IsViewSourceMode()) {
+    return false;
+  }
+
   // If we've already navigated to the canonical URL last time, we
   // should stop De-AMPing. This is done to prevent redirect loops.
   // https://github.com/brave/brave-browser/issues/22610
@@ -241,8 +248,8 @@ bool DeAmpBodyHandler::OpenCanonicalURL(const GURL& new_url) {
       new_url,
       content::Referrer::SanitizeForRequest(new_url, entry->GetReferrer()),
       contents->GetPrimaryMainFrame()->GetFrameTreeNodeId(),
-      WindowOpenDisposition::CURRENT_TAB, ui::PAGE_TRANSITION_CLIENT_REDIRECT,
-      is_renderer_initiated);
+      ui::mojom::WindowOpenDisposition::kCurrentTab,
+      ui::PAGE_TRANSITION_CLIENT_REDIRECT, is_renderer_initiated);
 
   params.initiator_origin = request_.request_initiator;
   params.user_gesture = request_.has_user_gesture;

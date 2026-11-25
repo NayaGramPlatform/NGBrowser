@@ -12,11 +12,10 @@
 #include "base/files/file_path.h"
 #include "base/functional/bind.h"
 #include "base/functional/callback_helpers.h"
-#include "base/json/json_writer.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/run_loop.h"
-#include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
+#include "base/test/test_future.h"
 #include "base/test/values_test_util.h"
 #include "base/values.h"
 #include "brave/components/ai_chat/core/browser/ai_chat_credential_manager.h"
@@ -26,11 +25,8 @@
 #include "brave/components/ai_chat/core/browser/engine/test_utils.h"
 #include "brave/components/ai_chat/core/browser/model_service.h"
 #include "brave/components/ai_chat/core/common/constants.h"
-#include "brave/components/ai_chat/core/common/features.h"
-#include "brave/components/ai_chat/core/common/mojom/ai_chat.mojom.h"
 #include "brave/components/ai_chat/core/common/mojom/common.mojom.h"
 #include "brave/components/ai_chat/core/common/pref_names.h"
-#include "brave/components/ai_chat/core/common/prefs.h"
 #include "brave/components/ai_chat/core/common/test_utils.h"
 #include "brave/components/api_request_helper/api_request_helper.h"
 #include "brave/components/api_request_helper/mock_api_request_helper.h"
@@ -42,7 +38,6 @@
 #include "net/http/http_status_code.h"
 #include "net/traffic_annotation/network_traffic_annotation_test_helper.h"
 #include "services/network/public/cpp/network_context_getter.h"
-#include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/abseil-cpp/absl/strings/str_format.h"
@@ -289,16 +284,6 @@ class ConversationAPIClientUnitTest : public testing::Test {
 
   void TearDown() override {}
 
-  // Returns a pair of system_language and selected_langauge
-  // The system language is the OS locale.
-  // The system language is the browser language
-  std::string GetSystemLanguage(const base::DictValue& body) {
-    const std::string* system_language = body.FindString("system_language");
-    // The system language should always be present
-    EXPECT_TRUE(system_language != nullptr);
-    return *system_language;
-  }
-
  protected:
   base::test::TaskEnvironment task_environment_;
   std::unique_ptr<os_crypt_async::OSCryptAsync> os_crypt_async_ =
@@ -317,8 +302,7 @@ TEST_F(ConversationAPIClientUnitTest, CreateJSONRequestBody_Capabilities) {
   std::string body = client_->CreateJSONRequestBody(
       {}, std::nullopt /* oai_tool_definitions */,
       std::nullopt /* preferred_tool_name */,
-      {mojom::ConversationCapability::CHAT,
-       mojom::ConversationCapability::CONTENT_AGENT,
+      {mojom::ConversationCapability::CONTENT_AGENT,
        mojom::ConversationCapability::DEEP_RESEARCH,
        mojom::ConversationCapability::MATH_ML},
       std::nullopt /* model_name */, /*is_sse_enabled=*/true);
@@ -326,11 +310,24 @@ TEST_F(ConversationAPIClientUnitTest, CreateJSONRequestBody_Capabilities) {
   auto dict = base::test::ParseJsonDict(body);
   const base::ListValue* capabilities = dict.FindList("brave_capability");
   ASSERT_TRUE(capabilities);
-  EXPECT_EQ(capabilities->size(), 4u);
-  EXPECT_TRUE(capabilities->contains("chat"));
+  EXPECT_EQ(capabilities->size(), 3u);
   EXPECT_TRUE(capabilities->contains("content_agent"));
   EXPECT_TRUE(capabilities->contains("deep_research"));
   EXPECT_TRUE(capabilities->contains("math_ml"));
+}
+
+TEST_F(ConversationAPIClientUnitTest, CreateJSONRequestBody_NoCapabilities) {
+  // A conversation that opts in to nothing still sends the field, as an empty
+  // list rather than omitting it.
+  std::string body = client_->CreateJSONRequestBody(
+      {}, std::nullopt /* oai_tool_definitions */,
+      std::nullopt /* preferred_tool_name */, {}, std::nullopt /* model_name */,
+      /*is_sse_enabled=*/true);
+
+  auto dict = base::test::ParseJsonDict(body);
+  const base::ListValue* capabilities = dict.FindList("brave_capability");
+  ASSERT_TRUE(capabilities);
+  EXPECT_TRUE(capabilities->empty());
 }
 
 class ConversationAPIClientUnitTest_ContentBlocks
@@ -651,10 +648,9 @@ TEST_F(ConversationAPIClientUnitTest, PerformRequest_PremiumHeaders) {
         EXPECT_EQ(net::HttpRequestHeaders::kPostMethod, method);
 
         // Verify premium Cookie header is present
-        EXPECT_TRUE(headers.contains("Cookie"));
-        const auto& cookie = headers.at("Cookie");
-        EXPECT_EQ(cookie,
-                  "__Secure-sku#brave-leo-premium=" + expected_credential);
+        EXPECT_THAT(headers, testing::Contains(testing::Pair(
+                                 "Cookie", "__Secure-sku#brave-leo-premium=" +
+                                               expected_credential)));
 
         // Verify other headers still present
         EXPECT_TRUE(headers.contains("x-brave-key"));
@@ -666,26 +662,26 @@ TEST_F(ConversationAPIClientUnitTest, PerformRequest_PremiumHeaders) {
         EXPECT_TRUE(!body_dict.empty());
 
         // Verify body contains the system language
-        auto system_language = GetSystemLanguage(body_dict);
-        EXPECT_EQ(system_language, expected_system_language);
+        EXPECT_THAT(body_dict, base::test::DictionaryHasValue(
+                                   "system_language",
+                                   base::Value(expected_system_language)));
 
-        // Verify body contains the brave_capability list with chat capability.
-        const base::ListValue* capability_list =
-            body_dict.FindList("brave_capability");
-        EXPECT_TRUE(capability_list);
-        if (capability_list) {
-          EXPECT_EQ(*capability_list, base::ListValue().Append("chat"));
-        }
+        // Verify body contains the brave_capability list.
+        EXPECT_THAT(
+            body_dict,
+            base::test::DictionaryHasValue(
+                "brave_capability",
+                base::Value(base::ListValue().Append("deep_research"))));
 
         // Verify body contains the stream
-        std::optional<bool> stream = body_dict.FindBool("stream");
-        EXPECT_TRUE(stream);
-        EXPECT_TRUE(*stream);
+        EXPECT_THAT(body_dict, base::test::DictionaryHasValue(
+                                   "stream", base::Value(true)));
 
         // Verify messages content matches expected
-        const base::ListValue* messages_list = body_dict.FindList("messages");
-        EXPECT_TRUE(messages_list);
-        EXPECT_EQ(*messages_list, expected_messages_json);
+        EXPECT_THAT(
+            body_dict,
+            base::test::DictionaryHasValue(
+                "messages", base::Value(expected_messages_json.Clone())));
 
         // Simulate streaming chunk
         auto chunk_dict = base::test::ParseJsonDict(R"({
@@ -728,8 +724,8 @@ TEST_F(ConversationAPIClientUnitTest, PerformRequest_PremiumHeaders) {
   EXPECT_CALL(mock_callbacks, OnCompleted(_))
       .WillOnce([&](EngineConsumer::GenerationResult result) {
         ASSERT_TRUE(result.has_value());
-        EXPECT_TRUE(result->event);
-        EXPECT_TRUE(result->event->is_completion_event());
+        ASSERT_TRUE(result->event);
+        ASSERT_TRUE(result->event->is_completion_event());
         EXPECT_EQ(result->event->get_completion_event()->completion,
                   expected_completion_response);
         EXPECT_FALSE(result->is_near_verified.has_value());
@@ -739,7 +735,7 @@ TEST_F(ConversationAPIClientUnitTest, PerformRequest_PremiumHeaders) {
   client_->PerformRequest(
       std::move(messages), std::nullopt,
       /* oai_tool_definitions */ std::nullopt, /* preferred_tool_name */
-      {mojom::ConversationCapability::CHAT},
+      {mojom::ConversationCapability::DEEP_RESEARCH},
       base::BindRepeating(&MockCallbacks::OnDataReceived,
                           base::Unretained(&mock_callbacks)),
       base::BindOnce(&MockCallbacks::OnCompleted,
@@ -794,28 +790,24 @@ TEST_F(ConversationAPIClientUnitTest, PerformRequest_NonPremium) {
         EXPECT_TRUE(!dict.empty());
 
         // Verify body contains the system language
-        auto system_language = GetSystemLanguage(dict);
-        EXPECT_EQ(system_language, expected_system_language);
+        EXPECT_THAT(dict, base::test::DictionaryHasValue(
+                              "system_language",
+                              base::Value(expected_system_language)));
 
         // Verify body contains the brave_capability list
-        const base::ListValue* capability_list =
-            dict.FindList("brave_capability");
-        EXPECT_TRUE(capability_list);
-        if (capability_list) {
-          EXPECT_EQ(capability_list->size(), 2u);
-          EXPECT_TRUE(capability_list->contains("chat"));
-          EXPECT_TRUE(capability_list->contains("content_agent"));
-        }
+        EXPECT_THAT(
+            dict, base::test::DictionaryHasValue(
+                      "brave_capability",
+                      base::Value(base::ListValue().Append("content_agent"))));
 
         // Verify body contains the stream
-        std::optional<bool> stream = dict.FindBool("stream");
-        EXPECT_TRUE(stream.has_value());
-        EXPECT_TRUE(*stream);
+        EXPECT_THAT(
+            dict, base::test::DictionaryHasValue("stream", base::Value(true)));
 
         // Verify messages content matches expected
-        const base::ListValue* messages_list = dict.FindList("messages");
-        EXPECT_TRUE(messages_list);
-        EXPECT_EQ(*messages_list, expected_messages_json);
+        EXPECT_THAT(
+            dict, base::test::DictionaryHasValue(
+                      "messages", base::Value(expected_messages_json.Clone())));
 
         // Simulate streaming chunk
         auto chunk_dict = base::test::ParseJsonDict(R"({
@@ -855,8 +847,8 @@ TEST_F(ConversationAPIClientUnitTest, PerformRequest_NonPremium) {
   EXPECT_CALL(mock_callbacks, OnCompleted(_))
       .WillOnce([&](EngineConsumer::GenerationResult result) {
         ASSERT_TRUE(result.has_value());
-        EXPECT_TRUE(result->event);
-        EXPECT_TRUE(result->event->is_completion_event());
+        ASSERT_TRUE(result->event);
+        ASSERT_TRUE(result->event->is_completion_event());
         EXPECT_EQ(result->event->get_completion_event()->completion,
                   expected_completion_response);
       });
@@ -865,8 +857,7 @@ TEST_F(ConversationAPIClientUnitTest, PerformRequest_NonPremium) {
   client_->PerformRequest(
       std::move(messages), std::nullopt, /* oai_tool_definitions */
       std::nullopt,                      /* preferred_tool_name */
-      {mojom::ConversationCapability::CHAT,
-       mojom::ConversationCapability::CONTENT_AGENT},
+      {mojom::ConversationCapability::CONTENT_AGENT},
       base::BindRepeating(&MockCallbacks::OnDataReceived,
                           base::Unretained(&mock_callbacks)),
       base::BindOnce(&MockCallbacks::OnCompleted,
@@ -987,7 +978,7 @@ TEST_F(ConversationAPIClientUnitTest, PerformRequest_WithToolUseResponse) {
   client_->PerformRequest(
       std::move(messages), std::nullopt, /* oai_tool_definitions */
       std::nullopt,                      /* preferred_tool_name */
-      {mojom::ConversationCapability::CHAT},
+      {},
       base::BindRepeating(&MockCallbacks::OnDataReceived,
                           base::Unretained(&mock_callbacks)),
       base::BindOnce(&MockCallbacks::OnCompleted,
@@ -1111,7 +1102,8 @@ TEST_F(ConversationAPIClientUnitTest, PerformRequest_PermissionChallenge) {
           std::nullopt, std::nullopt,
           mojom::PermissionChallenge::New(
               "Server determined this tool use is off", std::nullopt,
-              std::nullopt, /*supports_allow_session=*/false),
+              /*title=*/std::nullopt, std::nullopt, std::nullopt,
+              /*supports_allow_session=*/false),
           false));
   {
     SCOPED_TRACE(
@@ -1144,6 +1136,7 @@ TEST_F(ConversationAPIClientUnitTest, PerformRequest_PermissionChallenge) {
           "read_file", "call_789", "{\"path\":\"/etc/passwd\"}", std::nullopt,
           std::nullopt,
           mojom::PermissionChallenge::New("This tool is also off-topic",
+                                          std::nullopt, /*title=*/std::nullopt,
                                           std::nullopt, std::nullopt,
                                           /*supports_allow_session=*/false),
           false));
@@ -1192,6 +1185,7 @@ TEST_F(ConversationAPIClientUnitTest, PerformRequest_PermissionChallenge) {
       mojom::ConversationEntryEvent::NewToolUseEvent(mojom::ToolUseEvent::New(
           "missing_reasoning", "call_303", "{}", std::nullopt, std::nullopt,
           mojom::PermissionChallenge::New(std::nullopt, std::nullopt,
+                                          /*title=*/std::nullopt, std::nullopt,
                                           std::nullopt,
                                           /*supports_allow_session=*/false),
           false));
@@ -1209,8 +1203,7 @@ TEST_F(ConversationAPIClientUnitTest, PerformRequest_PermissionChallenge) {
 
   client_->PerformRequest(
       std::move(messages), std::nullopt /* oai_tool_definitions */,
-      std::nullopt /* preferred_tool_name */,
-      {mojom::ConversationCapability::CHAT},
+      std::nullopt /* preferred_tool_name */, {},
       base::BindRepeating(&MockCallbacks::OnDataReceived,
                           base::Unretained(&mock_callbacks)),
       base::BindOnce(&MockCallbacks::OnCompleted,
@@ -1251,14 +1244,13 @@ TEST_F(ConversationAPIClientUnitTest, PerformRequest_NonStreaming) {
 
             // Verify body has stream: false
             auto dict = base::test::ParseJsonDict(body);
-            std::optional<bool> stream = dict.FindBool("stream");
-            EXPECT_TRUE(stream.has_value());
-            EXPECT_FALSE(*stream);
+            EXPECT_THAT(dict, base::test::DictionaryHasValue(
+                                  "stream", base::Value(false)));
 
             // Verify messages content matches expected
-            const base::ListValue* messages_list = dict.FindList("messages");
-            EXPECT_TRUE(messages_list);
-            EXPECT_EQ(*messages_list, expected_messages_json);
+            EXPECT_THAT(dict, base::test::DictionaryHasValue(
+                                  "messages",
+                                  base::Value(expected_messages_json.Clone())));
 
             // Simulate non-streaming completion
             auto completion_dict = base::test::ParseJsonDict(R"({
@@ -1279,15 +1271,14 @@ TEST_F(ConversationAPIClientUnitTest, PerformRequest_NonStreaming) {
   EXPECT_CALL(mock_callbacks, OnCompleted(_))
       .WillOnce([&](EngineConsumer::GenerationResult result) {
         ASSERT_TRUE(result.has_value());
-        EXPECT_TRUE(result->event);
-        EXPECT_TRUE(result->event->is_completion_event());
+        ASSERT_TRUE(result->event);
+        ASSERT_TRUE(result->event->is_completion_event());
         EXPECT_EQ(result->event->get_completion_event()->completion,
                   expected_completion_response);
       });
 
   client_->PerformRequest(
-      std::move(messages), std::nullopt, std::nullopt,
-      {mojom::ConversationCapability::CHAT},
+      std::move(messages), std::nullopt, std::nullopt, {},
       base::NullCallback(),  // No data_received_callback (non-streaming)
       base::BindOnce(&MockCallbacks::OnCompleted,
                      base::Unretained(&mock_callbacks)));
@@ -1320,9 +1311,8 @@ TEST_F(ConversationAPIClientUnitTest,
                     const api_request_helper::APIRequestOptions& options) {
         // Verify the model name was overridden in the request
         auto dict = base::test::ParseJsonDict(body);
-        const std::string* model = dict.FindString("model");
-        EXPECT_TRUE(model);
-        EXPECT_EQ(*model, override_model_name);
+        EXPECT_THAT(dict, base::test::DictionaryHasValue(
+                              "model", base::Value(override_model_name)));
 
         // Simulate streaming chunk
         auto chunk_dict = base::test::ParseJsonDict(R"({
@@ -1363,7 +1353,7 @@ TEST_F(ConversationAPIClientUnitTest,
   client_->PerformRequest(
       std::move(messages), std::nullopt, /* oai_tool_definitions */
       std::nullopt,                      /* preferred_tool_name */
-      {mojom::ConversationCapability::CHAT},
+      {},
       base::BindRepeating(&MockCallbacks::OnDataReceived,
                           base::Unretained(&mock_callbacks)),
       base::BindOnce(&MockCallbacks::OnCompleted,
@@ -1404,9 +1394,8 @@ TEST_F(ConversationAPIClientUnitTest,
                   response_conversion_callback) {
             // Verify the model name was overridden in the request
             auto dict = base::test::ParseJsonDict(body);
-            const std::string* model = dict.FindString("model");
-            EXPECT_TRUE(model);
-            EXPECT_EQ(*model, override_model_name);
+            EXPECT_THAT(dict, base::test::DictionaryHasValue(
+                                  "model", base::Value(override_model_name)));
 
             // Create a response with both completion and model information
             auto response_dict = base::test::ParseJsonDict(R"({
@@ -1436,13 +1425,13 @@ TEST_F(ConversationAPIClientUnitTest,
       });
 
   // Begin request with model override but NULL data_received_callback
-  client_->PerformRequest(
-      std::move(messages), std::nullopt, /* oai_tool_definitions */
-      std::nullopt,                      /* preferred_tool_name */
-      {mojom::ConversationCapability::CHAT}, base::NullCallback(),
-      base::BindOnce(&MockCallbacks::OnCompleted,
-                     base::Unretained(&mock_callbacks)),
-      override_model_name);
+  client_->PerformRequest(std::move(messages),
+                          std::nullopt, /* oai_tool_definitions */
+                          std::nullopt, /* preferred_tool_name */
+                          {}, base::NullCallback(),
+                          base::BindOnce(&MockCallbacks::OnCompleted,
+                                         base::Unretained(&mock_callbacks)),
+                          override_model_name);
 
   run_loop.Run();
   testing::Mock::VerifyAndClearExpectations(client_.get());
@@ -1499,15 +1488,13 @@ TEST_F(ConversationAPIClientUnitTest, PerformRequest_NEARVerification) {
   EXPECT_CALL(mock_callbacks, OnCompleted(_))
       .WillOnce([](EngineConsumer::GenerationResult result) {
         ASSERT_TRUE(result.has_value());
-        EXPECT_TRUE(result->is_near_verified.has_value());
-        EXPECT_TRUE(result->is_near_verified.value());
+        EXPECT_THAT(result->is_near_verified, testing::Optional(true));
       });
 
   client_->PerformRequest(
       std::move(messages), std::nullopt, /* oai_tool_definitions */
       std::nullopt,                      /* preferred_tool_name */
-      {mojom::ConversationCapability::CHAT,
-       mojom::ConversationCapability::CONTENT_AGENT},
+      {mojom::ConversationCapability::CONTENT_AGENT},
       base::BindRepeating(&MockCallbacks::OnDataReceived,
                           base::Unretained(&mock_callbacks)),
       base::BindOnce(&MockCallbacks::OnCompleted,
@@ -1541,7 +1528,7 @@ TEST_F(ConversationAPIClientUnitTest, PerformRequest_FailWithEmptyMessages) {
   client_->PerformRequest(
       std::move(messages), std::nullopt, /* oai_tool_definitions */
       std::nullopt,                      /* preferred_tool_name */
-      {mojom::ConversationCapability::CHAT},
+      {},
       base::BindRepeating(&MockCallbacks::OnDataReceived,
                           base::Unretained(&mock_callbacks)),
       base::BindOnce(&MockCallbacks::OnCompleted,
@@ -1591,12 +1578,12 @@ TEST_F(ConversationAPIClientUnitTest, PerformRequest_NullEventUponBadResponse) {
                   EngineConsumer::GenerationResultData(nullptr, std::nullopt));
       });
 
-  client_->PerformRequest(
-      std::move(messages), std::nullopt, /* oai_tool_definitions */
-      std::nullopt,                      /* preferred_tool_name */
-      {mojom::ConversationCapability::CHAT}, base::NullCallback(),
-      base::BindOnce(&MockCallbacks::OnCompleted,
-                     base::Unretained(&mock_callbacks)));
+  client_->PerformRequest(std::move(messages),
+                          std::nullopt, /* oai_tool_definitions */
+                          std::nullopt, /* preferred_tool_name */
+                          {}, base::NullCallback(),
+                          base::BindOnce(&MockCallbacks::OnCompleted,
+                                         base::Unretained(&mock_callbacks)));
 
   run_loop.Run();
   testing::Mock::VerifyAndClearExpectations(client_.get());
@@ -1639,12 +1626,12 @@ TEST_F(ConversationAPIClientUnitTest, PerformRequest_ServerErrorResponse) {
         EXPECT_EQ(result.error(), mojom::APIError::RateLimitReached);
       });
 
-  client_->PerformRequest(
-      std::move(messages), std::nullopt, /* oai_tool_definitions */
-      std::nullopt,                      /* preferred_tool_name */
-      {mojom::ConversationCapability::CHAT}, base::NullCallback(),
-      base::BindOnce(&MockCallbacks::OnCompleted,
-                     base::Unretained(&mock_callbacks)));
+  client_->PerformRequest(std::move(messages),
+                          std::nullopt, /* oai_tool_definitions */
+                          std::nullopt, /* preferred_tool_name */
+                          {}, base::NullCallback(),
+                          base::BindOnce(&MockCallbacks::OnCompleted,
+                                         base::Unretained(&mock_callbacks)));
 
   run_loop.Run();
   testing::Mock::VerifyAndClearExpectations(client_.get());
@@ -2245,7 +2232,7 @@ TEST_F(ConversationAPIClientUnitTest, ErrorParsing_SSE) {
   for (int i = 0; i < 2; ++i) {
     client_->PerformRequest(
         GetMockMessagesAndExpectedMessagesJson().first, std::nullopt,
-        std::nullopt, {mojom::ConversationCapability::CHAT},
+        std::nullopt, {},
         base::BindRepeating(&MockCallbacks::OnDataReceived,
                             base::Unretained(&mock_callbacks)),
         base::BindOnce(&MockCallbacks::OnCompleted,
@@ -2258,8 +2245,7 @@ TEST_F(ConversationAPIClientUnitTest, ErrorParsing_SSE) {
 TEST_F(ConversationAPIClientUnitTest, ErrorParsing_NonSSE) {
   MockAPIRequestHelper* mock_request_helper =
       client_->GetMockAPIRequestHelper();
-  testing::StrictMock<MockCallbacks> mock_callbacks;
-  base::RunLoop run_loop;
+  base::test::TestFuture<EngineConsumer::GenerationResult> future;
 
   EXPECT_CALL(*mock_request_helper, Request(_, _, _, _, _, _, _, _))
       .WillOnce(
@@ -2279,23 +2265,16 @@ TEST_F(ConversationAPIClientUnitTest, ErrorParsing_NonSSE) {
             return Ticket();
           });
 
-  EXPECT_CALL(mock_callbacks, OnCompleted(_))
-      .WillOnce([&](EngineConsumer::GenerationResult result) {
-        ASSERT_FALSE(result.has_value());
-        EXPECT_EQ(result.error().api_error, mojom::APIError::RateLimitReached);
-        ASSERT_TRUE(result.error().details);
-        EXPECT_EQ(result.error().details->status_code, 429);
-        EXPECT_EQ(result.error().details->error_type, "5678");
-        run_loop.Quit();
-      });
+  client_->PerformRequest(GetMockMessagesAndExpectedMessagesJson().first,
+                          std::nullopt, std::nullopt, {}, base::NullCallback(),
+                          future.GetCallback());
 
-  client_->PerformRequest(
-      GetMockMessagesAndExpectedMessagesJson().first, std::nullopt,
-      std::nullopt, {mojom::ConversationCapability::CHAT}, base::NullCallback(),
-      base::BindOnce(&MockCallbacks::OnCompleted,
-                     base::Unretained(&mock_callbacks)));
-
-  run_loop.Run();
+  auto result = future.Take();
+  ASSERT_FALSE(result.has_value());
+  EXPECT_EQ(result.error().api_error, mojom::APIError::RateLimitReached);
+  ASSERT_TRUE(result.error().details);
+  EXPECT_EQ(result.error().details->status_code, 429);
+  EXPECT_EQ(result.error().details->error_type, "5678");
 }
 
 }  // namespace ai_chat

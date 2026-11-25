@@ -19,9 +19,7 @@
 #include "brave/components/tor/buildflags/buildflags.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_window.h"
-#include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_command_controller.h"
-#include "chrome/browser/ui/browser_window/public/browser_window_features.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/test/base/in_process_browser_test.h"
@@ -159,7 +157,7 @@ IN_PROC_BROWSER_TEST_P(BraveWalletPolicyTest, AppMenuItemDisabled) {
 IN_PROC_BROWSER_TEST_P(BraveWalletPolicyTest, WalletPageAccess) {
   const GURL url("chrome://wallet");
   auto* rfh = ui_test_utils::NavigateToURL(browser(), url);
-  EXPECT_TRUE(rfh);
+  ASSERT_TRUE(rfh);
   EXPECT_EQ(IsBraveWalletDisabledTest(), rfh->IsErrorDocument());
 }
 
@@ -167,7 +165,7 @@ IN_PROC_BROWSER_TEST_P(BraveWalletPolicyTest, WalletPageAccess) {
 // disabled by policy.
 IN_PROC_BROWSER_TEST_P(BraveWalletPolicyTest, WalletInSidebar) {
   sidebar::SidebarController* controller =
-      browser()->GetFeatures().sidebar_controller();
+      sidebar::SidebarController::From(browser());
   sidebar::SidebarModel* model = controller->model();
 
   const auto items = model->GetAllSidebarItems();
@@ -201,7 +199,7 @@ IN_PROC_BROWSER_TEST_P(BraveWalletPolicyTest, Web3SettingsPagesAccess) {
 
   for (const auto& url : web3_urls) {
     auto* rfh = ui_test_utils::NavigateToURL(browser(), url);
-    EXPECT_TRUE(rfh);
+    ASSERT_TRUE(rfh);
 
     if (IsBraveWalletDisabledTest()) {
       // When wallet is disabled, these pages should redirect
@@ -220,7 +218,7 @@ IN_PROC_BROWSER_TEST_P(BraveWalletPolicyTest, Web3MenuVisibility) {
   // Navigate to the main settings page
   const GURL settings_url("chrome://settings");
   auto* rfh = ui_test_utils::NavigateToURL(browser(), settings_url);
-  EXPECT_TRUE(rfh);
+  ASSERT_TRUE(rfh);
   EXPECT_FALSE(rfh->IsErrorDocument());
 
   // Wait for the page to load completely

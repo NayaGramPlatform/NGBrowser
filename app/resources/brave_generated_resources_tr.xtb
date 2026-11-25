@@ -3,18 +3,14 @@
 <translationbundle lang="tr">
 <translation id="1751249301761991853">Kişisel</translation>
 <translation id="3333887201479867589">Brave Ödülleri</translation>
-<translation id="7561196759112975576">Her zaman</translation>
-<translation id="7961015016161918242">Hiçbir Zaman</translation>
 <translation id="8507663778530179003">Tüm Yer İşaretleri Butonunu Göster</translation>
 <translation id="9018648632047670921">Tüm yer işaretleri butonunu göster</translation>
 <translation id="7630214457764713113">Temiz bağlantıyı kopyala</translation>
 <translation id="7973394300052703468">Yeni &amp;Kişisel Pencere</translation>
 <translation id="4615489450165434530">Arızalı Bir Siteyi Bildir</translation>
 <translation id="8097438084542431276">Temiz Bağlantıyı Kopyala</translation>
-<translation id="4678672101289648246">Yalnızca Yeni Sekme Sayfasında</translation>
 <translation id="6516243500644829484">Yeni &amp;gizli pencere</translation>
 <translation id="1209739344687072997">Arızalı bir siteyi bildir</translation>
-<translation id="8294286161128352783">Yalnızca yeni sekme sayfasında</translation>
 <translation id="6406506848690869874">Sync</translation>
 <translation id="1544192797660353713">Cüzdan</translation>
 <translation id="2361906291514218784">Leo YZ</translation>
@@ -55,6 +51,7 @@
 .
 Veya şu adresten daha sonra değiştirin: <ph name="SETTINGS_EXTENIONS_LINK"/>.</translation>
 <translation id="6229752134959014186">Widevine hakkında daha fazla bilgi edinin</translation>
+<translation id="3318169548229684688">Bu cihazda konuşmayı işlemek için bir konuşma tanıma modeli (<ph name="DOWNLOAD_SIZE"/>) indirme</translation>
 <translation id="6061083111980694767"><ph name="SITE_NAME"/> sizden şunu istiyor:</translation>
 <translation id="3218385319396786393">Bu sayfada otomatik oynatma engellenmiş</translation>
 <translation id="4988333904713528597"><ph name="HOST"/> her zaman otomatik oynatmaya izin ver</translation>
@@ -122,6 +119,8 @@ Veya şu adresten daha sonra değiştirin: <ph name="SETTINGS_EXTENIONS_LINK"/>.
 <translation id="2162109630536601963">Uzantı ağ istemlerinde bulunursa, Tor veya gizli mod kullanmayacak.</translation>
 <translation id="2725327089319971976">Bu uzantıyı gizli modda ve Tor modunda devre dışı bırakmak için, bu seçeneğin seçimini kaldırın.</translation>
 <translation id="438106944087726695">Brave tarafından barındırılır</translation>
+<translation id="2265651566599167057">Socket tarafından kötü amaçlı yazılım olarak işaretlendi.</translation>
+<translation id="2607395470596637070">Brave'deki Socket'in sizi nasıl koruduğu hakkında daha fazla bilgi edinin</translation>
 <translation id="3371343170427636147">Brave Browser Gece Uygulamaları</translation>
 <translation id="4097979995947147464">Brave Browser Beta Uygulamaları</translation>
 <translation id="8303432794159193481">Brave Tarayıcı Geliştirme Uygulamaları</translation>
@@ -196,7 +195,9 @@ Veya şu adresten daha sonra değiştirin: <ph name="SETTINGS_EXTENIONS_LINK"/>.
 <translation id="5977931179408079967">Konum</translation>
 <translation id="3790384768741064842">Sağa taşı</translation>
 <translation id="7444424316576061724">Sola taşı</translation>
+<translation id="7561196759112975576">Her zaman</translation>
 <translation id="7060352228894039151">Fare imleci üzerindeyken</translation>
+<translation id="7961015016161918242">Hiçbir Zaman</translation>
 <translation id="8981254605840444865">Ayarları göster</translation>
 <translation id="59174027418879706">Etkin</translation>
 <translation id="4176463684765177261">Devre dışı</translation>
@@ -222,6 +223,7 @@ Veya şu adresten daha sonra değiştirin: <ph name="SETTINGS_EXTENIONS_LINK"/>.
 <translation id="4515057635283480525">Internet Archive, birçok web sayfasının geçmiş sürümlerini kaydeder. Bu sayfayı Arşiv'de aramak ister misiniz?</translation>
 <translation id="8252977752585110703">Üzgünüz, Internet Archive'i kontrol ettik ve bu sayfanın arşivlenmiş bir sürümü yok.</translation>
 <translation id="8748778103033196270">Arşiv'e bak</translation>
+<translation id="7369915833843501413">Arşiv'e bakılıyor</translation>
 <translation id="191143826155037518">Brave'i <ph name="BEGIN_LINK_MPL"/>Mozilla Kamu Lisansı 2.0<ph name="END_LINK_MPL"/> (MPL) altında ve <ph name="BEGIN_LINK_OSS"/>açık kaynak yazılım<ph name="END_LINK_OSS"/> dahil çeşitli diğer lisanslar altında kullanabilirsiniz.
        <ph name="BEGIN_LINK_SOURCE_CODE"/>Bu kopyayı oluşturmak için kullanılan kaynak kodunu <ph name="END_LINK_SOURCE_CODE"/> <ph name="BEGIN_LINK_BUILD_INSTRUCTIONS"/>indirmek ve inşa etmek için talimatları<ph name="END_LINK_BUILD_INSTRUCTIONS"/> okuyabilirsiniz.</translation>
 <translation id="4474155171896946103">Tüm sekmelere yer işareti koy...</translation>
@@ -372,7 +374,7 @@ Veya şu adresten daha sonra değiştirin: <ph name="SETTINGS_EXTENIONS_LINK"/>.
 <translation id="7985042437720138349">Bu özellik, açık sekmelerinizle ilgili verileri Brave'in yapay zeka destekli tarayıcı asistanı Leo'ya gönderir.</translation>
 <translation id="6165508094623778733">Daha fazla bilgi edin</translation>
 <translation id="7557539689487606886">Premium olun</translation>
-<translation id="1035309871698658326">Bu özellik açıldığında, gizli olmayan tüm sekmelerin başlıklarını ve kaynaklarını sınıflandırması için otomatik olarak Leo'ya gönderir.</translation>
+<translation id="7103144720752576727">Açıldığında, bu özellik tüm özel olmayan sekmelerin başlıklarını ve kaynağını sınıflandırmak için otomatik olarak Leo'ya gönderir. Sayfa içeriği göndermeyi de açarsanız, her sekmenin metninin kısa alıntıları da gönderilir.</translation>
 <translation id="3435896845095436175">Etkinleştir</translation>
 <translation id="9031526219709160683">Brave bu sitenin gizlilik ayarlarını optimize etmenize yardımcı olabilir. Brave'in önerilerini gözden geçirmek ister misiniz?</translation>
 <translation id="5739953050957336013">Arama Önerileri</translation>
@@ -387,8 +389,6 @@ Veya şu adresten daha sonra değiştirin: <ph name="SETTINGS_EXTENIONS_LINK"/>.
 <translation id="8570228839666486945">Cihazda AI</translation>
 <translation id="7447041379556102185">Cihaz Üzerinde Konuşma Tanıma</translation>
 <translation id="3456536577668402695">Aramalarınız ve sayfa içerikleriniz bu cihazda işlenir. Brave'e hiçbir şey gönderilmez ve insan denetçiler tarafından görülmez.</translation>
-<translation id="4751537843966994505">Anlamsal Geçmiş Araması</translation>
-<translation id="6175973371938222040">Ziyaret ettiğiniz sayfaları yerel olarak dizinleyin, böylece geçmişinizi anlamına göre arayabilirsiniz. Tüm işlemler bu cihazda kalır.</translation>
 <translation id="9156965752763025780">Değişiklikleriniz, Brave tekrar başlatıldığında geçerli olacak.</translation>
 <translation id="7179921470347911571">Şimdi Tekrar Başlat</translation>
 <translation id="1426410128494586442">Evet</translation>
@@ -426,6 +426,7 @@ Veya şu adresten daha sonra değiştirin: <ph name="SETTINGS_EXTENIONS_LINK"/>.
 <translation id="4328541188421002379">Konteynerinize İş veya Kişisel gibi bir isim verin</translation>
 <translation id="4976989127264491396">Hata: <ph name="ERROR_MESSAGE"/></translation>
 <translation id="5436069931267876389">Konteyner bulunamadı</translation>
+<translation id="5831840958001766835">Öğeyi yeniden sırala. Taşımak için ok tuşlarını kullanın.</translation>
 <translation id="6055154402239241620">Trafik Denetimi</translation>
 <translation id="8134521925475508805">Belirli siteleri belirli bir bağlamda otomatik olarak açılacak şekilde yapılandırarak tarama oturumlarınız arasında ayrım oluşturun. <ph name="BEGIN_LINK"/>Daha fazla bilgi<ph name="END_LINK"/></translation>
 <translation id="6944848312867106540">Trafik Denetimini Etkinleştir</translation>
@@ -478,10 +479,6 @@ Veya şu adresten daha sonra değiştirin: <ph name="SETTINGS_EXTENIONS_LINK"/>.
 <translation id="7310387888625228830">Leo YZ Asistanı</translation>
 <translation id="5222974844674487962">Brave Haberleri butonunu göster</translation>
 <translation id="2085436423511121572">Leo YZ butonunu göster</translation>
-<translation id="6156323911414505561">Yer işaretleri çubuğunu göster</translation>
-<translation id="4054323497808446566">Yer işaretleri çubuğu tüm sayfalarda görünür halde</translation>
-<translation id="8693858092251192712">Yer işaretleri çubuğu, yeni sekme sayfası hariç tüm sayfalarda gizli</translation>
-<translation id="7158817046543187970">Yer işaretleri çubuğu tüm sayfalarda gizli</translation>
 <translation id="3416468988018290825">Her zaman tam URL'yi göster</translation>
 <translation id="5529693968082667490">Sekme arama düğmesini göster</translation>
 <translation id="1013121820689882118">Speedreader</translation>
@@ -613,6 +610,10 @@ Veya şu adresten daha sonra değiştirin: <ph name="SETTINGS_EXTENIONS_LINK"/>.
 <translation id="5825943197137337319">Sadece varsayılan genel arayüz</translation>
 <translation id="1689062823386843231">Non-proxied UDP'yi devre dışı bırak</translation>
 <translation id="3540231253392253941">Anında mesajlaşma için Google hizmetlerini kullanın</translation>
+<translation id="2224032129673914306">Anlamsal geçmiş araması</translation>
+<translation id="6045998903985162478">Ziyaret ettiğiniz sayfaları dizine ekleyin; böylece bunları geçmişte, açık sekmelerde ve Leo'da kolayca bulabilirsiniz.</translation>
+<translation id="3962946446120925966">Cihaz üzerinde konuşma tanıma</translation>
+<translation id="6408242130028978631">Sitelerin konuşmayı bu cihazda işleyebilmesi için bir konuşma tanıma modeli (<ph name="DOWNLOAD_SIZE"/>) indirin. Modeli kaldırmak için bunu kapatın.</translation>
 <translation id="5813105074916486721">Yerel geçmiş saklama</translation>
 <translation id="5671611745062206644">Brave'in tarama geçmişinizi yerel olarak ne kadar süre sakladığı</translation>
 <translation id="7184510058087008090">1 gün</translation>
@@ -728,7 +729,7 @@ Veya şu adresten daha sonra değiştirin: <ph name="SETTINGS_EXTENIONS_LINK"/>.
 <translation id="4432071071853308688">Bu kod boş</translation>
 <translation id="955848693465029904">Dahili senkronizasyon kurulum hatası</translation>
 <translation id="7456398316301207582">Dahili hesap silme hatası</translation>
-<translation id="859506441384380749">Bu kod Brave'in artık kullanılmayan bir sürümü tarafından oluşturulmuş, lütfen önce diğer cihazınızı yükseltin</translation>
+<translation id="4002014583969312635">Görünüşe göre bu kod Brave'in eski bir sürümünü çalıştıran bir cihazda oluşturulmuş. Lütfen diğer cihazınızda Brave'i en yeni sürümüne güncelleyin ve bundan sonra yeni bir senkronizasyon kodu oluşturun.</translation>
 <translation id="3132642509209154999">Bu kodun süresi dolmuş. Lütfen diğer cihazınızda yeni bir kod oluşturun ve tekrar deneyin.</translation>
 <translation id="2859229680945501779">Bu kod geçersiz. Lütfen cihazınızdaki saatin ve saat diliminin doğru şekilde ayarlandığını teyit edin.</translation>
 <translation id="2339730291919608488">Senkronizasyon Zincirinden Ayrıl</translation>
@@ -877,6 +878,7 @@ Veya şu adresten daha sonra değiştirin: <ph name="SETTINGS_EXTENIONS_LINK"/>.
 <translation id="2618193846561624884">Var olan ağı güncellemek istiyor musunuz?</translation>
 <translation id="1643029991199044105">Ctrl-Tab ile en son kullanılan sekmeler arasında gezinin</translation>
 <translation id="2775956301559569472">404 sayfalarda Wayback Machine istemini göster</translation>
+<translation id="8485716275262929774">404 sayfalarında kaydedilen sürümleri Wayback Machine'den otomatik olarak yükle</translation>
 <translation id="3095201688102519917">Çok sayıda sekmesi olan pencereleri kapatırken beni uyar</translation>
 <translation id="7120553802660696133">Son sekmeyi kapatırken pencereyi kapatın</translation>
 <translation id="3394171693948989253">Çıkmak için Esc'ye basılması gerektiğini söyleyen tam ekran hatırlatıcısını göster</translation>
@@ -886,6 +888,8 @@ Veya şu adresten daha sonra değiştirin: <ph name="SETTINGS_EXTENIONS_LINK"/>.
 <translation id="1529674267267221673">Bir web sitesinde sağ tıkladığınızda, Leo içerik menüsünde görünecektir. Bu ayar, mevcut web sayfasındaki bağlamı Leo'ya gönderecektir.</translation>
 <translation id="5226020406479918122">Sekme Odağı Modu</translation>
 <translation id="3705539672403311123">Sekme Arama sayfasında sekme organizasyonunu etkinleştirin. Bu özellik açıldığında, gizli olmayan tüm sekmelerin başlıklarını ve kaynaklarını sınıflandırması için otomatik olarak Leo'ya gönderir. <ph name="BEGIN_LINK"/>Daha fazla bilgi<ph name="END_LINK"/></translation>
+<translation id="2002238795517052616">Sekme odağı için sayfa içeriği gönder</translation>
+<translation id="2276823422122514441">Ayrıca her sekmenin metninden kısa alıntılar da gönderin; böylece sekmeler, başlığına göre değil, bir sayfanın ne hakkında olduğuna göre gruplandırılır. Alıntılar Leo'ya veya sekme odağı için bir model seçtiyseniz kendi modelinize gider. Bunun için alıntıları cihazınızda oluşturan <ph name="BEGIN_LINK"/><ph name="SEMANTIC_HISTORY_SEARCH"/><ph name="END_LINK"/> gereklidir.</translation>
 <translation id="9049433973274198706">Sekme odağı için varsayılan model</translation>
 <translation id="2161546758719933059">Sekmelerinizi Sekme Odak Modunda düzenlemek için kullanılan model. <ph name="BEGIN_LINK"/>Daha fazla bilgi<ph name="END_LINK"/></translation>
 <translation id="8172263161008556851">Konuşmada önerilen istemleri göster</translation>
@@ -967,9 +971,6 @@ Veya şu adresten daha sonra değiştirin: <ph name="SETTINGS_EXTENIONS_LINK"/>.
 <translation id="1838374766361614909">Aramayı Temizle</translation>
 <translation id="5126255551970171328">Bir arama belleği ara</translation>
 <translation id="7402116145895962069">Yerel Ollama modellerini eşzamanla</translation>
-<translation id="5985516785067818307">Anket Panelisti</translation>
-<translation id="8347743943525229984">Brave anketlerine izin ver</translation>
-<translation id="3204080538332044581">Brave'in yeni sekme sayfasında özel anketlere bağlantılar göstermesine izin verir. Anketler, daha iyi özellikler oluşturmamıza ve tarayıcı tabanlı reklam kampanyalarının etkinliğini ölçmemize yardımcı olur. <ph name="BEGIN_LINK"/>Daha fazla bilgi<ph name="END_LINK"/></translation>
 <translation id="349846214503465941">Oynatma Listesini etkinleştir</translation>
 <translation id="7903608716704052878">Dosyaları çevrimdışı görüntüleme için otomatik olarak ekle</translation>
 <translation id="384666453982355633">Bu seçenek, medya dosyalarını otomatik olarak önbelleğe alır, böylece bunları internet bağlantısı olmadan oynatabilirsiniz</translation>

@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+import("//brave/components/brave_ads/buildflags/buildflags.gni")
 import("//brave/components/brave_rewards/core/buildflags/buildflags.gni")
 import("//brave/components/brave_wallet/common/buildflags/buildflags.gni")
 import("//testing/test.gni")
@@ -13,7 +14,6 @@ source_set("brave_rewards") {
   sources = [
     "creator_detection_script_injector.h",
     "rewards_service_factory.h",
-    "rewards_tab_helper.h",
   ]
 
   deps = [
@@ -33,7 +33,6 @@ source_set("brave_rewards_impl") {
     "rewards_prefs_util.cc",
     "rewards_prefs_util.h",
     "rewards_service_factory.cc",
-    "rewards_tab_helper.cc",
   ]
 
   public_deps = [ ":brave_rewards" ]
@@ -50,8 +49,9 @@ source_set("brave_rewards_impl") {
     "//chrome/browser:browser_process",
     "//chrome/browser/bitmap_fetcher",
     "//chrome/browser/favicon",
+    "//chrome/browser/policy",
     "//chrome/browser/profiles",
-    "//chrome/browser/ui",
+    "//chrome/common",
     "//components/keyed_service/content",
     "//components/policy/core/common",
     "//components/prefs",
@@ -61,6 +61,54 @@ source_set("brave_rewards_impl") {
   if (enable_brave_wallet) {
     deps += [ "//brave/browser/brave_wallet" ]
   }
+
+  if (is_android) {
+    sources += [
+      "android/brave_rewards_native_worker.cc",
+      "android/brave_rewards_native_worker.h",
+    ]
+    deps += [
+      "//brave/browser/brave_adaptive_captcha",
+      "//brave/components/brave_adaptive_captcha",
+      "//brave/components/brave_ads/buildflags",
+      "//brave/components/brave_ads/core/browser/service",
+      "//brave/components/brave_ads/core/mojom",
+      "//brave/components/brave_rewards/core/mojom",
+      "//chrome/android:chrome_jni_headers",
+      "//chrome/browser/profiles:profile",
+      "//content/public/browser",
+    ]
+
+    if (enable_brave_ads) {
+      deps += [
+        "//brave/browser/brave_ads",
+        "//brave/components/brave_ads/core/public:headers",
+      ]
+    }
+  }
+}
+
+source_set("tab_helper") {
+  sources = [
+    "rewards_tab_helper.cc",
+    "rewards_tab_helper.h",
+  ]
+
+  public_deps = [
+    ":brave_rewards",
+    "//base",
+    "//brave/components/brave_rewards/content",
+    "//chrome/browser/ui/tabs:tabs_public",
+    "//components/sessions",
+    "//ui/base/unowned_user_data",
+  ]
+
+  deps = [
+    "//brave/components/brave_rewards/core",
+    "//chrome/browser/profiles:profile",
+    "//components/tabs:public",
+    "//content/public/browser",
+  ]
 }
 
 source_set("util") {

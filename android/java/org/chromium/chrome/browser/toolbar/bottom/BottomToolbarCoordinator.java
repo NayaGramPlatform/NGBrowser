@@ -161,7 +161,7 @@ class BottomToolbarCoordinator implements View.OnLongClickListener {
      *     incognito toggle tab layout.
      * @param incognitoStateProvider Notifies components when incognito mode is entered or exited.
      * @param topToolbarRoot The root {@link ViewGroup} of the top toolbar.
-     * @param closeAllTabsAction The runnable that closes all tabs in the current tab model.
+     * @param closeAllTabsAction The runnable that asks to close all tabs, or all private tabs.
      */
     @Initializer
     void initializeWithNative(
@@ -382,8 +382,8 @@ class BottomToolbarCoordinator implements View.OnLongClickListener {
             }
 
         } else if (v == mBookmarksButton) {
-            TabUtils.showBookmarkTabPopupMenu(
-                    mContext, v, mBookmarkModelSupplier, mLocationBarModel, mBookmarkManagerOpener);
+            BottomToolbarBookmarksMenu.show(
+                    v, mBookmarkModelSupplier, mLocationBarModel, mBookmarkManagerOpener);
             return true;
         } else if (v == mNewTabButton) {
             TabUtils.showTabPopupMenu(mContext, v);

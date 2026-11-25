@@ -8,11 +8,13 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/timer/timer.h"
 #include "base/values.h"
+#include "brave/components/psst/core/browser/psst_log_service.h"
 #include "brave/components/psst/core/browser/psst_settings_service.h"
 #include "brave/components/psst/core/common/psst_metadata_schema.h"
 #include "brave/components/psst/core/common/psst_script_responses.h"
@@ -30,8 +32,7 @@ namespace psst {
 class MatchedRule;
 class PsstRuleRegistry;
 
-class PsstTabWebContentsObserver : public tabs::ContentsObservingTabFeature,
-                                   public PsstSettingsService::PrefObserver {
+class PsstTabWebContentsObserver : public tabs::ContentsObservingTabFeature {
  public:
   using InsertScriptInPageCallback = base::OnceCallback<void(base::Value)>;
   using InsertScriptInPageTimeoutCallback =
@@ -57,6 +58,8 @@ class PsstTabWebContentsObserver : public tabs::ContentsObservingTabFeature,
                       const int rule_version,
                       std::optional<UserScriptResult> user_script_result,
                       ConsentCallback apply_changes_callback) = 0;
+    // Hides the consent dialog, omnibar icon and infobar
+    virtual void HideAll() = 0;
     // Update the UI state based on the applied tasks and progress.
     virtual void UpdateTasks(long progress,
                              const std::vector<PolicyTask>& applied_tasks,
@@ -65,6 +68,10 @@ class PsstTabWebContentsObserver : public tabs::ContentsObservingTabFeature,
     virtual std::optional<PsstWebsiteSettings> GetPsstWebsiteSettings(
         const url::Origin& origin,
         const std::string& user_id) = 0;
+    // Sets the callback used to cancel an in-flight PSST flow from the UI side
+    // (dialog close, "don't show for this site", or feature disable).
+    virtual void SetLogicalFlowCancelCallback(
+        base::RepeatingClosure cancel_callback) = 0;
   };
 
   // Creates an observer for `tab`'s web contents, or returns null for
@@ -72,14 +79,16 @@ class PsstTabWebContentsObserver : public tabs::ContentsObservingTabFeature,
   // keeps a reference to `tab` for its lifetime. `browser_context`,
   // `psst_settings_service`, and `ui_delegate` must not be null.
   // `variations_service` may be null, in which case the country used for
-  // rule matching is left empty. `world_id` is the isolated world that PSST
+  // rule matching is left empty. `log_service` may be null, in which case no
+  // diagnostics are recorded. `world_id` is the isolated world that PSST
   // scripts are injected into.
-  static std::unique_ptr<PsstTabWebContentsObserver> MaybeCreateForWebContents(
+  static std::unique_ptr<PsstTabWebContentsObserver> MaybeCreate(
       tabs::TabInterface& tab,
       content::BrowserContext* browser_context,
       std::unique_ptr<PsstUiDelegate> ui_delegate,
       PsstSettingsService* psst_settings_service,
       variations::VariationsService* variations_service,
+      PsstLogService* log_service,
       const int32_t world_id);
 
   ~PsstTabWebContentsObserver() override;
@@ -89,6 +98,7 @@ class PsstTabWebContentsObserver : public tabs::ContentsObservingTabFeature,
 
   PsstUiDelegate* GetPsstUiDelegate() const;
   base::WeakPtr<PsstTabWebContentsObserver> AsWeakPtr();
+  void CancelInFlightFlow();
 
  private:
   friend class PsstTabWebContentsObserverUnitTestBase;
@@ -97,7 +107,13 @@ class PsstTabWebContentsObserver : public tabs::ContentsObservingTabFeature,
                              PsstRuleRegistry* registry,
                              PsstSettingsService* psst_settings_service,
                              variations::VariationsService* variations_service,
+                             PsstLogService* log_service,
                              std::unique_ptr<PsstUiDelegate> ui_delegate);
+
+  // Records a step of the flow on the brave://psst-internals timeline.
+  void Log(mojom::PsstLogLevel level,
+           std::string_view message,
+           std::optional<base::DictValue> data = std::nullopt);
 
   void InsertUserScript(std::unique_ptr<MatchedRule> rule);
 
@@ -122,20 +138,26 @@ class PsstTabWebContentsObserver : public tabs::ContentsObservingTabFeature,
   void SetInjectScriptCallback(InjectScriptCallback inject_script_callback);
   void SetInjectAsyncScriptCallback(
       InjectScriptAsyncCallback inject_async_script_callback);
-  void CancelInFlightFlow();
-
-  // PsstSettingsService::Observer
-  void OnPsstEnableChange(bool new_value) override;
+  void PageScopedReset();
+  void NoRulesFoundHandler();
 
   const raw_ptr<PsstRuleRegistry> registry_;
   const raw_ptr<PsstSettingsService> psst_settings_service_ = nullptr;
   const raw_ptr<variations::VariationsService> variations_service_ = nullptr;
+  const raw_ptr<PsstLogService> log_service_;
   InjectScriptCallback inject_script_callback_;
   mojo::AssociatedRemote<script_injector::mojom::ScriptInjector>
       script_injector_remote_;
   InjectScriptAsyncCallback inject_async_script_callback_;
   std::unique_ptr<PsstUiDelegate> ui_delegate_;
   base::OneShotTimer timeout_timer_;
+
+  // Set when the user aborts an in-progress PSST flow. Unlike
+  // page_weak_factory_, which is invalidated on every cross-document
+  // commit, this flag persists across such commits and is only cleared
+  // when a fresh initial user-script execution begins, preventing the
+  // flow from resuming silently on a later page.
+  bool logical_flow_cancelled_ = false;
 
   // Whether the currently committed primary page is eligible for PSST
   // processing. Recomputed on every cross-document primary main frame commit.

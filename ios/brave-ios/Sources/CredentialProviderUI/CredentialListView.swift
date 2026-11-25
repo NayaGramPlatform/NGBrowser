@@ -131,10 +131,7 @@ public struct CredentialListView: View {
         }
       }
       .navigationDestination(
-        isPresented: Binding(
-          get: { credentialDetails != nil },
-          set: { if !$0 { credentialDetails = nil } }
-        )
+        isPresented: $credentialDetails.isPresented
       ) {
         if let credentialDetails {
           CredentialDetailView(model: model, credential: credentialDetails)
@@ -218,6 +215,8 @@ extension CredentialListModel {
     var rpId: String!
     var privateKey: Data!
     var encrypted: Data!
+    var securityDomainEncrypted: Data!
+    var deviceAuthKeyVersion: Int32 = 0
     var creationTime: Int64 = 0
     var lastUsedTime: Int64 = 0
     var hidden: Bool = false

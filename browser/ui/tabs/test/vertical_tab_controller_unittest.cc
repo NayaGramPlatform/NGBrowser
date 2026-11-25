@@ -9,34 +9,59 @@
 
 #include "base/test/scoped_feature_list.h"
 #include "brave/browser/ui/focus_mode/focus_mode_controller.h"
+#include "brave/browser/ui/focus_mode/focus_mode_prefs.h"
 #include "brave/browser/ui/tabs/brave_tab_prefs.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/tabs/features.h"
 #include "chrome/browser/ui/tabs/tab_strip_prefs.h"
+#include "chrome/common/pref_names.h"
 #include "components/sync_preferences/testing_pref_service_syncable.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/base/unowned_user_data/unowned_user_data_host.h"
 
 class VerticalTabControllerUnitTest : public testing::Test {
  public:
+  VerticalTabControllerUnitTest() {
+    // Brave vertical tabs are unsupported when kTabStripUnification is on.
+    feature_list_.InitAndDisableFeature(tabs::kTabStripUnification);
+  }
+
   void SetUp() override {
     tabs::RegisterProfilePrefs(pref_service_.registry());
     brave_tabs::RegisterBraveProfilePrefs(pref_service_.registry());
+    pref_service_.registry()->RegisterBooleanPref(
+        brave_tabs::kVerticalTabsEnabled, false);
+    focus_mode::RegisterProfilePrefs(pref_service_.registry());
   }
 
  protected:
   std::unique_ptr<VerticalTabController> MakeController(
       BrowserWindowInterface::Type type = BrowserWindowInterface::TYPE_NORMAL,
       FocusModeController* focus_mode_controller = nullptr) {
-    return std::make_unique<VerticalTabController>(type, &pref_service_,
-                                                   focus_mode_controller);
+    return std::make_unique<VerticalTabController>(
+        user_data_host_, type, &pref_service_, focus_mode_controller);
   }
 
+  base::test::ScopedFeatureList feature_list_;
   sync_preferences::TestingPrefServiceSyncable pref_service_;
+  // Each test creates at most one controller of each type, which registers
+  // itself here.
+  ui::UnownedUserDataHost user_data_host_;
 };
 
 TEST_F(VerticalTabControllerUnitTest, SupportsBraveVerticalTabsNormalWindow) {
   auto controller = MakeController(BrowserWindowInterface::TYPE_NORMAL);
   EXPECT_TRUE(controller->SupportsBraveVerticalTabs());
+}
+
+TEST_F(VerticalTabControllerUnitTest,
+       SupportsBraveVerticalTabsFalseWhenTabStripUnificationEnabled) {
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndEnableFeature(tabs::kTabStripUnification);
+  pref_service_.SetBoolean(brave_tabs::kVerticalTabsEnabled, true);
+  auto controller = MakeController(BrowserWindowInterface::TYPE_NORMAL);
+  EXPECT_FALSE(controller->SupportsBraveVerticalTabs());
+  EXPECT_FALSE(controller->ShouldShowBraveVerticalTabs());
 }
 
 TEST_F(VerticalTabControllerUnitTest, SupportsBraveVerticalTabsPopupWindow) {
@@ -81,7 +106,7 @@ TEST_F(VerticalTabControllerUnitTest, ShouldShowWindowTitleFalseInFocusMode) {
   pref_service_.SetBoolean(brave_tabs::kVerticalTabsEnabled, true);
   pref_service_.SetBoolean(brave_tabs::kVerticalTabsShowTitleOnWindow, true);
 
-  FocusModeController focus_mode_controller;
+  FocusModeController focus_mode_controller(user_data_host_, pref_service_);
   auto controller = MakeController(BrowserWindowInterface::TYPE_NORMAL,
                                    &focus_mode_controller);
   EXPECT_TRUE(controller->ShouldShowWindowTitleForVerticalTabs());

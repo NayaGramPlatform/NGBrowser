@@ -5,10 +5,14 @@
 # You can obtain one at https://mozilla.org/MPL/2.0/.
 
 import unittest
-from unittest.mock import patch
 
-from versioning import (load_package_file, read_chromium_version_file,
-                        get_uplift_branch_name_from_package)
+from versioning import (
+    branch_start,
+    load_package_file,
+    previous_version_commit,
+    read_chromium_version_file,
+    get_uplift_branch_name_from_package,
+)
 from versioning import Version
 
 from test.fake_chromium_repo import FakeChromiumRepo
@@ -16,7 +20,6 @@ import json
 
 
 class VersioningTest(unittest.TestCase):
-
     def setUp(self):
         """Set up a fake Chromium repository for testing."""
         self.fake_chromium_src = FakeChromiumRepo()
@@ -34,8 +37,10 @@ class VersioningTest(unittest.TestCase):
 
         # Assert that the loaded version matches the first updated version
         self.assertEqual(
-            loaded_package_1.get("config").get("projects").get("chrome").get(
-                "tag"),
+            loaded_package_1.get("config")
+            .get("projects")
+            .get("chrome")
+            .get("tag"),
             test_version_1,
         )
 
@@ -45,8 +50,10 @@ class VersioningTest(unittest.TestCase):
 
         loaded_package_2 = load_package_file("HEAD")
         self.assertEqual(
-            loaded_package_2.get("config").get("projects").get("chrome").get(
-                "tag"),
+            loaded_package_2.get("config")
+            .get("projects")
+            .get("chrome")
+            .get("tag"),
             test_version_2,
         )
 
@@ -112,7 +119,8 @@ class VersioningTest(unittest.TestCase):
         # Update the package.json file with a specific version
         test_version_1 = "3.4.5.6"
         commit_hash_1 = self.fake_chromium_src.update_brave_version(
-            test_version_1)
+            test_version_1
+        )
 
         # Retrieve the version using Version.from_git with HEAD
         version_1 = Version.from_git("HEAD")
@@ -122,7 +130,8 @@ class VersioningTest(unittest.TestCase):
         # Update the package.json file with another version
         test_version_2 = "4.5.6.7"
         commit_hash_2 = self.fake_chromium_src.update_brave_version(
-            test_version_2)
+            test_version_2
+        )
 
         # Retrieve the version using Version.from_git with HEAD
         version_2 = Version.from_git("HEAD")
@@ -144,11 +153,14 @@ class VersioningTest(unittest.TestCase):
         version_1 = Version("1.2.3.4")
         version_2 = Version("2.3.4.5")
 
-        expected_link = ("https://chromium.googlesource.com/chromium/src"
-                         "/+log/1.2.3.4..2.3.4.5?pretty=fuller&n=10000")
+        expected_link = (
+            "https://chromium.googlesource.com/chromium/src"
+            "/+log/1.2.3.4..2.3.4.5?pretty=fuller&n=10000"
+        )
 
-        self.assertEqual(version_2.get_googlesource_diff_link(version_1),
-                         expected_link)
+        self.assertEqual(
+            version_2.get_googlesource_diff_link(version_1), expected_link
+        )
 
     def test_read_chromium_version_file(self):
         """Test the result of read_chromium_version_file."""
@@ -175,14 +187,74 @@ class VersioningTest(unittest.TestCase):
         # Update the package.json file with a specific version
         test_version = '1.2.3'
         self.fake_chromium_src.write_and_stage_file(
-            'package.json', json.dumps({'version': test_version}),
-            self.fake_chromium_src.brave)
-        self.fake_chromium_src.commit('Update package.json',
-                                      self.fake_chromium_src.brave)
+            'package.json',
+            json.dumps({'version': test_version}),
+            self.fake_chromium_src.brave,
+        )
+        self.fake_chromium_src.commit(
+            'Update package.json', self.fake_chromium_src.brave
+        )
 
         # Assert the uplift branch name is generated correctly
         uplift_branch_name = get_uplift_branch_name_from_package()
         self.assertEqual(uplift_branch_name, '1.2.x')
+
+    def _commit_file(self, name: str) -> str:
+        repo = self.fake_chromium_src
+        repo.write_and_stage_file(name, f'{name}\n', repo.brave)
+        return repo.commit(f'Add {name}', repo.brave)
+
+    def _git(self, *args: str) -> str:
+        repo = self.fake_chromium_src
+        return repo._run_git_command(list(args), repo.brave)
+
+    def test_previous_version_commit(self):
+        repo = self.fake_chromium_src
+        repo.update_brave_version('1.0.0.0')
+        base = self._commit_file('base.txt')
+        self._git('checkout', '-q', '-b', 'feature')
+        major_bump = repo.update_brave_version('2.0.0.0')
+        self._commit_file('fix.txt')
+        repo.update_brave_version('2.0.0.5')
+        self._commit_file('own.txt')
+        self._git('checkout', '-q', 'master')
+
+        # From a ref other than HEAD, past the branch's own commits.
+        self.assertEqual(base, previous_version_commit('feature', major=True))
+        self.assertEqual(
+            self._git('rev-parse', 'feature~2'),
+            previous_version_commit('feature'),
+        )
+        self.assertEqual(major_bump, self._git('rev-parse', 'feature~3'))
+
+    def test_branch_start_holds_when_the_base_is_rewritten(self):
+        repo = self.fake_chromium_src
+        repo.update_brave_version('1.0.0.0')
+        base = self._commit_file('base.txt')
+        self._git('checkout', '-q', '-b', 'feature')
+        repo.update_brave_version('2.0.0.0')
+        self._commit_file('own.txt')
+        # The base drops its last commit and moves on: the merge-base falls
+        # behind where the branch's own commits start.
+        self._git('checkout', '-q', 'master')
+        self._git('reset', '-q', '--hard', 'HEAD~1')
+        self._commit_file('rewritten.txt')
+        self.assertNotEqual(base, self._git('merge-base', 'master', 'feature'))
+
+        self.assertEqual(base, branch_start('feature', 'master'))
+
+    def test_branch_start_on_a_base_of_the_same_major(self):
+        repo = self.fake_chromium_src
+        repo.update_brave_version('2.0.0.0')
+        self._git('checkout', '-q', '-b', 'feature')
+        minor_bump = repo.update_brave_version('2.0.0.5')
+        self._commit_file('own.txt')
+
+        # Only the commits since the last bump are the branch's own.
+        self.assertEqual(
+            self._git('rev-parse', f'{minor_bump}~1'),
+            branch_start('feature', 'master'),
+        )
 
 
 if __name__ == "__main__":

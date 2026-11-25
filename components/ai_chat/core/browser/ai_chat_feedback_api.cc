@@ -8,7 +8,6 @@
 #include <string_view>
 #include <utility>
 
-#include "base/containers/checked_iterators.h"
 #include "base/containers/flat_map.h"
 #include "base/json/json_writer.h"
 #include "base/memory/scoped_refptr.h"
@@ -81,14 +80,14 @@ AIChatFeedbackAPI::~AIChatFeedbackAPI() = default;
 void AIChatFeedbackAPI::SendRating(
     bool is_liked,
     bool is_premium,
-    const base::span<const mojom::ConversationTurnPtr>& history,
+    const EngineConsumer::ConversationHistoryView& history,
     const std::string& model_name,
     api_request_helper::APIRequestHelper::ResultCallback on_complete_callback) {
   base::DictValue payload;
 
   base::ListValue chat;
   int id = 0;
-  for (auto& turn : history) {
+  for (const mojom::ConversationTurn* turn : history) {
     base::DictValue turn_dict;
     turn_dict.Set("id", id);
     turn_dict.Set("type", turn->character_type == mojom::CharacterType::HUMAN

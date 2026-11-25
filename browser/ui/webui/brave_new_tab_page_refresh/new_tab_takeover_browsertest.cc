@@ -3,38 +3,55 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+#include <algorithm>
+#include <string>
+#include <string_view>
+
 #include "base/callback_list.h"
+#include "base/location.h"
 #include "base/path_service.h"
 #include "base/test/gmock_callback_support.h"
+#include "base/test/run_until.h"
+#include "base/test/scoped_feature_list.h"
 #include "brave/browser/brave_ads/ads_service_factory.h"
+#include "brave/browser/brave_browser_features.h"
 #include "brave/browser/brave_browser_process.h"
 #include "brave/components/brave_ads/core/browser/service/ads_service.h"
 #include "brave/components/brave_ads/core/browser/service/test/ads_service_mock.h"
+#include "brave/components/brave_ads/core/mojom/brave_ads.mojom.h"
 #include "brave/components/constants/brave_paths.h"
 #include "brave/components/ntp_background_images/browser/features.h"
 #include "brave/components/ntp_background_images/browser/ntp_background_images_service.h"
 #include "brave/components/ntp_background_images/browser/ntp_background_images_service_waiter.h"
 #include "brave/components/ntp_background_images/browser/switches.h"
+#include "brave/components/ntp_background_images/common/pref_names.h"
 #include "chrome/browser/profiles/keep_alive/profile_keep_alive_types.h"
 #include "chrome/browser/profiles/keep_alive/scoped_profile_keep_alive.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/sessions/session_restore.h"
 #include "chrome/browser/sessions/session_restore_test_helper.h"
-#include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_commands.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
+#include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/common/webui_url_constants.h"
 #include "chrome/test/base/chrome_test_utils.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
+#include "components/infobars/content/content_infobar_manager.h"
+#include "components/infobars/core/infobar.h"
+#include "components/infobars/core/infobar_delegate.h"
 #include "components/keep_alive_registry/keep_alive_types.h"
 #include "components/keep_alive_registry/scoped_keep_alive.h"
 #include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "components/keyed_service/core/keyed_service.h"
+#include "components/prefs/pref_service.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
 #include "content/public/test/test_navigation_observer.h"
+#include "ui/base/mojom/window_open_disposition.mojom.h"
 #include "url/gurl.h"
 
 namespace {
@@ -50,6 +67,21 @@ void OnWillCreateBrowserContextServices(
       context, base::BindRepeating(&CreateAdsService));
 }
 
+brave_ads::mojom::NewTabPageAdInfoPtr BuildNewTabPageAd() {
+  brave_ads::mojom::NewTabPageAdInfoPtr ad =
+      brave_ads::mojom::NewTabPageAdInfo::New();
+  ad->placement_id = "326eb47b-467b-46ab-ac1b-5f5de780b344";
+  ad->creative_instance_id = "aa0b561e-9eed-4aaa-8999-5627bc6b14fd";
+  ad->creative_set_id = "34ab06be-c9ed-4104-9ce0-9e639f4ad272";
+  ad->campaign_id = "65933e82-6b21-440b-9956-c0f675ca7435";
+  ad->advertiser_id = "496b045a-195e-441f-b439-07bac083450f";
+  ad->segment = "untargeted";
+  ad->target_url = GURL("https://basicattentiontoken.org");
+  ad->company_name = "Image NTT Creative";
+  ad->alt = "Some content";
+  return ad;
+}
+
 }  // namespace
 
 class NewTabTakeoverBrowserTest : public InProcessBrowserTest {
@@ -60,16 +92,20 @@ class NewTabTakeoverBrowserTest : public InProcessBrowserTest {
     // for tests, so the view counter is not incremented when trying to display
     // NTP background.
     // TODO(https://github.com/brave/brave-browser/issues/51437): Add proper
-    // values for kInitialCountToBrandedWallpaper and kCountToBrandedWallpaper
-    // once NTP background images data is available for tests.
+    // values for kInitialCountToNewTabTakeoverWallpaper and
+    // kCountToNewTabTakeoverWallpaper once NTP background images data is
+    // available for tests.
     base::FieldTrialParams parameters;
     std::vector<base::test::FeatureRefAndParams> enabled_features;
-    parameters[ntp_background_images::features::kInitialCountToBrandedWallpaper
+    parameters[ntp_background_images::features::
+                   kInitialCountToNewTabTakeoverWallpaper.name] = "1";
+    parameters[ntp_background_images::features::kCountToNewTabTakeoverWallpaper
                    .name] = "1";
-    parameters[ntp_background_images::features::kCountToBrandedWallpaper.name] =
-        "1";
     enabled_features.emplace_back(
-        ntp_background_images::features::kBraveNTPBrandedWallpaper, parameters);
+        ntp_background_images::features::kBraveNTPNewTabTakeoverWallpaper,
+        parameters);
+    enabled_features.emplace_back(features::kBraveNewTabPageRefreshEnabled,
+                                  base::FieldTrialParams());
     feature_list_.InitWithFeaturesAndParameters(enabled_features, {});
   }
   ~NewTabTakeoverBrowserTest() override = default;
@@ -83,7 +119,8 @@ class NewTabTakeoverBrowserTest : public InProcessBrowserTest {
     const base::FilePath component_file_path =
         test_data_file_path.AppendASCII("components")
             .AppendASCII("ntp_sponsored_images")
-            .AppendASCII("image");
+            .AppendASCII("new_tab_takeover")
+            .AppendASCII(GetComponentDataDirectoryName());
     base::CommandLine::ForCurrentProcess()->AppendSwitchPath(
         ntp_background_images::switches::kOverrideSponsoredImagesComponentPath,
         component_file_path);
@@ -154,6 +191,56 @@ class NewTabTakeoverBrowserTest : public InProcessBrowserTest {
                     .ExtractBool());
   }
 
+  void WaitForElement(std::string_view selector,
+                      base::Location location = base::Location::Current()) {
+    SCOPED_TRACE(location.ToString());
+    const std::string script = content::JsReplace(R"(
+      new Promise((resolve) => {
+        const isElementPresent = () => !!document.querySelector($1);
+        if (isElementPresent()) {
+          resolve(true);
+          return;
+        }
+        const observer = new MutationObserver(() => {
+          if (isElementPresent()) {
+            observer.disconnect();
+            resolve(true);
+          }
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+      })
+    )",
+                                                  selector);
+    EXPECT_TRUE(content::EvalJs(GetActiveWebContents(), script).ExtractBool());
+  }
+
+  void WaitForNewTabTakeoverDisclosureLabel(
+      base::Location location = base::Location::Current()) {
+    WaitForElement(".new-tab-takeover-disclosure", location);
+  }
+
+  bool HasNewTabTakeoverDisclosureLabel() {
+    return content::EvalJs(
+               GetActiveWebContents(),
+               "!!document.querySelector('.new-tab-takeover-disclosure')")
+        .ExtractBool();
+  }
+
+  bool HasNewTabTakeoverInfoBar() {
+    infobars::ContentInfoBarManager* const infobar_manager =
+        infobars::ContentInfoBarManager::FromWebContents(
+            GetActiveWebContents());
+    CHECK(infobar_manager);
+    return std::ranges::any_of(
+        infobar_manager->infobars(), [](const infobars::InfoBar* infobar) {
+          return infobar->delegate()->GetIdentifier() ==
+                 infobars::InfoBarDelegate::NEW_TAB_TAKEOVER_INFOBAR_DELEGATE;
+        });
+  }
+
+ protected:
+  virtual std::string GetComponentDataDirectoryName() { return "static"; }
+
  private:
   base::test::ScopedFeatureList feature_list_;
   base::CallbackListSubscription callback_list_subscription_;
@@ -171,6 +258,128 @@ IN_PROC_BROWSER_TEST_F(NewTabTakeoverBrowserTest,
 
   OpenNewTabAndWaitForLoad();
   VerifyNewTabPageLoadedExpectation();
+}
+
+IN_PROC_BROWSER_TEST_F(NewTabTakeoverBrowserTest,
+                       DisplaysDisclosureLabelForStaticNewTabTakeover) {
+  ON_CALL(GetAdsServiceMock(), GetStatementOfAccounts(::testing::_))
+      .WillByDefault([](brave_ads::GetStatementOfAccountsCallback callback) {
+        std::move(callback).Run(/*mojom_statement=*/nullptr);
+      });
+
+  EXPECT_CALL(GetAdsServiceMock(), MaybeServeNewTabPageAd)
+      .WillOnce(base::test::RunOnceCallback<0>(BuildNewTabPageAd()));
+
+  OpenNewTabAndWaitForLoad();
+  VerifyNewTabPageLoadedExpectation();
+  WaitForNewTabTakeoverDisclosureLabel();
+}
+
+IN_PROC_BROWSER_TEST_F(
+    NewTabTakeoverBrowserTest,
+    DecrementsRemainingDisplayCountWhenDisclosureTooltipIsAutoDisplayed) {
+  ON_CALL(GetAdsServiceMock(), GetStatementOfAccounts(::testing::_))
+      .WillByDefault([](brave_ads::GetStatementOfAccountsCallback callback) {
+        std::move(callback).Run(/*mojom_statement=*/nullptr);
+      });
+
+  EXPECT_CALL(GetAdsServiceMock(), MaybeServeNewTabPageAd)
+      .WillOnce(base::test::RunOnceCallback<0>(BuildNewTabPageAd()));
+
+  PrefService* const prefs = GetProfile()->GetPrefs();
+  const int initial_count =
+      prefs->GetInteger(ntp_background_images::prefs::
+                            kNewTabTakeoverInfobarRemainingDisplayCount);
+
+  OpenNewTabAndWaitForLoad();
+  VerifyNewTabPageLoadedExpectation();
+  WaitForNewTabTakeoverDisclosureLabel();
+
+  ASSERT_TRUE(base::test::RunUntil([&] {
+    return prefs->GetInteger(ntp_background_images::prefs::
+                                 kNewTabTakeoverInfobarRemainingDisplayCount) <
+           initial_count;
+  }));
+}
+
+IN_PROC_BROWSER_TEST_F(NewTabTakeoverBrowserTest,
+                       DoesNotDisplayInfobarForNewTabTakeover) {
+  ON_CALL(GetAdsServiceMock(), GetStatementOfAccounts(::testing::_))
+      .WillByDefault([](brave_ads::GetStatementOfAccountsCallback callback) {
+        std::move(callback).Run(/*mojom_statement=*/nullptr);
+      });
+
+  EXPECT_CALL(GetAdsServiceMock(), MaybeServeNewTabPageAd)
+      .WillOnce(base::test::RunOnceCallback<0>(BuildNewTabPageAd()));
+
+  OpenNewTabAndWaitForLoad();
+  VerifyNewTabPageLoadedExpectation();
+  WaitForNewTabTakeoverDisclosureLabel();
+
+  EXPECT_FALSE(HasNewTabTakeoverInfoBar());
+}
+
+IN_PROC_BROWSER_TEST_F(
+    NewTabTakeoverBrowserTest,
+    SuppressesDisclosureTooltipAutoDisplayWhenLearnMoreIsClicked) {
+  ON_CALL(GetAdsServiceMock(), GetStatementOfAccounts(::testing::_))
+      .WillByDefault([](brave_ads::GetStatementOfAccountsCallback callback) {
+        std::move(callback).Run(/*mojom_statement=*/nullptr);
+      });
+
+  EXPECT_CALL(GetAdsServiceMock(), MaybeServeNewTabPageAd)
+      .WillOnce(base::test::RunOnceCallback<0>(BuildNewTabPageAd()));
+
+  OpenNewTabAndWaitForLoad();
+  VerifyNewTabPageLoadedExpectation();
+  WaitForNewTabTakeoverDisclosureLabel();
+
+  ASSERT_TRUE(content::ExecJs(
+      GetActiveWebContents(),
+      "document.querySelector('.new-tab-takeover-disclosure-tooltip a')"
+      ".click()"));
+
+  PrefService* const prefs = GetProfile()->GetPrefs();
+  EXPECT_TRUE(base::test::RunUntil([&] {
+    return prefs->GetInteger(ntp_background_images::prefs::
+                                 kNewTabTakeoverInfobarRemainingDisplayCount) ==
+           0;
+  }));
+}
+
+IN_PROC_BROWSER_TEST_F(NewTabTakeoverBrowserTest,
+                       NavigatesCurrentTabWhenDisclosureLearnMoreIsClicked) {
+  ON_CALL(GetAdsServiceMock(), GetStatementOfAccounts(::testing::_))
+      .WillByDefault([](brave_ads::GetStatementOfAccountsCallback callback) {
+        std::move(callback).Run(/*mojom_statement=*/nullptr);
+      });
+
+  EXPECT_CALL(GetAdsServiceMock(), MaybeServeNewTabPageAd)
+      .WillOnce(base::test::RunOnceCallback<0>(BuildNewTabPageAd()));
+
+  OpenNewTabAndWaitForLoad();
+  VerifyNewTabPageLoadedExpectation();
+  WaitForNewTabTakeoverDisclosureLabel();
+
+  const int tab_count = browser()->GetTabStripModel()->count();
+  const GURL learn_more_url(
+      content::EvalJs(
+          GetActiveWebContents(),
+          "document.querySelector('.new-tab-takeover-disclosure-tooltip a')"
+          ".href")
+          .ExtractString());
+  EXPECT_TRUE(learn_more_url.is_valid());
+  content::TestNavigationObserver navigation_observer(learn_more_url);
+  navigation_observer.WatchExistingWebContents();
+
+  ASSERT_TRUE(content::ExecJs(
+      GetActiveWebContents(),
+      "document.querySelector('.new-tab-takeover-disclosure-tooltip a')"
+      ".click()"));
+  navigation_observer.Wait();
+
+  EXPECT_EQ(tab_count, browser()->GetTabStripModel()->count());
+  EXPECT_EQ(learn_more_url, GetActiveWebContents()->GetLastCommittedURL());
 }
 
 IN_PROC_BROWSER_TEST_F(NewTabTakeoverBrowserTest,
@@ -195,7 +404,111 @@ IN_PROC_BROWSER_TEST_F(NewTabTakeoverBrowserTest,
 
   EXPECT_CALL(ads_service_mock, MaybeServeNewTabPageAd)
       .WillOnce(base::test::RunOnceCallback<0>(/*ad=*/nullptr));
-  chrome::Reload(browser(), WindowOpenDisposition::CURRENT_TAB);
+  chrome::Reload(browser(), ui::mojom::WindowOpenDisposition::kCurrentTab);
   WaitForLoadStop();
   VerifyNewTabPageLoadedExpectation();
+}
+
+class DynamicNewTabTakeoverBrowserTest : public NewTabTakeoverBrowserTest {
+ protected:
+  std::string GetComponentDataDirectoryName() override { return "dynamic"; }
+};
+
+IN_PROC_BROWSER_TEST_F(DynamicNewTabTakeoverBrowserTest,
+                       DisplaysDisclosureLabelForDynamicNewTabTakeover) {
+  ON_CALL(GetAdsServiceMock(), GetStatementOfAccounts(::testing::_))
+      .WillByDefault([](brave_ads::GetStatementOfAccountsCallback callback) {
+        std::move(callback).Run(/*mojom_statement=*/nullptr);
+      });
+
+  EXPECT_CALL(GetAdsServiceMock(), MaybeServeNewTabPageAd)
+      .WillOnce(base::test::RunOnceCallback<0>(BuildNewTabPageAd()));
+
+  OpenNewTabAndWaitForLoad();
+  VerifyNewTabPageLoadedExpectation();
+  WaitForNewTabTakeoverDisclosureLabel();
+}
+
+class ProductCampaignNewTabTakeoverBrowserTest
+    : public NewTabTakeoverBrowserTest {
+ protected:
+  std::string GetComponentDataDirectoryName() override {
+    return "product_campaign";
+  }
+};
+
+IN_PROC_BROWSER_TEST_F(
+    ProductCampaignNewTabTakeoverBrowserTest,
+    DoesNotDisplayDisclosureForProductCampaignNewTabTakeover) {
+  ON_CALL(GetAdsServiceMock(), GetStatementOfAccounts(::testing::_))
+      .WillByDefault([](brave_ads::GetStatementOfAccountsCallback callback) {
+        std::move(callback).Run(/*mojom_statement=*/nullptr);
+      });
+
+  EXPECT_CALL(GetAdsServiceMock(), MaybeServeNewTabPageAd)
+      .WillOnce(base::test::RunOnceCallback<0>(BuildNewTabPageAd()));
+
+  PrefService* const prefs = GetProfile()->GetPrefs();
+  const int initial_display_count =
+      prefs->GetInteger(ntp_background_images::prefs::
+                            kNewTabTakeoverInfobarRemainingDisplayCount);
+
+  OpenNewTabAndWaitForLoad();
+  VerifyNewTabPageLoadedExpectation();
+  WaitForElement(".sponsored-logo");
+
+  EXPECT_FALSE(HasNewTabTakeoverDisclosureLabel());
+  EXPECT_EQ(initial_display_count,
+            prefs->GetInteger(ntp_background_images::prefs::
+                                  kNewTabTakeoverInfobarRemainingDisplayCount));
+}
+
+class NewTabTakeoverForLegacyNewTabPageBrowserTest
+    : public NewTabTakeoverBrowserTest {
+ public:
+  NewTabTakeoverForLegacyNewTabPageBrowserTest() {
+    new_tab_page_refresh_feature_list_.InitAndDisableFeature(
+        features::kBraveNewTabPageRefreshEnabled);
+  }
+
+ private:
+  base::test::ScopedFeatureList new_tab_page_refresh_feature_list_;
+};
+
+IN_PROC_BROWSER_TEST_F(NewTabTakeoverForLegacyNewTabPageBrowserTest,
+                       DisplaysInfobarForNewTabTakeover) {
+  ON_CALL(GetAdsServiceMock(), GetStatementOfAccounts(::testing::_))
+      .WillByDefault([](brave_ads::GetStatementOfAccountsCallback callback) {
+        std::move(callback).Run(/*mojom_statement=*/nullptr);
+      });
+
+  EXPECT_CALL(GetAdsServiceMock(), MaybeServeNewTabPageAd)
+      .WillOnce(base::test::RunOnceCallback<0>(BuildNewTabPageAd()));
+
+  OpenNewTabAndWaitForLoad();
+
+  EXPECT_TRUE(base::test::RunUntil([&] { return HasNewTabTakeoverInfoBar(); }));
+}
+
+IN_PROC_BROWSER_TEST_F(NewTabTakeoverForLegacyNewTabPageBrowserTest,
+                       DecrementsRemainingDisplayCountWhenInfobarIsDisplayed) {
+  ON_CALL(GetAdsServiceMock(), GetStatementOfAccounts(::testing::_))
+      .WillByDefault([](brave_ads::GetStatementOfAccountsCallback callback) {
+        std::move(callback).Run(/*mojom_statement=*/nullptr);
+      });
+
+  EXPECT_CALL(GetAdsServiceMock(), MaybeServeNewTabPageAd)
+      .WillOnce(base::test::RunOnceCallback<0>(BuildNewTabPageAd()));
+
+  PrefService* const prefs = GetProfile()->GetPrefs();
+  const int initial_count =
+      prefs->GetInteger(ntp_background_images::prefs::
+                            kNewTabTakeoverInfobarRemainingDisplayCount);
+
+  OpenNewTabAndWaitForLoad();
+  ASSERT_TRUE(base::test::RunUntil([&] { return HasNewTabTakeoverInfoBar(); }));
+
+  EXPECT_EQ(initial_count - 1,
+            prefs->GetInteger(ntp_background_images::prefs::
+                                  kNewTabTakeoverInfobarRemainingDisplayCount));
 }

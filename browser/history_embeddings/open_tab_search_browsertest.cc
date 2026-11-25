@@ -21,7 +21,6 @@
 #include "brave/components/history_embeddings/test/fake_history_embeddings_search.h"
 #include "chrome/browser/history/history_service_factory.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
@@ -37,6 +36,7 @@
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/base/mojom/window_open_disposition.mojom.h"
 #include "ui/base/page_transition_types.h"
 #include "url/gurl.h"
 
@@ -82,7 +82,7 @@ class OpenTabSearchBrowserTest : public InProcessBrowserTest {
                  const GURL& url,
                  const std::string& title) {
     ui_test_utils::NavigateToURLWithDisposition(
-        target, url, WindowOpenDisposition::NEW_FOREGROUND_TAB,
+        target, url, ui::mojom::WindowOpenDisposition::kNewForegroundTab,
         ui_test_utils::BROWSER_TEST_WAIT_FOR_LOAD_STOP);
     content::WebContents* contents =
         target->tab_strip_model()->GetActiveWebContents();
@@ -201,7 +201,6 @@ IN_PROC_BROWSER_TEST_F(OpenTabSearchBrowserTest, RanksAndDropsUnmatchedTabs) {
   const std::vector<OpenTabInfo> ranked = future.Take();
 
   // Every eligible open tab is offered to `Search()` for scoring...
-  EXPECT_TRUE(fake.last_skip_answering());
   EXPECT_THAT(
       fake.last_url_id_filter(),
       testing::UnorderedElementsAre(foo_url_id, bar_url_id, baz_url_id));

@@ -20,7 +20,12 @@
 #include "brave/browser/ui/webui/brave_wallet/line_chart/line_chart_ui.h"
 #include "brave/browser/ui/webui/brave_wallet/market/market_ui.h"
 #include "brave/browser/ui/webui/brave_wallet/nft/nft_ui.h"
+#include "brave/browser/ui/webui/brave_wallet/polkadot/polkadot_ui.h"
 #include "brave/browser/ui/webui/brave_wallet/trezor/trezor_ui.h"
+#include "brave/components/brave_wallet/common/common_utils.h"
+#if BUILDFLAG(ENABLE_SNAP)
+#include "brave/browser/ui/webui/brave_wallet/snap_host/snap_host_ui.h"
+#endif  // BUILDFLAG(ENABLE_SNAP)
 #endif
 
 #if BUILDFLAG(ENABLE_AI_CHAT)
@@ -53,15 +58,11 @@
 #include "brave/components/local_ai/core/features.h"
 #endif
 
-#define RegisterChromeUntrustedWebUIConfigs \
-  RegisterChromeUntrustedWebUIConfigs_ChromiumImpl
+namespace {
 
-#include <chrome/browser/ui/webui/chrome_untrusted_web_ui_configs.cc>
-
-#undef RegisterChromeUntrustedWebUIConfigs
-
-void RegisterChromeUntrustedWebUIConfigs() {
-  RegisterChromeUntrustedWebUIConfigs_ChromiumImpl();
+// Called at the end of RegisterChromeUntrustedWebUIConfigs() via the rewrite/
+// plaster.
+void RegisterBraveUntrustedWebUIConfigs() {
 #if BUILDFLAG(ENABLE_BRAVE_WALLET)
   content::WebUIConfigMap::GetInstance().AddUntrustedWebUIConfig(
       std::make_unique<market::UntrustedMarketUIConfig>());
@@ -74,6 +75,14 @@ void RegisterChromeUntrustedWebUIConfigs() {
       std::make_unique<ledger::UntrustedLedgerUIConfig>());
   content::WebUIConfigMap::GetInstance().AddUntrustedWebUIConfig(
       std::make_unique<trezor::UntrustedTrezorUIConfig>());
+#if BUILDFLAG(ENABLE_SNAP)
+  if (brave_wallet::IsSnapFeatureEnabled()) {
+    content::WebUIConfigMap::GetInstance().AddUntrustedWebUIConfig(
+        std::make_unique<snap_host::UntrustedSnapHostUIConfig>());
+  }
+#endif  // BUILDFLAG(ENABLE_SNAP)
+  content::WebUIConfigMap::GetInstance().AddUntrustedWebUIConfig(
+      std::make_unique<polkadot::UntrustedPolkadotUIConfig>());
 #endif  // !BUILDFLAG(IS_ANDROID)
 #endif  // BUILDFLAG(ENABLE_BRAVE_WALLET)
 #if BUILDFLAG(ENABLE_LOCAL_AI)
@@ -118,3 +127,7 @@ void RegisterChromeUntrustedWebUIConfigs() {
   }
 #endif  // BUILDFLAG(ENABLE_BRAVE_NEWS) && !BUILDFLAG(IS_ANDROID)
 }
+
+}  // namespace
+
+#include <chrome/browser/ui/webui/chrome_untrusted_web_ui_configs.cc>

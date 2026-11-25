@@ -7,6 +7,7 @@ import { createSlice, PayloadAction } from '@reduxjs/toolkit'
 
 import {
   BraveWallet,
+  HardwareWalletOperation,
   HardwareWalletResponseCodeType,
   PanelState,
   PanelTypes,
@@ -33,6 +34,7 @@ const defaultState: PanelState = {
   selectedPanel,
   connectingAccounts: [],
   hardwareWalletCode: undefined,
+  hardwareWalletOperation: undefined,
 }
 
 export const createPanelSlice = (initialState: PanelState = defaultState) => {
@@ -40,8 +42,26 @@ export const createPanelSlice = (initialState: PanelState = defaultState) => {
     name: 'panel',
     initialState,
     reducers: {
+      setHasInitialized(state) {
+        state.hasInitialized = true
+      },
       navigateTo(state, action: PayloadAction<PanelTypes>) {
+        // A different panel is a new session. Drop the bound operation so the
+        // next hardware attempt can record the request that opened it.
+        if (action.payload !== state.selectedPanel) {
+          state.hardwareWalletOperation = undefined
+        }
         state.selectedPanel = action.payload
+      },
+      setHardwareWalletOperation(
+        state,
+        action: PayloadAction<HardwareWalletOperation>,
+      ) {
+        // First writer wins. A retry must not retarget the panel.
+        if (state.hardwareWalletOperation) {
+          return
+        }
+        state.hardwareWalletOperation = action.payload
       },
       showConnectToSite(
         state,

@@ -1,0 +1,18 @@
+# Copyright (c) 2026 The Brave Authors. All rights reserved.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this file,
+# You can obtain one at https://mozilla.org/MPL/2.0/.
+
+substitutions:
+  - description: |
+      Place the screenshot overlay at the native window's origin.
+
+      The overlay is a child of `native_window->layer()`, whose coordinates are
+      relative to the window, while `native_window->bounds()` is relative to its
+      parent, so using it offsets the overlay from the cursor by the window's
+      origin. CreateAndAddUIOverlay() and ResetUIOverlayBounds() both compute
+      the bounds. See https://github.com/brave/brave-browser/issues/58258.
+    count: 2
+    regex:
+      pattern: 'const gfx::Rect bounds = native_window->bounds();'
+      replace: 'const gfx::Rect bounds(native_window->bounds().size());'

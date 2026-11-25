@@ -19,6 +19,7 @@ import {
   SendZecTransactionParams,
   SendCardanoTransactionParams,
   SendPolkadotTransactionParams,
+  PanelState,
   SerializableTransactionInfo,
   SPLTransferFromParams,
   TransactionInfoLookup,
@@ -51,7 +52,6 @@ import { makeSerializableTransaction } from '../../../utils/model-serialization-
 import { getCoinFromTxDataUnion } from '../../../utils/network-utils'
 import { TX_CACHE_TAGS } from '../../../utils/query-cache-utils'
 import { sortTransactionByDate } from '../../../utils/tx-utils'
-import { getIsBraveWalletOrigin } from '../../../utils/string-utils'
 import {
   signLedgerEthereumTransaction,
   signLedgerFilecoinTransaction,
@@ -495,7 +495,11 @@ export const transactionEndpoints = ({
           }
 
           if (panelHandler) {
-            navigateToConnectHardwareWallet(store)
+            navigateToConnectHardwareWallet(store, {
+              type: 'signSolTransactions',
+              id: arg.request.id,
+              accountUniqueKey: arg.request.fromAccountId.uniqueKey,
+            })
           }
 
           // Send serialized requests to hardware keyring to sign.
@@ -528,6 +532,26 @@ export const transactionEndpoints = ({
             payload,
             panelHandler,
           )
+
+          // The request is finished, and retry will not run a signSolTransactions
+          // operation. Leave the hardware panel when another request is still
+          // queued so its own confirmation can show. Skip this when the queue
+          // is empty: processSignSolTransactionsRequest already closed the
+          // panel, and navigateToMain would open it again. Read the bound
+          // operation after the pending-request lookup so a cancel that opens
+          // a newer hardware operation is not cleared by this completion.
+          const hasPendingRequests = await getHasPendingRequests()
+          const { panel } = store.getState() as { panel: PanelState }
+          const operation = panel.hardwareWalletOperation
+          if (
+            hasPendingRequests
+            && operation?.type === 'signSolTransactions'
+            && operation.id === arg.request.id
+            && operation.accountUniqueKey
+              === arg.request.fromAccountId.uniqueKey
+          ) {
+            store.dispatch(PanelActions.navigateToMain())
+          }
 
           return {
             data: {
@@ -1211,7 +1235,11 @@ export const transactionEndpoints = ({
             foundAccount.hardware
 
           if (apiProxy.panelHandler) {
-            navigateToConnectHardwareWallet(store)
+            navigateToConnectHardwareWallet(store, {
+              type: 'transaction',
+              id: txInfo.id,
+              accountUniqueKey: txInfo.fromAccountId.uniqueKey,
+            })
           }
 
           if (hardwareAccount.vendor === BraveWallet.HardwareVendor.kLedger) {
@@ -1677,8 +1705,7 @@ export const transactionEndpoints = ({
         const { ui } = api.getState() as { ui: { isMobile: boolean } }
         // Desktop-only: wallet-origin txs confirm in-page. Mobile (Android /
         // iOS) still opens the native approve panel for all origins.
-        const isWalletOrigin =
-          !!arg.originInfo && getIsBraveWalletOrigin(arg.originInfo)
+        const isWalletOrigin = !arg.dappOriginInfo
         if (pageHandler && (ui.isMobile || !isWalletOrigin)) {
           pageHandler.showApprovePanelUI()
         }

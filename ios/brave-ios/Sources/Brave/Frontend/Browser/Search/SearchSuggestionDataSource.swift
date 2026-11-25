@@ -49,38 +49,36 @@ class SearchSuggestionDataSource {
 
   let searchEngines: SearchEngines?
 
-  var quickSearchEngines: [OpenSearchEngine] {
-    guard let searchEngines else { return [] }
-    var quickSearchEngines = searchEngines.quickSearchEngines
-    let searchEngineType: DefaultEngineType = isPrivate ? .privateMode : .standard
-    if let defaultEngine = searchEngines.defaultEngine(forType: searchEngineType),
-      !quickSearchEngines.contains(where: { $0.engineID == defaultEngine.engineID })
-    {
-      quickSearchEngines.insert(defaultEngine, at: 0)
-    }
-    return quickSearchEngines
+  private var defaultEngine: OpenSearchEngine? {
+    searchEngines?.defaultEngine(forType: isPrivate ? .privateMode : .standard)
+  }
+
+  /// The default engine is pinned first — it is in the row regardless of the disabled list —
+  /// followed by the remaining enabled engines. Leo is prepended separately by the view.
+  var quickSearchItems: [QuickSearchItem] {
+    guard let searchEngines, let defaultEngine else { return [] }
+    let others = QuickSearchItem.quickSearchCatalog(
+      from: searchEngines.orderedEngines,
+      excludingDefault: defaultEngine
+    )
+    .filteringQuickSearchDisabled()
+    return [QuickSearchItem(source: .engine(defaultEngine))] + others
   }
 
   // If the user only has a single quick search engine, it is also their default one.
   // In that case, we count it as if there are no quick suggestions to show
   // Unless Default Search Engine is different than Quick Search Engine
   var hasQuickSearchEngines: Bool {
-    let isDefaultEngineQuickEngine =
-      searchEngines?.defaultEngine(forType: isPrivate ? .privateMode : .standard)?
-      .engineID
-      == quickSearchEngines.first?.engineID
-
-    if quickSearchEngines.count == 1 {
-      return !isDefaultEngineQuickEngine
+    let items = quickSearchItems
+    if items.count == 1 {
+      return items.first?.id != defaultEngine.map(QuickSearchItemID.init(engine:))
     }
-
-    return quickSearchEngines.count > 1
+    return items.count > 1
   }
 
   var braveSearchPromotionAvailable: Bool {
     guard Preferences.Review.launchCount.value > 1,
-      searchEngines?.defaultEngine(forType: isPrivate ? .privateMode : .standard)?
-        .shortName != OpenSearchEngine.EngineNames.brave,
+      defaultEngine?.shortName != OpenSearchEngine.EngineNames.brave,
       let braveSearchPromotionLaunchDate = Preferences.BraveSearch.braveSearchPromotionLaunchDate
         .value,
       Preferences.BraveSearch.braveSearchPromotionCompletionState.value

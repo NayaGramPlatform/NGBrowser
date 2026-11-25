@@ -15,7 +15,10 @@ import { clickLeoButton } from './test_utils'
 import {
   Alias,
   EmailAliasesServiceInterface,
-} from 'gen/brave/components/email_aliases/email_aliases.mojom.m'
+  DEFAULT_MAX_ALIASES,
+} from 'gen/brave/components/email_aliases/email_aliases.mojom-webui.js'
+
+const MAX_ALIASES = 5
 
 const emptyResultPromise = Promise.resolve({})
 
@@ -56,6 +59,7 @@ describe('EmailAliasModal', () => {
     render(
       <EmailAliasModal
         editing={false}
+        aliasLimit={MAX_ALIASES}
         mainEmail={mockEmail}
         onReturnToMain={mockOnReturnToMain}
         emailAliasesService={mockEmailAliasesService}
@@ -83,6 +87,7 @@ describe('EmailAliasModal', () => {
     render(
       <EmailAliasModal
         editing={true}
+        aliasLimit={MAX_ALIASES}
         editAlias={mockEditAlias}
         mainEmail={mockEmail}
         onReturnToMain={mockOnReturnToMain}
@@ -153,6 +158,7 @@ describe('EmailAliasModal', () => {
     render(
       <EmailAliasModal
         editing={false}
+        aliasLimit={MAX_ALIASES}
         mainEmail={mockEmail}
         onReturnToMain={mockOnReturnToMain}
         emailAliasesService={mockEmailAliasesService}
@@ -196,6 +202,7 @@ describe('EmailAliasModal', () => {
     render(
       <EmailAliasModal
         editing={false}
+        aliasLimit={MAX_ALIASES}
         mainEmail={mockEmail}
         onReturnToMain={mockOnReturnToMain}
         emailAliasesService={mockEmailAliasesService}
@@ -225,8 +232,8 @@ describe('EmailAliasModal', () => {
   it('shows limit reached dialog in bubble mode without generating an alias', async () => {
     const atLimitAliases: Alias[] = Array.from({ length: 5 }, (_, i) => ({
       email: `alias-${i}@bravealias.com`,
-      note: undefined,
-      domains: undefined,
+      note: null,
+      domains: null,
     }))
 
     render(
@@ -234,6 +241,7 @@ describe('EmailAliasModal', () => {
         editing={false}
         mainEmail={mockEmail}
         aliases={atLimitAliases}
+        aliasLimit={MAX_ALIASES}
         onReturnToMain={mockOnReturnToMain}
         emailAliasesService={mockEmailAliasesService}
         bubble={true}
@@ -274,7 +282,7 @@ describe('EmailAliasModal', () => {
     const atLimitAliases: Alias[] = Array.from({ length: 5 }, (_, i) => ({
       email: `alias-${i}@bravealias.com`,
       note: 'Existing Alias',
-      domains: undefined,
+      domains: null,
     }))
 
     const mockEditAlias: Alias = {
@@ -289,6 +297,7 @@ describe('EmailAliasModal', () => {
         editAlias={mockEditAlias}
         mainEmail={mockEmail}
         aliases={atLimitAliases}
+        aliasLimit={MAX_ALIASES}
         onReturnToMain={mockOnReturnToMain}
         emailAliasesService={mockEmailAliasesService}
       />,
@@ -446,7 +455,7 @@ describe('EmailAliasModal', () => {
     await waitFor(() => {
       expect(mockEmailAliasesService.updateAlias).toHaveBeenCalledWith(
         'existing@brave.com',
-        { note: 'Existing Alias', active: undefined, domains: undefined },
+        { note: 'Existing Alias', active: null, domains: null },
       )
       expect(mockOnReturnToMain).toHaveBeenCalled()
     })
@@ -456,7 +465,7 @@ describe('EmailAliasModal', () => {
     {
       email: 'new@brave.com',
       note: 'New Alias',
-      domains: undefined,
+      domains: null,
     },
     {
       email: 'existing@brave.com',
@@ -478,6 +487,7 @@ describe('EmailAliasModal', () => {
       render(
         <EmailAliasModal
           editing={isEditing}
+          aliasLimit={MAX_ALIASES}
           editAlias={alias}
           mainEmail={mockEmail}
           onReturnToMain={mockOnReturnToMain}
@@ -541,6 +551,7 @@ describe('EmailAliasModal', () => {
     render(
       <EmailAliasModal
         editing={false}
+        aliasLimit={MAX_ALIASES}
         mainEmail={mockEmail}
         onReturnToMain={mockOnReturnToMain}
         emailAliasesService={mockEmailAliasesService}

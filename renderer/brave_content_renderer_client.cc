@@ -9,6 +9,7 @@
 #include <memory>
 #include <utility>
 
+#include "base/containers/flat_set.h"
 #include "base/feature_list.h"
 #include "brave/components/ai_chat/core/common/buildflags/buildflags.h"
 #include "brave/components/brave_news/renderer/rss_link_reader.h"
@@ -19,6 +20,7 @@
 #include "brave/components/cosmetic_filters/renderer/cosmetic_filters_js_render_frame_observer.h"
 #include "brave/components/misc_metrics/renderer/web3_metrics_render_frame_observer.h"
 #include "brave/components/playlist/core/common/buildflags/buildflags.h"
+#include "brave/components/psst/buildflags/buildflags.h"
 #include "brave/components/script_injector/renderer/script_injector_render_frame_observer.h"
 #include "brave/components/skus/common/features.h"
 #include "brave/components/skus/renderer/skus_render_frame_observer.h"
@@ -53,6 +55,11 @@
 #include "brave/components/playlist/core/common/features.h"
 #endif
 
+#if BUILDFLAG(ENABLE_PSST)
+#include "brave/components/psst/core/common/features.h"
+#include "brave/components/psst/renderer/psst_render_frame_observer.h"
+#endif
+
 #if BUILDFLAG(ENABLE_BRAVE_VPN)
 #include "brave/components/brave_vpn/common/brave_vpn_utils.h"
 #endif  // BUILDFLAG(ENABLE_BRAVE_VPN)
@@ -78,8 +85,10 @@
 #endif
 
 namespace {
-void MaybeRemoveWidevineSupport(media::GetSupportedKeySystemsCB cb,
-                                media::KeySystemInfos key_systems) {
+void MaybeRemoveWidevineSupport(
+    media::GetSupportedKeySystemsCB cb,
+    media::KeySystemInfos key_systems,
+    base::flat_set<std::string> pending_key_systems) {
 #if BUILDFLAG(ENABLE_WIDEVINE)
   auto dynamic_params = BraveRenderThreadObserver::GetDynamicParams();
   if (!dynamic_params.widevine_enabled) {
@@ -91,7 +100,7 @@ void MaybeRemoveWidevineSupport(media::GetSupportedKeySystemsCB cb,
     key_systems.erase(to_remove.begin(), to_remove.end());
   }
 #endif
-  cb.Run(std::move(key_systems));
+  cb.Run(std::move(key_systems), std::move(pending_key_systems));
 }
 
 class Web3MetricsDelegate
@@ -123,7 +132,6 @@ void BraveContentRendererClient::
   ChromeContentRendererClient::
       SetRuntimeFeaturesDefaultsBeforeBlinkInitialization();
 
-  blink::WebRuntimeFeatures::EnableFledge(false);
   // Disable the fenced frames API; kFencedFrames is disabled browser-side.
   blink::WebRuntimeFeatures::EnableFencedFrames(false);
   // Disable topics APIs because kBrowsingTopics feature is disabled
@@ -143,9 +151,6 @@ void BraveContentRendererClient::
 
   // These features don't have dedicated WebRuntimeFeatures wrappers.
   blink::WebRuntimeFeatures::EnableFeatureFromString("AdTagging", false);
-  blink::WebRuntimeFeatures::EnableFeatureFromString("AIClassifierAPI", false);
-  blink::WebRuntimeFeatures::EnableFeatureFromString(
-      "ApproximateGeolocationPermissionAccuracyMode", true);
   blink::WebRuntimeFeatures::EnableFeatureFromString("DigitalGoods", false);
   if (!base::FeatureList::IsEnabled(blink::features::kFileSystemAccessAPI)) {
     blink::WebRuntimeFeatures::EnableFeatureFromString("FileSystemAccessLocal",
@@ -153,18 +158,8 @@ void BraveContentRendererClient::
     blink::WebRuntimeFeatures::EnableFeatureFromString(
         "FileSystemAccessAPIExperimental", false);
   }
-  blink::WebRuntimeFeatures::EnableFeatureFromString("FledgeMultiBid", false);
   blink::WebRuntimeFeatures::EnableFeatureFromString("PrivateStateTokens",
                                                      false);
-  blink::WebRuntimeFeatures::EnableFeatureFromString("ProfilerAPI", false);
-
-#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
-  if (base::FeatureList::IsEnabled(
-          blink::features::kMiddleButtonClickAutoscroll)) {
-    blink::WebRuntimeFeatures::EnableFeatureFromString("MiddleClickAutoscroll",
-                                                       true);
-  }
-#endif  // BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
 }
 
 BraveContentRendererClient::~BraveContentRendererClient() = default;
@@ -257,6 +252,15 @@ void BraveContentRendererClient::RenderFrameCreated(
         ISOLATED_WORLD_ID_BRAVE_INTERNAL);
   }
 #endif  // BUILDFLAG(ENABLE_PLAYLIST)
+
+#if BUILDFLAG(ENABLE_PSST)
+  // Installs the script logging API in PSST's isolated world.
+  if (base::FeatureList::IsEnabled(psst::features::kEnablePsst) &&
+      !process_state::IsIncognitoProcess()) {
+    new psst::PsstRenderFrameObserver(render_frame,
+                                      ISOLATED_WORLD_ID_BRAVE_PSST);
+  }
+#endif  // BUILDFLAG(ENABLE_PSST)
 
 #if BUILDFLAG(ENABLE_AI_CHAT)
   if (ai_chat::features::IsAIChatEnabled() &&

@@ -12,6 +12,7 @@ sandbox/runner infrastructure is imported from cmd_test.
 
 import os
 import platform
+import re
 import stat
 import subprocess
 import sys
@@ -19,8 +20,9 @@ import unittest
 from pathlib import Path
 
 import _boot  # noqa: F401
-from cmd_test import (CMD_SCRIPT, _GIT_ENV_OVERRIDES, _Sandbox)
+from cmd_test import CMD_SCRIPT, _GIT_ENV_OVERRIDES, _Sandbox
 from alias.commit import _MarkChangeShortcut
+import pinned_commits
 
 # ---------------------------------------------------------------------------
 # Tests: flag pass-through
@@ -31,12 +33,8 @@ class TestFlagPassthrough(unittest.TestCase):
     """gc must strip its own flags and forward everything else to git."""
 
     def setUp(self) -> None:
-        self._sandbox = _Sandbox()
-        self._sandbox.__enter__()
+        self._sandbox = self.enterContext(_Sandbox())
         self._sandbox.install_hook()
-
-    def tearDown(self) -> None:
-        self._sandbox.__exit__(None, None, None)
 
     def test_custom_flags_stripped_before_git(self) -> None:
         """--tagged, --issue, --culprit are stripped; git never receives them.
@@ -52,9 +50,9 @@ class TestFlagPassthrough(unittest.TestCase):
         ]:
             with self.subTest(flag=flag):
                 self._sandbox.stage_change(f'content for {flag}\n')
-                result = self._sandbox.run_gc([
-                    'commit', flag, value, '--no-verify', '-m', f'test {flag}'
-                ])
+                result = self._sandbox.run_gc(
+                    ['commit', flag, value, '--no-verify', '-m', f'test {flag}']
+                )
                 self.assertEqual(
                     result.returncode,
                     0,
@@ -76,7 +74,8 @@ class TestFlagPassthrough(unittest.TestCase):
         """--no-verify reaches git (bypass hook) and the commit succeeds."""
         self._sandbox.stage_change()
         result = self._sandbox.run_gc(
-            ['commit', '--no-verify', '-m', 'bare commit'])
+            ['commit', '--no-verify', '-m', 'bare commit']
+        )
         self.assertEqual(result.returncode, 0)
 
     def test_short_flags_pass_through(self) -> None:
@@ -103,12 +102,8 @@ class TestCommitIntegration(unittest.TestCase):
     """gc must inject env vars that the commit-msg hook reads correctly."""
 
     def setUp(self) -> None:
-        self._sandbox = _Sandbox()
-        self._sandbox.__enter__()
+        self._sandbox = self.enterContext(_Sandbox())
         self._sandbox.install_hook()
-
-    def tearDown(self) -> None:
-        self._sandbox.__exit__(None, None, None)
 
     def test_commit_without_flags_succeeds(self) -> None:
         """A plain commit via gc works end-to-end."""
@@ -121,7 +116,8 @@ class TestCommitIntegration(unittest.TestCase):
         """--tagged WIP results in [WIP] prepended to the commit message."""
         self._sandbox.stage_change()
         result = self._sandbox.run_gc(
-            ['commit', '--tagged', 'WIP', '-m', 'My change'])
+            ['commit', '--tagged', 'WIP', '-m', 'My change']
+        )
         self.assertEqual(result.returncode, 0, msg=f'stderr: {result.stderr}')
         msg = self._sandbox.last_commit_message()
         self.assertIn('[WIP]', msg)
@@ -131,7 +127,8 @@ class TestCommitIntegration(unittest.TestCase):
         """--tagged WIP,CodeHealth adds both [WIP] and [CodeHealth] tags."""
         self._sandbox.stage_change()
         result = self._sandbox.run_gc(
-            ['commit', '--tagged', 'WIP,CodeHealth', '-m', 'Multi-tag'])
+            ['commit', '--tagged', 'WIP,CodeHealth', '-m', 'Multi-tag']
+        )
         self.assertEqual(result.returncode, 0, msg=f'stderr: {result.stderr}')
         msg = self._sandbox.last_commit_message()
         self.assertIn('[WIP]', msg)
@@ -141,7 +138,8 @@ class TestCommitIntegration(unittest.TestCase):
         """--issue 1234 appends a Resolves link to the commit message."""
         self._sandbox.stage_change()
         result = self._sandbox.run_gc(
-            ['commit', '--issue', '1234', '-m', 'Fix something'])
+            ['commit', '--issue', '1234', '-m', 'Fix something']
+        )
         self.assertEqual(result.returncode, 0, msg=f'stderr: {result.stderr}')
         msg = self._sandbox.last_commit_message()
         self.assertIn('Resolves', msg)
@@ -152,7 +150,8 @@ class TestCommitIntegration(unittest.TestCase):
         """--issue 11,22 adds Resolves links for both issues."""
         self._sandbox.stage_change()
         result = self._sandbox.run_gc(
-            ['commit', '--issue', '11,22', '-m', 'Multi-issue fix'])
+            ['commit', '--issue', '11,22', '-m', 'Multi-issue fix']
+        )
         self.assertEqual(result.returncode, 0, msg=f'stderr: {result.stderr}')
         msg = self._sandbox.last_commit_message()
         self.assertIn('issues/11', msg)
@@ -161,27 +160,68 @@ class TestCommitIntegration(unittest.TestCase):
     def test_tagged_and_issue_combined(self) -> None:
         """--tagged and --issue can be used together."""
         self._sandbox.stage_change()
-        result = self._sandbox.run_gc([
-            'commit', '--tagged', 'canary', '--issue', '999', '-m', 'Combined'
-        ])
+        result = self._sandbox.run_gc(
+            ['commit', '--tagged', 'canary', '--issue', '999', '-m', 'Combined']
+        )
         self.assertEqual(result.returncode, 0, msg=f'stderr: {result.stderr}')
         msg = self._sandbox.last_commit_message()
         self.assertIn('[canary]', msg)
         self.assertIn('issues/999', msg)
 
     def test_fixup_commit_skips_hook_processing(self) -> None:
-        """fixup! commits bypass tag insertion (hook behaviour)."""
-        # First commit to have something to fixup.
+        """A plain fixup! commit goes through, and the hook leaves it alone."""
         self._sandbox.stage_change('v1\n')
         self._sandbox.run_gc(['commit', '-m', 'Base commit'])
         self._sandbox.stage_change('v2\n')
-        result = self._sandbox.run_gc(
-            ['commit', '--tagged', 'WIP', '-m', 'fixup! Base commit'])
+        result = self._sandbox.run_gc(['commit', '-m', 'fixup! Base commit'])
         self.assertEqual(result.returncode, 0, msg=f'stderr: {result.stderr}')
-        msg = self._sandbox.last_commit_message()
-        # The hook skips fixup! commits — no tag should be added.
-        self.assertNotIn('[WIP]', msg)
-        self.assertTrue(msg.startswith('fixup!'))
+        self.assertEqual(
+            'fixup! Base commit', self._sandbox.last_commit_message()
+        )
+
+    def test_squash_marker_of_a_pinned_commit_is_refused(self) -> None:
+        """brockit squashes and moves pinned groups, so a fixup! can't be
+        replayed onto one: the hook refuses it and names the subject to
+        commit with instead."""
+        self._sandbox.stage_change('v1\n')
+        self._sandbox.run_gc(['commit', '-m', 'Version lift updates'])
+        for subject in (
+            'fixup! Version lift updates',
+            'amend! Version lift updates',
+            'squash! Version lift updates',
+            'fixup! [cr160] Version lift updates',
+        ):
+            with self.subTest(subject):
+                self._sandbox.stage_change(f'{subject}\n')
+                result = self._sandbox.run_gc(['commit', '-m', subject])
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn('pinned commit', result.stderr)
+                self.assertIn(
+                    "git commit -m 'Version lift updates'", result.stderr
+                )
+                self.assertEqual(
+                    'Version lift updates',
+                    self._sandbox.last_commit_message().split('\n', 1)[0],
+                )
+
+    def test_fixup_flag_of_a_pinned_commit_is_refused(self) -> None:
+        self._sandbox.stage_change('v1\n')
+        self._sandbox.run_gc(['commit', '-m', 'IWYU fixes.'])
+        self._sandbox.stage_change('v2\n')
+        result = self._sandbox.run_gc(['commit', '--fixup=HEAD'])
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("git commit -m 'IWYU fixes.'", result.stderr)
+
+    @unittest.skipIf(
+        platform.system() == 'Windows', 'Windows installs a shim, not a copy'
+    )
+    def test_copied_hook_asks_for_a_reinstall(self) -> None:
+        """A hook copied into .git/hooks can't import `pinned_commits`."""
+        self._sandbox.install_hook(as_copy=True)
+        self._sandbox.stage_change()
+        result = self._sandbox.run_gc(['commit', '-m', 'Plain commit'])
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('git cr install-hook', result.stderr)
 
     def test_empty_message_rejected(self) -> None:
         """A commit with only whitespace in the message is rejected."""
@@ -202,16 +242,24 @@ class TestCulpritLinks(unittest.TestCase):
 
     A bare hash resolves against the Chromium checkout ('../'); a
     '<subrepo>:<hash>' value (e.g. 'v8/src:...') resolves against that subrepo
-    (e.g. '../v8/src') and links to its own googlesource project.
+    (e.g. '../v8/src'). Each links through its checkout's origin push URL.
     """
 
     def setUp(self) -> None:
-        self._sandbox = _Sandbox()
-        self._sandbox.__enter__()
+        self._sandbox = self.enterContext(_Sandbox())
         self._sandbox.install_hook()
+        self._set_origin(
+            self._sandbox.repo.chromium,
+            'https://chromium.googlesource.com/chromium/src.git',
+        )
 
-    def tearDown(self) -> None:
-        self._sandbox.__exit__(None, None, None)
+    def _set_origin(
+        self, repo_path: Path, url: str, push_url: str | None = None
+    ) -> None:
+        git = self._sandbox.repo._run_git_command
+        git(['remote', 'add', 'origin', url], repo_path)
+        if push_url:
+            git(['remote', 'set-url', '--push', 'origin', push_url], repo_path)
 
     def _commit_in(self, subject: str, repo_path: Path) -> str:
         """Create an empty commit in repo_path and return its hash."""
@@ -220,17 +268,20 @@ class TestCulpritLinks(unittest.TestCase):
     def test_chromium_hash_adds_link_and_body(self) -> None:
         """A bare culprit hash links to chromium/src and inlines the body."""
         repo = self._sandbox.repo
-        culprit_hash = self._commit_in('Upstream chromium change',
-                                       repo.chromium)
+        culprit_hash = self._commit_in(
+            'Upstream chromium change', repo.chromium
+        )
         self._sandbox.stage_change()
         result = self._sandbox.run_gc(
-            ['commit', '--culprit', culprit_hash, '-m', 'Fix'])
+            ['commit', '--culprit', culprit_hash, '-m', 'Fix']
+        )
         self.assertEqual(result.returncode, 0, msg=f'stderr: {result.stderr}')
         msg = self._sandbox.last_commit_message()
         self.assertIn('Chromium changes:', msg)
         self.assertIn(
             f'https://chromium.googlesource.com/chromium/src/+/{culprit_hash}',
-            msg)
+            msg,
+        )
         # The full upstream commit body is inlined.
         self.assertIn('Upstream chromium change', msg)
 
@@ -238,16 +289,23 @@ class TestCulpritLinks(unittest.TestCase):
         """A 'v8/src:<hash>' culprit resolves in ../v8/src, links to v8/v8."""
         repo = self._sandbox.repo
         repo.add_repo('v8/src')
-        culprit_hash = self._commit_in('Some v8 change',
-                                       repo.chromium / 'v8' / 'src')
+        self._set_origin(
+            repo.chromium / 'v8' / 'src',
+            'https://chromium.googlesource.com/v8/v8',
+        )
+        culprit_hash = self._commit_in(
+            'Some v8 change', repo.chromium / 'v8' / 'src'
+        )
         self._sandbox.stage_change()
         result = self._sandbox.run_gc(
-            ['commit', '--culprit', f'v8/src:{culprit_hash}', '-m', 'Fix'])
+            ['commit', '--culprit', f'v8/src:{culprit_hash}', '-m', 'Fix']
+        )
         self.assertEqual(result.returncode, 0, msg=f'stderr: {result.stderr}')
         msg = self._sandbox.last_commit_message()
         # The link points at the v8 project, not chromium/src.
         self.assertIn(
-            f'https://chromium.googlesource.com/v8/v8/+/{culprit_hash}', msg)
+            f'https://chromium.googlesource.com/v8/v8/+/{culprit_hash}', msg
+        )
         self.assertNotIn('chromium/src/+/', msg)
         self.assertIn('Some v8 change', msg)
 
@@ -256,45 +314,693 @@ class TestCulpritLinks(unittest.TestCase):
         repo = self._sandbox.repo
         chromium_hash = self._commit_in('Chromium side', repo.chromium)
         repo.add_repo('v8/src')
+        self._set_origin(
+            repo.chromium / 'v8' / 'src',
+            'https://chromium.googlesource.com/v8/v8.git',
+        )
         v8_hash = self._commit_in('V8 side', repo.chromium / 'v8' / 'src')
         self._sandbox.stage_change()
-        result = self._sandbox.run_gc([
-            'commit', '--culprit', f'{chromium_hash},v8/src:{v8_hash}', '-m',
-            'Fix'
-        ])
+        result = self._sandbox.run_gc(
+            [
+                'commit',
+                '--culprit',
+                f'{chromium_hash},v8/src:{v8_hash}',
+                '-m',
+                'Fix',
+            ]
+        )
         self.assertEqual(result.returncode, 0, msg=f'stderr: {result.stderr}')
         msg = self._sandbox.last_commit_message()
         self.assertIn(
             f'https://chromium.googlesource.com/chromium/src/+/{chromium_hash}',
-            msg)
-        self.assertIn(f'https://chromium.googlesource.com/v8/v8/+/{v8_hash}',
-                      msg)
+            msg,
+        )
+        self.assertIn(
+            f'https://chromium.googlesource.com/v8/v8/+/{v8_hash}', msg
+        )
         self.assertIn('Chromium side', msg)
         self.assertIn('V8 side', msg)
 
-    def test_unknown_subrepo_is_rejected(self) -> None:
-        """An unknown subrepo prefix aborts the commit with a helpful error."""
+    def test_subrepo_that_is_not_a_checkout_is_rejected(self) -> None:
+        """A subrepo with no git checkout aborts the commit."""
         self._sandbox.stage_change()
         result = self._sandbox.run_gc(
-            ['commit', '--culprit', 'skia:deadbeef', '-m', 'Fix'])
+            ['commit', '--culprit', 'skia:deadbeef', '-m', 'Fix']
+        )
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("Unknown culprit subrepo 'skia'", result.stderr)
-        # The known subrepos are listed to guide the user.
-        self.assertIn('v8/src', result.stderr)
+        self.assertIn(
+            "Culprit subrepo 'skia' is not a git checkout", result.stderr
+        )
+
+    def test_github_subrepo_links_to_github(self) -> None:
+        """A subrepo on GitHub, over ssh, links to its GitHub commit page."""
+        repo = self._sandbox.repo
+        repo.add_repo('third_party/foo')
+        self._set_origin(
+            repo.chromium / 'third_party' / 'foo',
+            'git@github.com:example/foo.git',
+        )
+        culprit_hash = self._commit_in(
+            'A foo change', repo.chromium / 'third_party' / 'foo'
+        )
+        self._sandbox.stage_change()
+        result = self._sandbox.run_gc(
+            [
+                'commit',
+                '--culprit',
+                f'third_party/foo:{culprit_hash}',
+                '-m',
+                'x',
+            ]
+        )
+        self.assertEqual(result.returncode, 0, msg=f'stderr: {result.stderr}')
+        self.assertIn(
+            f'https://github.com/example/foo/commit/{culprit_hash}',
+            self._sandbox.last_commit_message(),
+        )
+
+    def test_push_url_wins_over_a_git_cache_fetch_url(self) -> None:
+        """A checkout fetching from a local mirror links through its push
+        URL, as in CI."""
+        repo = self._sandbox.repo
+        repo.add_repo('v8/src')
+        self._set_origin(
+            repo.chromium / 'v8' / 'src',
+            str(repo.chromium / 'v8' / 'src'),
+            push_url='https://chromium.googlesource.com/a/v8/v8.git',
+        )
+        culprit_hash = self._commit_in(
+            'Some v8 change', repo.chromium / 'v8' / 'src'
+        )
+        self._sandbox.stage_change()
+        result = self._sandbox.run_gc(
+            ['commit', '--culprit', f'v8/src:{culprit_hash}', '-m', 'Fix']
+        )
+        self.assertEqual(result.returncode, 0, msg=f'stderr: {result.stderr}')
+        self.assertIn(
+            f'https://chromium.googlesource.com/v8/v8/+/{culprit_hash}',
+            self._sandbox.last_commit_message(),
+        )
+
+    def test_remote_on_another_host_is_rejected(self) -> None:
+        """A remote neither on googlesource nor on GitHub can't be linked."""
+        repo = self._sandbox.repo
+        repo.add_repo('third_party/bar')
+        self._set_origin(
+            repo.chromium / 'third_party' / 'bar', 'https://gitlab.com/x/bar'
+        )
+        culprit_hash = self._commit_in(
+            'A bar change', repo.chromium / 'third_party' / 'bar'
+        )
+        self._sandbox.stage_change()
+        result = self._sandbox.run_gc(
+            [
+                'commit',
+                '--culprit',
+                f'third_party/bar:{culprit_hash}',
+                '-m',
+                'x',
+            ]
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Can't link to commits in", result.stderr)
 
     def test_culprit_already_in_message_is_not_duplicated(self) -> None:
         """A culprit whose hash is already in the message adds no link block."""
         repo = self._sandbox.repo
         culprit_hash = self._commit_in('Should not be inlined', repo.chromium)
         self._sandbox.stage_change()
-        result = self._sandbox.run_gc([
-            'commit', '--culprit', culprit_hash, '-m',
-            f'Fix (see {culprit_hash})'
-        ])
+        result = self._sandbox.run_gc(
+            [
+                'commit',
+                '--culprit',
+                culprit_hash,
+                '-m',
+                f'Fix (see {culprit_hash})',
+            ]
+        )
         self.assertEqual(result.returncode, 0, msg=f'stderr: {result.stderr}')
         msg = self._sandbox.last_commit_message()
         self.assertNotIn('Chromium changes:', msg)
         self.assertNotIn('Should not be inlined', msg)
+
+    def test_short_hash_is_written_in_full(self) -> None:
+        """A culprit given as a short hash links with the full one."""
+        repo = self._sandbox.repo
+        culprit_hash = self._commit_in('Upstream change', repo.chromium)
+        self._sandbox.stage_change()
+        result = self._sandbox.run_gc(
+            ['commit', '--culprit', culprit_hash[:9], '-m', 'Fix']
+        )
+        self.assertEqual(result.returncode, 0, msg=f'stderr: {result.stderr}')
+        self.assertIn(
+            f'chromium/src/+/{culprit_hash}\n',
+            self._sandbox.last_commit_message() + '\n',
+        )
+
+    def test_hash_that_is_not_a_commit_is_rejected(self) -> None:
+        """A culprit that doesn't resolve aborts the commit."""
+        self._sandbox.stage_change()
+        result = self._sandbox.run_gc(
+            ['commit', '--culprit', 'deadbeef1234', '-m', 'Fix']
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Culprit 'deadbeef1234' is not a commit", result.stderr)
+
+    def _cr_branch(self, tag_both: bool = True) -> dict[str, str]:
+        """A `cr158` branch on `158.0.8127.4` whose upstream pins
+        `158.0.8127.2`, over a Chromium history of before, the old tag, in
+        range, the new tag, and after. Returns those commits by name."""
+        repo = self._sandbox.repo
+        git = repo._run_git_command
+        commits = {'before': self._commit_in('Before', repo.chromium)}
+        commits['old'] = self._commit_in('Old tag', repo.chromium)
+        git(['tag', '158.0.8127.2'], repo.chromium)
+        commits['in_range'] = self._commit_in('In range', repo.chromium)
+        commits['new'] = self._commit_in('New tag', repo.chromium)
+        if tag_both:
+            git(['tag', '158.0.8127.4'], repo.chromium)
+        commits['after'] = self._commit_in('After', repo.chromium)
+        repo.update_brave_version('158.0.8127.2')
+        git(['branch', 'base'], repo.brave)
+        git(['checkout', '-q', '-b', 'cr158'], repo.brave)
+        git(['branch', '--set-upstream-to=base'], repo.brave)
+        repo.update_brave_version('158.0.8127.4')
+        return commits
+
+    def _commit_with_culprit(self, culprit: str, in_range: bool = True):
+        self._sandbox.stage_change(f'{culprit}\n')
+        return self._sandbox.run_gc(
+            ['commit', '--culprit', culprit, '-m', 'Fix']
+            + (['--culprit-in-range'] if in_range else [])
+        )
+
+    def test_cr_branch_accepts_a_culprit_in_its_range(self) -> None:
+        commits = self._cr_branch()
+        for name in ('in_range', 'new'):
+            with self.subTest(name):
+                result = self._commit_with_culprit(commits[name])
+                self.assertEqual(
+                    result.returncode, 0, msg=f'stderr: {result.stderr}'
+                )
+
+    def test_cr_branch_rejects_a_culprit_outside_its_range(self) -> None:
+        commits = self._cr_branch()
+        for name in ('before', 'old', 'after'):
+            with self.subTest(name):
+                result = self._commit_with_culprit(commits[name])
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(
+                    "not in the branch's Chromium range, "
+                    '158.0.8127.2..158.0.8127.4',
+                    result.stderr,
+                )
+
+    def test_cr_branch_accepts_any_culprit_unless_asked(self) -> None:
+        """A fix of a latent issue cites a culprit from before the range."""
+        commits = self._cr_branch()
+        for name in ('before', 'old', 'after'):
+            with self.subTest(name):
+                result = self._commit_with_culprit(
+                    commits[name], in_range=False
+                )
+                self.assertEqual(
+                    result.returncode, 0, msg=f'stderr: {result.stderr}'
+                )
+                self.assertIn(
+                    f'chromium/src/+/{commits[name]}',
+                    self._sandbox.last_commit_message(),
+                )
+
+    def test_range_is_not_checked_without_the_tags(self) -> None:
+        commits = self._cr_branch(tag_both=False)
+        result = self._commit_with_culprit(commits['after'])
+        self.assertEqual(result.returncode, 0, msg=f'stderr: {result.stderr}')
+        self.assertIn("tag 158.0.8127.4 isn't in", result.stderr)
+
+
+# ---------------------------------------------------------------------------
+# Tests: Gerrit Change-Id trailer
+# ---------------------------------------------------------------------------
+
+
+class TestChangeId(unittest.TestCase):
+    """The hook adds a Change-Id trailer with the checks of Gerrit's own
+    commit-msg hook, and never replaces one the message has."""
+
+    _CHANGE_ID = re.compile(r'^Change-Id: (I[0-9a-f]{40})$', re.M)
+    _KEPT_ID = 'I' + 'a' * 40
+
+    def setUp(self) -> None:
+        self._sandbox = self.enterContext(_Sandbox())
+        self._sandbox.install_hook()
+        self._commits = 0
+        repo = self._sandbox.repo
+        repo._run_git_command(
+            [
+                'remote',
+                'add',
+                'origin',
+                'https://chromium.googlesource.com/chromium/src.git',
+            ],
+            repo.chromium,
+        )
+
+    def _git(self, *args: str, cwd: Path | None = None) -> str:
+        return subprocess.run(
+            ['git', *args],
+            cwd=cwd or self._sandbox.root,
+            check=True,
+            capture_output=True,
+            text=True,
+            env={**os.environ, **_GIT_ENV_OVERRIDES},
+        ).stdout
+
+    def _commit(self, *args: str, env: dict[str, str] | None = None) -> str:
+        self._commits += 1
+        self._sandbox.stage_change(f'{self._commits} {args}\n')
+        result = self._sandbox.run_gc(['commit', *args], env=env)
+        self.assertEqual(result.returncode, 0, msg=f'stderr: {result.stderr}')
+        return self._sandbox.last_commit_message()
+
+    def _last_paragraph(self, message: str) -> str:
+        return message.rsplit('\n\n', 1)[-1]
+
+    def test_commit_ends_with_a_change_id(self) -> None:
+        msg = self._commit('-m', 'Fix')
+        self.assertRegex(
+            self._last_paragraph(msg), r'^Change-Id: I[0-9a-f]{40}$'
+        )
+
+    def test_quoted_culprit_change_id_is_not_the_commits(self) -> None:
+        repo = self._sandbox.repo
+        culprit = repo.commit_empty(
+            f'Upstream change\n\nChange-Id: {self._KEPT_ID}', repo.chromium
+        )
+        msg = self._commit('--culprit', culprit, '-m', 'Fix')
+        self.assertIn(f'    Change-Id: {self._KEPT_ID}', msg)
+        ids = self._CHANGE_ID.findall(msg)
+        self.assertEqual(len(ids), 1, msg=msg)
+        self.assertNotEqual(ids[0], self._KEPT_ID)
+        self.assertEqual(self._last_paragraph(msg), f'Change-Id: {ids[0]}')
+
+    def _unindented_block(self, culprit: str) -> str:
+        """A "Chromium changes:" block quoting `culprit`'s message without
+        its indentation, as a hand-written message can."""
+        quoted = self._git(
+            'log', '-1', culprit, cwd=self._sandbox.repo.chromium
+        )
+        return (
+            'Chromium changes:\n'
+            f'https://chromium.googlesource.com/chromium/src/+/{culprit}\n\n'
+            + '\n'.join(
+                line.removeprefix('    ') for line in quoted.split('\n')
+            )
+        )
+
+    def test_unindented_culprit_quote_is_refused(self) -> None:
+        repo = self._sandbox.repo
+        culprit = repo.commit_empty(
+            f'Upstream change\n\nChange-Id: {self._KEPT_ID}', repo.chromium
+        )
+        for subject in ('Fix', 'amend! Fix'):
+            with self.subTest(subject=subject):
+                self._sandbox.stage_change(f'{subject}\n')
+                result = self._sandbox.run_gc(
+                    [
+                        'commit',
+                        '-m',
+                        subject,
+                        '-m',
+                        self._unindented_block(culprit),
+                    ]
+                )
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn('quoted without its indentation', result.stderr)
+                self.assertIn('git cr commit --culprit', result.stderr)
+
+    def test_amend_keeps_the_culprit_block(self) -> None:
+        repo = self._sandbox.repo
+        culprit = repo.commit_empty('Upstream change', repo.chromium)
+        msg = self._commit('--culprit', culprit, '-m', 'Fix')
+        self._sandbox.stage_change('amended\n')
+        result = self._sandbox.run_gc(['commit', '--amend', '--no-edit'])
+        self.assertEqual(result.returncode, 0, msg=f'stderr: {result.stderr}')
+        self.assertEqual(self._sandbox.last_commit_message(), msg)
+
+    def test_reverted_change_id_is_not_the_reverts(self) -> None:
+        msg = self._commit(
+            '-m',
+            'Revert "Fix"',
+            '-m',
+            'This reverts commit 1234567.',
+            '-m',
+            f"Original change's description:\n> Fix\n>\n"
+            f'> Change-Id: {self._KEPT_ID}',
+        )
+        self.assertIn(f'> Change-Id: {self._KEPT_ID}', msg)
+        ids = self._CHANGE_ID.findall(msg)
+        self.assertEqual(len(ids), 1, msg=msg)
+        self.assertNotEqual(ids[0], self._KEPT_ID)
+        self.assertEqual(self._last_paragraph(msg), f'Change-Id: {ids[0]}')
+
+    def test_existing_change_id_is_kept_below_the_links(self) -> None:
+        repo = self._sandbox.repo
+        culprit = repo.commit_empty('Upstream change', repo.chromium)
+        trailers = f'Bug: 1\nChange-Id: {self._KEPT_ID}'
+        msg = self._commit(
+            '--culprit', culprit, '--issue', '7', '-m', 'Fix', '-m', trailers
+        )
+        self.assertIn('Chromium changes:', msg)
+        self.assertEqual(self._last_paragraph(msg), trailers)
+        self.assertEqual(self._CHANGE_ID.findall(msg), [self._KEPT_ID])
+
+    def test_existing_change_id_of_any_value_is_not_replaced(self) -> None:
+        msg = self._commit('-m', 'Fix', '-m', 'Change-Id: custom')
+        self.assertEqual(self._last_paragraph(msg), 'Change-Id: custom')
+        self.assertEqual(self._CHANGE_ID.findall(msg), [])
+
+    def test_amend_keeps_the_change_id(self) -> None:
+        change_id = self._CHANGE_ID.findall(self._commit('-m', 'Fix'))
+        self._sandbox.stage_change('amended\n')
+        result = self._sandbox.run_gc(['commit', '--amend', '--no-edit'])
+        self.assertEqual(result.returncode, 0, msg=f'stderr: {result.stderr}')
+        self.assertEqual(
+            self._CHANGE_ID.findall(self._sandbox.last_commit_message()),
+            change_id,
+        )
+
+    def test_change_id_goes_before_signed_off_by(self) -> None:
+        msg = self._commit('-s', '-m', 'Fix')
+        lines = self._last_paragraph(msg).split('\n')
+        self.assertRegex(lines[0], self._CHANGE_ID)
+        self.assertTrue(lines[1].startswith('Signed-off-by: '), msg=msg)
+        self.assertEqual(len(lines), 2, msg=msg)
+
+    def test_pinned_commits_share_a_change_id_per_cr_branch(self) -> None:
+        change_ids = {}
+        for branch in ('cr160', 'cr161'):
+            self._git('checkout', '-q', '-b', branch)
+            change_ids[branch] = [
+                self._CHANGE_ID.findall(
+                    self._commit('-m', 'Version lift updates')
+                )
+                for _ in range(2)
+            ]
+        self.assertEqual(change_ids['cr160'][0], change_ids['cr160'][1])
+        self.assertEqual(change_ids['cr161'][0], change_ids['cr161'][1])
+        self.assertNotEqual(change_ids['cr160'], change_ids['cr161'])
+        self.assertEqual(
+            change_ids['cr160'][0],
+            [pinned_commits.derived_change_id('cr160', 'Version lift updates')],
+        )
+
+    def test_directives_get_no_change_id(self) -> None:
+        for args in (
+            ['-m', 'squash! Add file.txt'],
+            ['-m', 'reassign!abc123! Add file.txt'],
+            ['-m', 'drop!abc123! Add file.txt'],
+            ['--force-commit-hook', '-m', 'fixup! Add file.txt'],
+        ):
+            with self.subTest(args[-1]):
+                self.assertNotIn('Change-Id:', self._commit(*args))
+
+    def test_create_change_id_setting(self) -> None:
+        self._git('config', 'gerrit.createChangeId', 'false')
+        self.assertNotIn('Change-Id:', self._commit('-m', 'Fix'))
+        self._git('config', 'gerrit.createChangeId', 'always')
+        msg = self._commit('-m', 'squash! Add file.txt')
+        self.assertRegex(self._last_paragraph(msg), self._CHANGE_ID)
+
+    def test_review_url_gives_a_link_trailer(self) -> None:
+        self._git('config', 'gerrit.reviewUrl', 'https://gerrit.example.com/')
+        msg = self._commit('-m', 'Fix')
+        self.assertRegex(
+            self._last_paragraph(msg),
+            r'^Link: https://gerrit\.example\.com/id/I[0-9a-f]{40}$',
+        )
+        msg = self._commit(
+            '-m', 'Fix', '-m', f'Link: https://x/id/{self._KEPT_ID}'
+        )
+        self.assertEqual(
+            self._last_paragraph(msg), f'Link: https://x/id/{self._KEPT_ID}'
+        )
+
+    def test_scissors_part_stays_after_what_the_hook_adds(self) -> None:
+        repo = self._sandbox.repo
+        culprit = repo.commit_empty('Upstream change', repo.chromium)
+        message_file = self._sandbox.root.parent / 'message.txt'
+        message_file.write_text(
+            'Fix\n\n'
+            '# ------------------------ >8 ------------------------\n'
+            'diff --git a/file.txt b/file.txt\n',
+            encoding='utf-8',
+            newline='',
+        )
+        msg = self._commit(
+            '--culprit',
+            culprit,
+            '--cleanup=scissors',
+            '-e',
+            '-F',
+            str(message_file),
+            env={'GIT_EDITOR': 'true'},
+        )
+        self.assertIn(f'chromium/src/+/{culprit}', msg)
+        self.assertNotIn('diff --git', msg)
+        self.assertRegex(self._last_paragraph(msg), self._CHANGE_ID)
+
+    def test_message_of_only_comments_is_refused(self) -> None:
+        message_file = self._sandbox.root.parent / 'message.txt'
+        message_file.write_text('# Nothing.\n', encoding='utf-8', newline='')
+        self._sandbox.stage_change()
+        result = self._sandbox.run_gc(
+            ['commit', '--cleanup=strip', '-F', str(message_file)]
+        )
+        self.assertNotEqual(result.returncode, 0)
+
+    def test_cherry_pick_in_a_worktree_is_left_alone(self) -> None:
+        worktree = self._sandbox.root.parent / 'brave-worktree'
+        self._git('worktree', 'add', '-q', '--detach', str(worktree))
+        cherry_pick_head = Path(
+            self._git(
+                'rev-parse', '--git-path', 'CHERRY_PICK_HEAD', cwd=worktree
+            ).strip()
+        )
+        if not cherry_pick_head.is_absolute():
+            cherry_pick_head = worktree / cherry_pick_head
+        cherry_pick_head.write_text(
+            self._git('rev-parse', 'HEAD'), encoding='utf-8', newline=''
+        )
+        self._git('commit', '-q', '--allow-empty', '-m', 'Picked', cwd=worktree)
+        self.assertEqual(
+            self._git('log', '-1', '--format=%B', cwd=worktree).strip(),
+            'Picked',
+        )
+
+
+# ---------------------------------------------------------------------------
+# Tests: where the hook bails out, and --force-commit-hook
+# ---------------------------------------------------------------------------
+
+
+class TestForceCommitHook(unittest.TestCase):
+    """`git cr commit` refuses where the hook would leave the message alone,
+    and `--force-commit-hook` runs it there anyway."""
+
+    _HINT = 'Pass --force-commit-hook'
+
+    def setUp(self) -> None:
+        self._sandbox = self.enterContext(_Sandbox())
+        self._sandbox.install_hook()
+        repo = self._sandbox.repo
+        repo._run_git_command(
+            [
+                'remote',
+                'add',
+                'origin',
+                'https://chromium.googlesource.com/chromium/src.git',
+            ],
+            repo.chromium,
+        )
+        self._culprit = repo.commit_empty('Upstream change', repo.chromium)
+
+    def _git(self, *args: str, env: dict[str, str] | None = None) -> None:
+        subprocess.run(
+            ['git', *args],
+            cwd=self._sandbox.root,
+            check=True,
+            capture_output=True,
+            text=True,
+            env={**os.environ, **_GIT_ENV_OVERRIDES, **(env or {})},
+        )
+
+    def _stop_rebase_on_cr158(self) -> None:
+        """A `cr158` branch whose rebase is stopped on its last commit."""
+        self._git('checkout', '-q', '-b', 'cr158')
+        self._sandbox.stage_change('to rebase\n')
+        self._git('commit', '--no-verify', '-q', '-m', 'To rebase')
+        editor = (
+            f'"{sys.executable}" -c "import pathlib, sys; '
+            'p = pathlib.Path(sys.argv[1]); '
+            "p.write_text(p.read_text().replace('pick', 'edit', 1))\""
+        )
+        self._git(
+            'rebase', '-q', '-i', 'HEAD~1', env={'GIT_SEQUENCE_EDITOR': editor}
+        )
+
+    def test_rebase_in_progress_is_refused(self) -> None:
+        self._stop_rebase_on_cr158()
+        self._sandbox.stage_change('during rebase\n')
+        result = self._sandbox.run_gc(['commit', '-m', 'Fix'])
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('a rebase is in progress', result.stderr)
+        self.assertIn(self._HINT, result.stderr)
+
+    def test_forced_during_rebase_tags_and_links(self) -> None:
+        self._stop_rebase_on_cr158()
+        self._sandbox.stage_change('during rebase\n')
+        result = self._sandbox.run_gc(
+            [
+                'commit',
+                '--force-commit-hook',
+                '--culprit',
+                self._culprit,
+                '-m',
+                'Fix',
+            ]
+        )
+        self.assertEqual(result.returncode, 0, msg=f'stderr: {result.stderr}')
+        msg = self._sandbox.last_commit_message()
+        self.assertTrue(msg.startswith('[cr158] Fix'), msg=msg)
+        self.assertIn(f'chromium/src/+/{self._culprit}', msg)
+
+    def test_cherry_pick_in_progress_is_refused(self) -> None:
+        (self._sandbox.root / '.git' / 'CHERRY_PICK_HEAD').write_text(
+            'HEAD\n', encoding='utf-8', newline=''
+        )
+        self._sandbox.stage_change()
+        result = self._sandbox.run_gc(['commit', '-m', 'Fix'])
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('a cherry-pick is in progress', result.stderr)
+
+    def test_fixup_with_hook_flags_is_refused(self) -> None:
+        self._sandbox.stage_change()
+        result = self._sandbox.run_gc(
+            ['commit', '--culprit', self._culprit, '-m', 'fixup! Add file.txt']
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('fixup!/amend!', result.stderr)
+        self.assertIn(self._HINT, result.stderr)
+
+    def test_forced_fixup_links_without_tags(self) -> None:
+        self._git('checkout', '-q', '-b', 'cr158')
+        self._sandbox.stage_change()
+        result = self._sandbox.run_gc(
+            [
+                'commit',
+                '--force-commit-hook',
+                '--tagged',
+                'WIP',
+                '--culprit',
+                self._culprit,
+                '-m',
+                'fixup! Add file.txt',
+            ]
+        )
+        self.assertEqual(result.returncode, 0, msg=f'stderr: {result.stderr}')
+        msg = self._sandbox.last_commit_message()
+        self.assertTrue(msg.startswith('fixup! Add file.txt'), msg=msg)
+        self.assertNotIn('[WIP]', msg)
+        self.assertIn(f'chromium/src/+/{self._culprit}', msg)
+
+
+class TestFormat(unittest.TestCase):
+    """--format wraps the body as a CL description, and nothing else."""
+
+    _LONG = (
+        'Upstream removed `TabChangeType::kAttentionOnly` and '
+        '`TabStripModel::SetTabNeedsAttention()`, so JS dialogs now notify '
+        'only the `TabUIHelper` callbacks.'
+    )
+    _WRAPPED = (
+        'Upstream removed `TabChangeType::kAttentionOnly` and\n'
+        '`TabStripModel::SetTabNeedsAttention()`, so JS dialogs now notify only\n'
+        'the `TabUIHelper` callbacks.'
+    )
+
+    def setUp(self) -> None:
+        self._sandbox = self.enterContext(_Sandbox())
+        self._sandbox.install_hook()
+        repo = self._sandbox.repo
+        repo._run_git_command(
+            [
+                'remote',
+                'add',
+                'origin',
+                'https://chromium.googlesource.com/chromium/src.git',
+            ],
+            repo.chromium,
+        )
+
+    def _commit(self, *args: str) -> subprocess.CompletedProcess:
+        self._sandbox.stage_change(f'{args}\n')
+        return self._sandbox.run_gc(['commit', *args])
+
+    def _body(self) -> str:
+        msg = self._sandbox.last_commit_message()
+        return msg.split('\n\n', 1)[1].rsplit('\n\nChange-Id: ', 1)[0]
+
+    def test_body_is_wrapped_and_subject_kept(self) -> None:
+        result = self._commit('--format', '-m', 'Fix it.', '-m', self._LONG)
+        self.assertEqual(result.returncode, 0, msg=f'stderr: {result.stderr}')
+        msg = self._sandbox.last_commit_message()
+        self.assertTrue(msg.startswith('Fix it.\n\n'), msg=msg)
+        self.assertEqual(self._body(), self._WRAPPED)
+
+    def test_body_is_left_alone_without_the_flag(self) -> None:
+        result = self._commit('-m', 'Fix', '-m', self._LONG)
+        self.assertEqual(result.returncode, 0, msg=f'stderr: {result.stderr}')
+        self.assertEqual(self._body(), self._LONG)
+
+    def test_indented_paragraph_is_kept(self) -> None:
+        quote = '    ' + 'x' * 80 + '\n    y'
+        result = self._commit('--format', '-m', 'Fix', '-m', quote)
+        self.assertEqual(result.returncode, 0, msg=f'stderr: {result.stderr}')
+        self.assertEqual(self._body(), quote)
+
+    def test_culprit_block_is_not_wrapped(self) -> None:
+        repo = self._sandbox.repo
+        culprit = repo.commit_empty(
+            f'Upstream change\n\n{self._LONG}', repo.chromium
+        )
+        result = self._commit(
+            '--format', '--culprit', culprit, '-m', 'Fix', '-m', self._LONG
+        )
+        self.assertEqual(result.returncode, 0, msg=f'stderr: {result.stderr}')
+        msg = self._sandbox.last_commit_message()
+        self.assertIn(f'Fix\n\n{self._WRAPPED}\n\nChromium changes:\n', msg)
+        self.assertIn(f'    {self._LONG}', msg)
+
+    def test_amend_marker_formats_the_new_message(self) -> None:
+        self.assertEqual(self._commit('-m', 'Fix').returncode, 0)
+        message = f'amend! Fix\n\nFix better\n\n{self._LONG}'
+        result = self._commit('--format', '--allow-empty', '-m', message)
+        self.assertEqual(result.returncode, 0, msg=f'stderr: {result.stderr}')
+        self.assertEqual(
+            self._sandbox.last_commit_message(),
+            f'amend! Fix\n\nFix better\n\n{self._WRAPPED}',
+        )
+
+    def test_long_subject_with_tags_is_refused(self) -> None:
+        subject = 'x' * 66
+        result = self._commit('--format', '--tagged', 'WIP', '-m', subject)
+        self.assertEqual(result.returncode, 0, msg=f'stderr: {result.stderr}')
+        result = self._commit(
+            '--format', '--tagged', 'Android,WIP', '-m', subject
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('81 columns', result.stderr)
 
 
 # ---------------------------------------------------------------------------
@@ -306,11 +1012,7 @@ class TestCommitSanityCheck(unittest.TestCase):
     """cmd_commit must refuse early when the hook is absent or misconfigured."""
 
     def setUp(self) -> None:
-        self._sandbox = _Sandbox()
-        self._sandbox.__enter__()
-
-    def tearDown(self) -> None:
-        self._sandbox.__exit__(None, None, None)
+        self._sandbox = self.enterContext(_Sandbox())
 
     def test_missing_hook_is_rejected(self) -> None:
         """cmd_commit exits non-zero and mentions install-hook when absent."""
@@ -320,8 +1022,9 @@ class TestCommitSanityCheck(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('install-hook', result.stderr)
 
-    @unittest.skipIf(platform.system() == 'Windows',
-                     'executable bit is POSIX-only')
+    @unittest.skipIf(
+        platform.system() == 'Windows', 'executable bit is POSIX-only'
+    )
     def test_non_executable_hook_is_rejected(self) -> None:
         """cmd_commit exits non-zero when the hook lacks the executable bit."""
         # Install as a copy so flipping the exec bit is scoped to the sandbox.
@@ -329,8 +1032,9 @@ class TestCommitSanityCheck(unittest.TestCase):
         # tests (in this process or in parallel test files) that chmod it +x.
         self._sandbox.install_hook(as_copy=True)
         dest = self._sandbox.hook_dest
-        dest.chmod(dest.stat().st_mode & ~(stat.S_IXUSR | stat.S_IXGRP
-                                           | stat.S_IXOTH))
+        dest.chmod(
+            dest.stat().st_mode & ~(stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+        )
         self._sandbox.stage_change()
         result = self._sandbox.run_gc(['commit', '-m', 'should fail'])
         self.assertNotEqual(result.returncode, 0)
@@ -346,11 +1050,7 @@ class TestReassignFixup(unittest.TestCase):
     """git cr commit --fixup=reassign:<ref> delegates to brockit reassign."""
 
     def setUp(self) -> None:
-        self._sandbox = _Sandbox()
-        self._sandbox.__enter__()
-
-    def tearDown(self) -> None:
-        self._sandbox.__exit__(None, None, None)
+        self._sandbox = self.enterContext(_Sandbox())
 
     def _commit_count(self) -> int:
         return int(
@@ -358,11 +1058,9 @@ class TestReassignFixup(unittest.TestCase):
                 ['git', 'rev-list', '--count', 'HEAD'],
                 cwd=self._sandbox.root,
                 text=True,
-                env={
-                    **os.environ,
-                    **_GIT_ENV_OVERRIDES
-                },
-            ).strip())
+                env={**os.environ, **_GIT_ENV_OVERRIDES},
+            ).strip()
+        )
 
     def test_joined_form_creates_reassign_commit(self) -> None:
         """--fixup=reassign:HEAD adds an empty reassign! commit on top.
@@ -376,8 +1074,9 @@ class TestReassignFixup(unittest.TestCase):
         self.assertEqual(self._commit_count(), before + 1)
         msg = self._sandbox.last_commit_message()
         # brockit formats the subject as `reassign!<hash>! <original subject>`.
-        self.assertTrue(msg.startswith('reassign!'),
-                        msg=f'unexpected message: {msg!r}')
+        self.assertTrue(
+            msg.startswith('reassign!'), msg=f'unexpected message: {msg!r}'
+        )
         self.assertIn('Add file.txt', msg)
 
     def test_split_form_creates_reassign_commit(self) -> None:
@@ -387,7 +1086,8 @@ class TestReassignFixup(unittest.TestCase):
         self.assertEqual(result.returncode, 0, msg=f'stderr: {result.stderr}')
         self.assertEqual(self._commit_count(), before + 1)
         self.assertTrue(
-            self._sandbox.last_commit_message().startswith('reassign!'))
+            self._sandbox.last_commit_message().startswith('reassign!')
+        )
 
     def test_drop_verb_creates_drop_commit(self) -> None:
         """--fixup=drop:HEAD adds an empty drop! commit via brockit drop."""
@@ -397,8 +1097,9 @@ class TestReassignFixup(unittest.TestCase):
         self.assertEqual(self._commit_count(), before + 1)
         msg = self._sandbox.last_commit_message()
         # brockit formats the subject as `drop!<hash>! <original subject>`.
-        self.assertTrue(msg.startswith('drop!'),
-                        msg=f'unexpected message: {msg!r}')
+        self.assertTrue(
+            msg.startswith('drop!'), msg=f'unexpected message: {msg!r}'
+        )
         self.assertIn('Add file.txt', msg)
 
     def test_empty_ref_is_rejected(self) -> None:
@@ -413,7 +1114,8 @@ class TestReassignFixup(unittest.TestCase):
         """Mixing the shortcut with a git arg (e.g. -m) errors, no commit."""
         before = self._commit_count()
         result = self._sandbox.run_gc(
-            ['commit', '--fixup=reassign:HEAD', '-m', 'nope'])
+            ['commit', '--fixup=reassign:HEAD', '-m', 'nope']
+        )
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('cannot be combined', result.stderr)
         self.assertEqual(self._commit_count(), before)
@@ -422,7 +1124,8 @@ class TestReassignFixup(unittest.TestCase):
         """Mixing the shortcut with a wrapper flag (--tagged) errors too."""
         before = self._commit_count()
         result = self._sandbox.run_gc(
-            ['commit', '--tagged', 'WIP', '--fixup=reassign:HEAD'])
+            ['commit', '--tagged', 'WIP', '--fixup=reassign:HEAD']
+        )
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('cannot be combined', result.stderr)
         self.assertIn('--tagged', result.stderr)
@@ -436,12 +1139,12 @@ class TestReassignFixup(unittest.TestCase):
         """
         self._sandbox.install_hook()
         self._sandbox.stage_change('fixup body\n')
-        result = self._sandbox.run_gc(
-            ['commit', '--fixup=HEAD', '--no-verify'])
+        result = self._sandbox.run_gc(['commit', '--fixup=HEAD', '--no-verify'])
         self.assertEqual(result.returncode, 0, msg=f'stderr: {result.stderr}')
         msg = self._sandbox.last_commit_message()
-        self.assertTrue(msg.startswith('fixup!'),
-                        msg=f'unexpected message: {msg!r}')
+        self.assertTrue(
+            msg.startswith('fixup!'), msg=f'unexpected message: {msg!r}'
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -459,7 +1162,8 @@ class TestMarkChangeShortcutParsing(unittest.TestCase):
         self.assertEqual(joined.verb, 'reassign')
         self.assertEqual(joined.target, 'HEAD')
         self.assertIsNotNone(
-            _MarkChangeShortcut.from_args(['--fixup', 'reassign:HEAD']))
+            _MarkChangeShortcut.from_args(['--fixup', 'reassign:HEAD'])
+        )
 
     def test_detects_drop_verb(self) -> None:
         """The `drop:` verb is recognised alongside `reassign:`."""
@@ -472,14 +1176,14 @@ class TestMarkChangeShortcutParsing(unittest.TestCase):
     def test_absent_when_no_marker(self) -> None:
         """Ordinary commits and git's native fixup modes are not claimed."""
         self.assertIsNone(_MarkChangeShortcut.from_args(['--fixup=HEAD']))
-        self.assertIsNone(_MarkChangeShortcut.from_args(['--fixup=amend:HEAD'
-                                                         ]))
+        self.assertIsNone(_MarkChangeShortcut.from_args(['--fixup=amend:HEAD']))
         self.assertIsNone(_MarkChangeShortcut.from_args(['-m', 'a message']))
 
     def test_marker_outside_fixup_is_not_the_shortcut(self) -> None:
         """A verb token only in a commit message is not the shortcut."""
         self.assertIsNone(
-            _MarkChangeShortcut.from_args(['-m', 'fix reassign: bug']))
+            _MarkChangeShortcut.from_args(['-m', 'fix reassign: bug'])
+        )
 
     def test_malformed_fixup_does_not_terminate(self) -> None:
         """A `--fixup` with no value must not exit the process.
@@ -500,12 +1204,8 @@ class TestGracefulExit(unittest.TestCase):
     """gc must not emit Python tracebacks on Ctrl-C."""
 
     def setUp(self) -> None:
-        self._sandbox = _Sandbox()
-        self._sandbox.__enter__()
+        self._sandbox = self.enterContext(_Sandbox())
         self._sandbox.install_hook()
-
-    def tearDown(self) -> None:
-        self._sandbox.__exit__(None, None, None)
 
     @unittest.skipIf(
         platform.system() == 'Windows',
@@ -516,29 +1216,26 @@ class TestGracefulExit(unittest.TestCase):
         'work around, so the child never sees an interrupt at all. The '
         'one event that does stay scoped, CTRL_BREAK_EVENT, is delivered '
         'but is not mapped to KeyboardInterrupt unless the child opts in '
-        "with signal.signal(signal.SIGBREAK, ...), which cmd.py doesn't.")
+        "with signal.signal(signal.SIGBREAK, ...), which cmd.py doesn't.",
+    )
     def test_no_traceback_on_keyboard_interrupt(self) -> None:
         """Sending SIGINT produces exit code 130 with no traceback."""
         import signal
 
-        proc = subprocess.Popen(
-            [sys.executable,
-             str(CMD_SCRIPT), 'commit', '-m', 'test'],
+        with subprocess.Popen(
+            [sys.executable, str(CMD_SCRIPT), 'commit', '-m', 'test'],
             cwd=self._sandbox.root,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            env={
-                **os.environ,
-                **_GIT_ENV_OVERRIDES
-            },
-        )
-        try:
-            proc.send_signal(signal.SIGINT)
-            _, stderr = proc.communicate(timeout=5)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            _, stderr = proc.communicate()
+            env={**os.environ, **_GIT_ENV_OVERRIDES},
+        ) as proc:
+            try:
+                proc.send_signal(signal.SIGINT)
+                _, stderr = proc.communicate(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                _, stderr = proc.communicate()
 
         self.assertNotIn('Traceback', stderr)
         # 130 = Python caught KeyboardInterrupt and called sys.exit(130).

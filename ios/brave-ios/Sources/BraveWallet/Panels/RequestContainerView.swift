@@ -33,7 +33,7 @@ struct RequestContainerView<DismissContent: ToolbarContent>: View {
           case .addSuggestedToken(let request):
             AddSuggestedTokenView(
               token: request.token,
-              originInfo: request.origin,
+              dappOriginInfo: request.dappOriginInfo,
               cryptoStore: cryptoStore,
               onDismiss: onDismiss
             )
@@ -41,7 +41,6 @@ struct RequestContainerView<DismissContent: ToolbarContent>: View {
             SuggestedNetworkView(
               mode: .switchNetworks(request),
               cryptoStore: cryptoStore,
-              keyringStore: keyringStore,
               networkStore: cryptoStore.networkStore,
               onDismiss: onDismiss
             )
@@ -49,7 +48,6 @@ struct RequestContainerView<DismissContent: ToolbarContent>: View {
             SuggestedNetworkView(
               mode: .addNetwork(request),
               cryptoStore: cryptoStore,
-              keyringStore: keyringStore,
               networkStore: cryptoStore.networkStore,
               onDismiss: onDismiss
             )
@@ -66,23 +64,8 @@ struct RequestContainerView<DismissContent: ToolbarContent>: View {
               signMessageErrors: signMessageErrors,
               cryptoStore: cryptoStore
             )
-          case .getEncryptionPublicKey(let request):
-            EncryptionView(
-              request: .getEncryptionPublicKey(request),
-              cryptoStore: cryptoStore,
-              keyringStore: keyringStore,
-              onDismiss: onDismiss
-            )
-          case .decrypt(let request):
-            EncryptionView(
-              request: .decrypt(request),
-              cryptoStore: cryptoStore,
-              keyringStore: keyringStore,
-              onDismiss: onDismiss
-            )
           case .signTransactions(let requests):
             SignTransactionView(
-              keyringStore: keyringStore,
               networkStore: cryptoStore.networkStore,
               requests: requests,
               cryptoStore: cryptoStore,

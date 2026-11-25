@@ -1,0 +1,28 @@
+diff --git a/components/omnibox/browser/suggestion_group_util.cc b/components/omnibox/browser/suggestion_group_util.cc
+index 9f099ea1319a768f313dc12937e88e6c953edd1a..86bde3d51eb69e09aa8da6afe4ecae0f2b2e3b52 100644
+--- a/components/omnibox/browser/suggestion_group_util.cc
++++ b/components/omnibox/browser/suggestion_group_util.cc
+@@ -8,6 +8,8 @@
+ 
+ #include "base/feature_list.h"
+ #include "base/lazy_instance.h"
++#include "brave/components/commander/common/buildflags/buildflags.h"
++#include "components/grit/brave_components_strings.h"
+ #include "components/omnibox/browser/autocomplete_input.h"
+ #include "components/omnibox/browser/match_compare.h"
+ #include "components/omnibox/browser/omnibox_field_trial.h"
+@@ -69,7 +71,14 @@ const GroupConfigMap& BuildDefaultGroups() {
+         {GROUP_MOBILE_RICH_ANSWER,
+          CreateGroup(SECTION_SEARCH)},
+         {GROUP_SEARCH, CreateGroup(SECTION_SEARCH)},
++#if BUILDFLAG(ENABLE_COMMANDER)
++        {GROUP_OTHER_NAVS,
++         CreateGroup(SECTION_OTHER_NAVS,
++                     GroupConfig_RenderType_DEFAULT_VERTICAL,
++                     IDS_IDC_COMMANDER)},
++#else
+         {GROUP_OTHER_NAVS, CreateGroup(SECTION_SEARCH)},
++#endif
+         // clang-format on
+     };
+   }

@@ -6,15 +6,25 @@
 #include "brave/browser/brave_wallet/brave_wallet_tab_helper.h"
 
 #include <memory>
+#include <utility>
+#include <vector>
 
+#include "base/functional/bind.h"
 #include "base/memory/weak_ptr.h"
+#include "base/test/run_until.h"
+#include "base/test/test_future.h"
 #include "brave/browser/brave_wallet/brave_wallet_service_factory.h"
 #include "brave/components/brave_wallet/browser/brave_wallet_service.h"
 #include "brave/components/brave_wallet/browser/brave_wallet_utils.h"
 #include "brave/components/brave_wallet/browser/keyring_service.h"
 #include "brave/components/brave_wallet/browser/test_utils.h"
+#include "brave/components/brave_wallet/common/web_ui_constants.h"
+#include "chrome/browser/hid/hid_chooser_context.h"
+#include "chrome/browser/hid/hid_chooser_context_factory.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/browser.h"
+#include "chrome/browser/resource_coordinator/lifecycle_unit_state.mojom.h"
+#include "chrome/browser/resource_coordinator/tab_lifecycle_unit_external.h"
+#include "chrome/browser/resource_coordinator/tab_lifecycle_unit_source.h"
 #include "chrome/browser/ui/browser_commands.h"
 #include "chrome/browser/ui/dialogs/browser_dialogs.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
@@ -22,13 +32,20 @@
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/network_session_configurator/common/network_switches.h"
 #include "components/permissions/fake_usb_chooser_controller.h"
+#include "components/tabs/public/tab_interface.h"
+#include "content/public/browser/navigation_controller.h"
+#include "content/public/browser/visibility.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
 #include "content/public/test/content_mock_cert_verifier.h"
 #include "content/public/test/test_navigation_observer.h"
 #include "content/public/test/web_contents_tester.h"
+#include "mojo/public/cpp/bindings/pending_remote.h"
 #include "net/dns/mock_host_resolver.h"
+#include "services/device/public/cpp/test/fake_hid_manager.h"
+#include "services/device/public/mojom/hid.mojom.h"
+#include "ui/base/mojom/window_open_disposition.mojom.h"
 
 namespace {
 
@@ -174,8 +191,8 @@ IN_PROC_BROWSER_TEST_F(BraveWalletTabHelperBrowserTest,
   base::RunLoop loop;
   content::WebContents* contents =
       browser()->tab_strip_model()->GetActiveWebContents();
-  auto* tab_helper =
-      brave_wallet::BraveWalletTabHelper::FromWebContents(contents);
+  auto* tab_helper = brave_wallet::BraveWalletTabHelper::From(
+      tabs::TabInterface::MaybeGetFromContents(contents));
   tab_helper->SetShowBubbleCallbackForTesting(loop.QuitClosure());
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), url));
   WaitForLoadStop(contents);
@@ -183,15 +200,47 @@ IN_PROC_BROWSER_TEST_F(BraveWalletTabHelperBrowserTest,
 
   ASSERT_TRUE(tab_helper->IsShowingBubble());
   auto* panel_contents = tab_helper->GetBubbleWebContentsForTesting();
-  auto close_dialog_callback = ShowChooserBubble(
-      panel_contents, std::make_unique<FakeUsbChooserController>(1));
-  ASSERT_TRUE(tab_helper->IsShowingBubble());
-  std::move(close_dialog_callback).Run();
-  base::RunLoop().RunUntilIdle();
+  ASSERT_TRUE(panel_contents);
+  ASSERT_TRUE(content::WaitForLoadStop(panel_contents));
+
+  device::FakeHidManager hid_manager;
+  mojo::PendingRemote<device::mojom::HidManager> hid_remote;
+  hid_manager.Bind(hid_remote.InitWithNewPipeAndPassReceiver());
+  base::test::TestFuture<std::vector<device::mojom::HidDeviceInfoPtr>> devices;
+  HidChooserContextFactory::GetForProfile(browser()->GetProfile())
+      ->SetHidManagerForTesting(std::move(hid_remote), devices.GetCallback());
+  ASSERT_TRUE(devices.Wait());
+  hid_manager.CreateAndAddDevice("ledger_id", 0x2c97, 0x4015, "Ledger", "001",
+                                 device::mojom::HidBusType::kHIDBusTypeUSB);
+
+  ASSERT_TRUE(content::ExecJs(panel_contents,
+                              content::JsReplace(R"js(
+    new Promise(resolve => {
+      const iframe = document.createElement('iframe');
+      iframe.name = 'ledger-test';
+      iframe.onload = resolve;
+      iframe.allow = 'hid';
+      iframe.src = $1;
+      document.body.appendChild(iframe);
+    })
+  )js",
+                                                 GURL(kUntrustedLedgerURL))));
+  auto* ledger_frame = content::FrameMatchingPredicate(
+      panel_contents->GetPrimaryPage(),
+      base::BindRepeating(&content::FrameMatchesName, "ledger-test"));
+  ASSERT_TRUE(ledger_frame);
+
+  // Wallet uses a headless Ledger chooser. Wait for the actual request to
+  // complete before checking that it left the panel open.
+  EXPECT_EQ(content::EvalJs(ledger_frame, R"js(
+    navigator.hid.requestDevice({filters: [{vendorId: 0x2c97}]})
+        .then(devices => devices.length)
+  )js"),
+            1);
   ASSERT_TRUE(tab_helper->IsShowingBubble());
   chrome::NewTab(browser(), NewTabTypes::kNewTabCommand);
-  base::RunLoop().RunUntilIdle();
-  ASSERT_FALSE(tab_helper->IsShowingBubble());
+  ASSERT_TRUE(
+      base::test::RunUntil([&] { return !tab_helper->IsShowingBubble(); }));
 }
 
 IN_PROC_BROWSER_TEST_F(BraveWalletTabHelperBrowserTest,
@@ -200,8 +249,8 @@ IN_PROC_BROWSER_TEST_F(BraveWalletTabHelperBrowserTest,
   base::RunLoop loop;
   content::WebContents* contents =
       browser()->tab_strip_model()->GetActiveWebContents();
-  auto* tab_helper =
-      brave_wallet::BraveWalletTabHelper::FromWebContents(contents);
+  auto* tab_helper = brave_wallet::BraveWalletTabHelper::From(
+      tabs::TabInterface::MaybeGetFromContents(contents));
   tab_helper->SetShowBubbleCallbackForTesting(loop.QuitClosure());
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), url));
   WaitForLoadStop(contents);
@@ -211,10 +260,9 @@ IN_PROC_BROWSER_TEST_F(BraveWalletTabHelperBrowserTest,
   auto close_dialog_callback = ShowChooserBubble(
       contents, std::make_unique<FakeUsbChooserController>(1));
   std::move(close_dialog_callback).Run();
-  base::RunLoop().RunUntilIdle();
   chrome::NewTab(browser(), NewTabTypes::kNewTabCommand);
-  base::RunLoop().RunUntilIdle();
-  ASSERT_FALSE(tab_helper->IsShowingBubble());
+  ASSERT_TRUE(
+      base::test::RunUntil([&] { return !tab_helper->IsShowingBubble(); }));
 }
 
 IN_PROC_BROWSER_TEST_F(BraveWalletTabHelperBrowserTest,
@@ -227,12 +275,13 @@ IN_PROC_BROWSER_TEST_F(BraveWalletTabHelperBrowserTest,
   auto non_panel_web_contents =
       OpenFromRegularPage(blank_url, browser(), active_contents);
   browser()->tab_strip_model()->ActivateTabAt(0);
-  auto* tab_helper =
-      brave_wallet::BraveWalletTabHelper::FromWebContents(active_contents);
+  auto* tab_helper = brave_wallet::BraveWalletTabHelper::From(
+      tabs::TabInterface::MaybeGetFromContents(active_contents));
   ASSERT_TRUE(non_panel_web_contents);
   tab_helper->ShowApproveWalletBubble();
-  EXPECT_TRUE(tab_helper->IsShowingBubble());
+  ASSERT_TRUE(tab_helper->IsShowingBubble());
   auto* panel_contents = tab_helper->GetBubbleWebContentsForTesting();
+  ASSERT_TRUE(panel_contents);
   WaitForLoadStop(panel_contents);
   auto popup1 = OpenFromPanel(https_server()->GetURL("a.com", "/popup.html"),
                               panel_contents, tab_helper);
@@ -242,8 +291,8 @@ IN_PROC_BROWSER_TEST_F(BraveWalletTabHelperBrowserTest,
   EXPECT_TRUE(popup2);
   EXPECT_TRUE(tab_helper->IsShowingBubble());
   chrome::NewTab(browser(), NewTabTypes::kNewTabCommand);
-  base::RunLoop().RunUntilIdle();
-  ASSERT_FALSE(tab_helper->IsShowingBubble());
+  ASSERT_TRUE(base::test::RunUntil(
+      [&] { return !tab_helper->IsShowingBubble() && !popup1 && !popup2; }));
 
   EXPECT_FALSE(popup1);
   EXPECT_FALSE(popup2);
@@ -259,12 +308,13 @@ IN_PROC_BROWSER_TEST_F(BraveWalletTabHelperBrowserTest, ClosePopupsWithBubble) {
   auto non_panel_web_contents =
       OpenFromRegularPage(blank_url, browser(), active_contents);
   browser()->tab_strip_model()->ActivateTabAt(0);
-  auto* tab_helper =
-      brave_wallet::BraveWalletTabHelper::FromWebContents(active_contents);
+  auto* tab_helper = brave_wallet::BraveWalletTabHelper::From(
+      tabs::TabInterface::MaybeGetFromContents(active_contents));
   ASSERT_TRUE(non_panel_web_contents);
   tab_helper->ShowApproveWalletBubble();
-  EXPECT_TRUE(tab_helper->IsShowingBubble());
+  ASSERT_TRUE(tab_helper->IsShowingBubble());
   auto* panel_contents = tab_helper->GetBubbleWebContentsForTesting();
+  ASSERT_TRUE(panel_contents);
   WaitForLoadStop(panel_contents);
   auto popup1 = OpenFromPanel(https_server()->GetURL("a.com", "/popup.html"),
                               panel_contents, tab_helper);
@@ -272,10 +322,50 @@ IN_PROC_BROWSER_TEST_F(BraveWalletTabHelperBrowserTest, ClosePopupsWithBubble) {
                               panel_contents, tab_helper);
   EXPECT_TRUE(tab_helper->IsShowingBubble());
   tab_helper->CloseBubble();
-  base::RunLoop().RunUntilIdle();
+  ASSERT_TRUE(base::test::RunUntil(
+      [&] { return !tab_helper->IsShowingBubble() && !popup1 && !popup2; }));
 
   ASSERT_FALSE(tab_helper->IsShowingBubble());
   ASSERT_FALSE(popup1);
   ASSERT_FALSE(popup2);
   ASSERT_TRUE(non_panel_web_contents);
+}
+
+// Discarding a tab replaces its contents, whose frames must still reach the
+// tab helper's providers.
+IN_PROC_BROWSER_TEST_F(BraveWalletTabHelperBrowserTest, ShowPanelAfterDiscard) {
+  ASSERT_TRUE(ui_test_utils::NavigateToURLWithDisposition(
+      browser(), https_server()->GetURL("c.com", "/popup.html"),
+      ui::mojom::WindowOpenDisposition::kNewBackgroundTab,
+      ui_test_utils::BROWSER_TEST_WAIT_FOR_LOAD_STOP));
+  TabStripModel* const tab_strip_model = browser()->tab_strip_model();
+  const int index = tab_strip_model->count() - 1;
+  tabs::TabInterface* const tab = tab_strip_model->GetTabAtIndex(index);
+  auto* const tab_helper = brave_wallet::BraveWalletTabHelper::From(tab);
+  ASSERT_TRUE(tab_helper);
+
+  auto* const lifecycle_unit =
+      resource_coordinator::TabLifecycleUnitSource::GetTabLifecycleUnitExternal(
+          tab->GetContents());
+  ASSERT_TRUE(lifecycle_unit);
+  ASSERT_TRUE(
+      lifecycle_unit->DiscardTab(::mojom::LifecycleUnitDiscardReason::URGENT));
+  EXPECT_EQ(tab_helper, brave_wallet::BraveWalletTabHelper::From(tab));
+
+  content::TestNavigationObserver navigation_observer(tab->GetContents());
+  tab_strip_model->ActivateTabAt(index);
+  tab->GetContents()->GetController().LoadIfNecessary();
+  navigation_observer.Wait();
+  // Wallet requests from a hidden tab are rejected, and the restored contents
+  // may only report itself visible after it loads.
+  ASSERT_TRUE(base::test::RunUntil([&] {
+    return tab->GetContents()->GetVisibility() == content::Visibility::VISIBLE;
+  }));
+
+  base::RunLoop loop;
+  tab_helper->SetShowBubbleCallbackForTesting(loop.QuitClosure());
+  ASSERT_TRUE(
+      ui_test_utils::NavigateToURL(browser(), GetWalletEthereumChainPageURL()));
+  loop.Run();
+  EXPECT_TRUE(tab_helper->IsShowingBubble());
 }

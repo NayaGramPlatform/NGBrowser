@@ -12,17 +12,15 @@
 #include <vector>
 
 #include "base/json/json_writer.h"
-#include "base/run_loop.h"
 #include "base/strings/strcat.h"
-#include "base/test/bind.h"
 #include "base/test/scoped_feature_list.h"
+#include "base/test/test_future.h"
 #include "base/test/values_test_util.h"
 #include "base/values.h"
 #include "brave/components/ai_chat/core/browser/tools/code_plugin.h"
 #include "brave/components/ai_chat/core/common/features.h"
 #include "brave/components/ai_chat/core/common/mojom/ai_chat.mojom.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/browser.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "content/public/test/browser_test.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
@@ -101,23 +99,18 @@ class AIChatCodeExecutionToolBrowserTest : public InProcessBrowserTest {
       const std::string& input_json,
       std::string* output,
       std::vector<mojom::ToolArtifactPtr>* artifacts = nullptr) {
-    base::RunLoop run_loop;
-    tool_->UseTool(
-        input_json,
-        base::BindLambdaForTesting(
-            [&run_loop, output, artifacts](
-                std::vector<mojom::ContentBlockPtr> result,
-                std::vector<mojom::ToolArtifactPtr> result_artifacts) {
-              ASSERT_FALSE(result.empty());
-              ASSERT_TRUE(result[0]->is_text_content_block());
-              *output = result[0]->get_text_content_block()->text;
+    base::test::TestFuture<std::vector<mojom::ContentBlockPtr>,
+                           std::vector<mojom::ToolArtifactPtr>>
+        future;
+    tool_->UseTool(input_json, future.GetCallback());
+    auto [result, result_artifacts] = future.Take();
+    ASSERT_FALSE(result.empty());
+    ASSERT_TRUE(result[0]->is_text_content_block());
+    *output = result[0]->get_text_content_block()->text;
 
-              if (artifacts) {
-                *artifacts = std::move(result_artifacts);
-              }
-              run_loop.Quit();
-            }));
-    run_loop.Run();
+    if (artifacts) {
+      *artifacts = std::move(result_artifacts);
+    }
   }
 
   void ExecuteCode(const std::string& script,

@@ -73,40 +73,45 @@ SHIM_TARGETS: dict[str, Shim] = {
     'git-cr': Shim('src/brave/tools/cr/alias/cmd.py', 'vpython'),
     'node-linux': Shim(
         'src/brave/third_party/node/node-linux-x64/bin/node',
-        self_update_extra_dep_entry='src/brave/third_party/node/node-linux-x64'
+        self_update_extra_dep_entry='src/brave/third_party/node/node-linux-x64',
     ),
     'node-mac': Shim(
         'src/brave/third_party/node/node-mac-x64/bin/node',
-        self_update_extra_dep_entry='src/brave/third_party/node/node-mac-x64'),
+        self_update_extra_dep_entry='src/brave/third_party/node/node-mac-x64',
+    ),
     'node-mac_arm64': Shim(
         'src/brave/third_party/node/node-mac-arm64/bin/node',
-        self_update_extra_dep_entry='src/brave/third_party/node/node-mac-arm64'
+        self_update_extra_dep_entry='src/brave/third_party/node/node-mac-arm64',
     ),
     'node-win': Shim(
         'src/brave/third_party/node/node-win-x64/node.exe',
-        self_update_extra_dep_entry='src/brave/third_party/node/node-win-x64'),
+        self_update_extra_dep_entry='src/brave/third_party/node/node-win-x64',
+    ),
     'npm-linux': Shim(
         'src/brave/third_party/node/node-linux-x64/lib/node_modules/npm/bin/npm-cli.js',
         'node',
-        self_update_extra_dep_entry='src/brave/third_party/node/node-linux-x64'
+        self_update_extra_dep_entry='src/brave/third_party/node/node-linux-x64',
     ),
     'npm-mac': Shim(
         'src/brave/third_party/node/node-mac-x64/lib/node_modules/npm/bin/npm-cli.js',
         'node',
-        self_update_extra_dep_entry='src/brave/third_party/node/node-mac-x64'),
+        self_update_extra_dep_entry='src/brave/third_party/node/node-mac-x64',
+    ),
     'npm-mac_arm64': Shim(
         'src/brave/third_party/node/node-mac-arm64/lib/node_modules/npm/bin/npm-cli.js',
         'node',
-        self_update_extra_dep_entry='src/brave/third_party/node/node-mac-arm64'
+        self_update_extra_dep_entry='src/brave/third_party/node/node-mac-arm64',
     ),
     'npm-win': Shim(
         'src/brave/third_party/node/node-win-x64/node_modules/npm/bin/npm-cli.js',
         'node',
-        self_update_extra_dep_entry='src/brave/third_party/node/node-win-x64'),
+        self_update_extra_dep_entry='src/brave/third_party/node/node-win-x64',
+    ),
     'pnpm': Shim(
         'src/brave/third_party/node/node_modules/pnpm/bin/pnpm.mjs',
         'node',
-        self_update_extra_dep_entry='src/brave/third_party/node/node_modules'),
+        self_update_extra_dep_entry='src/brave/third_party/node/node_modules',
+    ),
 }
 
 
@@ -171,30 +176,9 @@ def _resolve_vpython3(checkout: Path) -> Path:
     return checkout / 'vendor' / 'depot_tools' / name
 
 
-# TODO(https://brave.dev/b/57477): this `npm_wrapper` special-casing exists
-# only while `build/npm_wrapper` sits ahead of our shims on `$PATH` in CI. That
-# wrapper translates `npm` to `pnpm` and otherwise defers to the next `npm` on
-# `$PATH` (our shim). If our `npm` fallback resolved a binary back out of the
-# wrapper dir, the wrapper would call our shim, which would fall back to the
-# wrapper again, ping-ponging forever. The wrapper dir is recognised by a
-# sentinel file it is guaranteed to contain. Delete this constant and
-# `_is_wrapper_dir`, and the guarded block in `_resolve_system_binary`, once
-# `build/npm_wrapper` is gone.
-_WRAPPER_SENTINELS: tuple[str, ...] = ('npm_wrapper.py', )
-
-
-def _is_wrapper_dir(directory: Path) -> bool:
-    """Whether `directory` is the `npm_wrapper` routing dir.
-
-    TODO(https://brave.dev/b/57477): remove with the rest of the `npm_wrapper`
-    special-casing once `build/npm_wrapper` is gone.
-    """
-    return any(
-        (directory / sentinel).is_file() for sentinel in _WRAPPER_SENTINELS)
-
-
-def _resolve_system_binary(tool: str,
-                           exclude_dir: Path | None = None) -> str | None:
+def _resolve_system_binary(
+    tool: str, exclude_dir: Path | None = None
+) -> str | None:
     """Locate `tool` on `$PATH`, minus the shim dir.
 
     The shim dir is first on `$PATH`, so a plain `which` would find our own shim
@@ -207,12 +191,6 @@ def _resolve_system_binary(tool: str,
             continue
         resolved = Path(entry).resolve()
         if resolved == here:
-            continue
-        # TODO(https://brave.dev/b/57477): the `npm` fallback alone must skip a
-        # `build/npm_wrapper` dir present on `$PATH` (the wrapper shadows `npm`
-        # only); resolving into it would ping-pong between the wrapper and our
-        # shim. Remove once `build/npm_wrapper` is gone.
-        if tool == 'npm' and _is_wrapper_dir(resolved):
             continue
         entries.append(entry)
     return shutil.which(tool, path=os.pathsep.join(entries))
@@ -249,7 +227,8 @@ class SelfUpdater:
             return False
         try:
             return not module.check_extra_deps_installed(
-                self.checkout.parent.parent, self.entry)
+                self.checkout.parent.parent, self.entry
+            )
         except (AttributeError, KeyError, ValueError, OSError):
             return False
 
@@ -268,10 +247,9 @@ class SelfUpdater:
         installer = self.checkout / 'tools' / 'cr' / 'tarball_installer.py'
         if not installer.is_file():
             return
-        subprocess.check_call([
-            str(_resolve_vpython3(self.checkout)),
-            str(installer), self.entry
-        ])
+        subprocess.check_call(
+            [str(_resolve_vpython3(self.checkout)), str(installer), self.entry]
+        )
 
     def _load_extra_deps(self):
         """Import the checkout's stdlib-only `extra_deps` module, or None.
@@ -282,8 +260,9 @@ class SelfUpdater:
         module_path = self.checkout / 'tools' / 'cr' / 'extra_deps.py'
         if not module_path.is_file():
             return None
-        spec = importlib.util.spec_from_file_location('brave_extra_deps',
-                                                      module_path)
+        spec = importlib.util.spec_from_file_location(
+            'brave_extra_deps', module_path
+        )
         if spec is None or spec.loader is None:
             return None
         module = importlib.util.module_from_spec(spec)
@@ -299,8 +278,9 @@ class SelfUpdater:
         return module
 
 
-def resolve_invocation(tool: str, checkout: Path | None,
-                       allow_fallback: bool) -> list[str] | None:
+def resolve_invocation(
+    tool: str, checkout: Path | None, allow_fallback: bool
+) -> list[str] | None:
     """The argv prefix to run `tool` from `checkout`.
 
     This function attempts to resolve the invocation for a given tool. Tools
@@ -352,19 +332,24 @@ def build_parser() -> argparse.ArgumentParser:
         prog='launcher.py',
         description='Run a brave tool shim against the checkout in the cwd.',
         epilog='Arguments after TOOL are forwarded to it verbatim.',
-        allow_abbrev=False)
+        allow_abbrev=False,
+    )
     parser.add_argument(
         '--allow-fallback',
         action='store_true',
-        help='Allow falling back to a binary on $PATH if outside a checkout.')
-    parser.add_argument('tool',
-                        metavar='TOOL',
-                        help='shim to run (e.g. brockit, plaster, node, npm, '
-                        'pnpm)')
-    parser.add_argument('tool_args',
-                        metavar='...',
-                        nargs=argparse.REMAINDER,
-                        help='arguments forwarded to TOOL verbatim')
+        help='Allow falling back to a binary on $PATH if outside a checkout.',
+    )
+    parser.add_argument(
+        'tool',
+        metavar='TOOL',
+        help='shim to run (e.g. brockit, plaster, node, npm, pnpm)',
+    )
+    parser.add_argument(
+        'tool_args',
+        metavar='...',
+        nargs=argparse.REMAINDER,
+        help='arguments forwarded to TOOL verbatim',
+    )
     return parser
 
 
@@ -395,15 +380,20 @@ def main() -> int:
     # Resolved a known tool but produced nothing to run — report why.
     if parsed.allow_fallback:
         family = tool.split('-', 1)[0]
-        sys.stderr.write(f'{family}: no checkout-local binary found and no '
-                         f'{family} on $PATH.\n')
+        sys.stderr.write(
+            f'{family}: no checkout-local binary found and no '
+            f'{family} on $PATH.\n'
+        )
         return 1
     if checkout is None:
-        sys.stderr.write(f'{tool}: must be run inside a brave checkout '
-                         f'(no src/brave found for the current directory).\n')
+        sys.stderr.write(
+            f'{tool}: must be run inside a brave checkout '
+            f'(no src/brave found for the current directory).\n'
+        )
     else:
         sys.stderr.write(
-            f'{tool}: target not found in the resolved checkout.\n')
+            f'{tool}: target not found in the resolved checkout.\n'
+        )
     return 2
 
 

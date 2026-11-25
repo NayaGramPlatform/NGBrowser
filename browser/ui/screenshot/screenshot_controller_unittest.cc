@@ -14,6 +14,7 @@
 #include "base/test/bind.h"
 #include "base/test/test_future.h"
 #include "base/types/expected.h"
+#include "brave/ui/base/clipboard/test/privacy_capturing_test_clipboard.h"
 #include "chrome/browser/image_editor/screenshot_flow.h"
 #include "chrome/test/base/chrome_render_view_host_test_harness.h"
 #include "printing/buildflags/buildflags.h"
@@ -24,6 +25,7 @@
 #include "ui/base/clipboard/clipboard.h"
 #include "ui/base/clipboard/test/clipboard_test_util.h"
 #include "ui/base/clipboard/test/test_clipboard.h"
+#include "ui/base/unowned_user_data/unowned_user_data_host.h"
 #include "ui/gfx/codec/png_codec.h"
 #include "ui/gfx/image/image.h"
 #include "ui/gfx/native_ui_types.h"
@@ -40,39 +42,6 @@ SkBitmap MakeSolidBitmap(int width, int height, SkColor color) {
   canvas.drawColor(color);
   return bm;
 }
-
-// A TestClipboard that records the `privacy_types` bitmask passed to
-// WritePortableAndPlatformRepresentations(), so tests can verify
-// ScreenshotController::CopyToClipboard() calls
-// ScopedClipboardWriter::MarkAsOffTheRecord() (which sets
-// Clipboard::kNoLocalClipboardHistory | Clipboard::kNoCloudClipboard) only
-// when the profile is off-the-record.
-// Pattern from content/browser/renderer_host/clipboard_host_impl_unittest.cc
-// (DeferredReadAvailableTypesClipboard / RaceConditionTestClipboard).
-class PrivacyCapturingTestClipboard : public ui::TestClipboard {
- public:
-  PrivacyCapturingTestClipboard() = default;
-  ~PrivacyCapturingTestClipboard() override = default;
-
-  void WritePortableAndPlatformRepresentations(
-      ui::ClipboardBuffer buffer,
-      const ui::Clipboard::ObjectMap& objects,
-      const std::vector<ui::Clipboard::RawData>& raw_objects,
-      std::vector<ui::Clipboard::PlatformRepresentation>
-          platform_representations,
-      std::unique_ptr<ui::DataTransferEndpoint> data_src,
-      uint32_t privacy_types) override {
-    last_privacy_types_ = privacy_types;
-    ui::TestClipboard::WritePortableAndPlatformRepresentations(
-        buffer, objects, raw_objects, std::move(platform_representations),
-        std::move(data_src), privacy_types);
-  }
-
-  uint32_t last_privacy_types() const { return last_privacy_types_; }
-
- private:
-  uint32_t last_privacy_types_ = ui::Clipboard::kNone;
-};
 
 }  // namespace
 
@@ -109,7 +78,8 @@ class ScreenshotControllerTest : public ChromeRenderViewHostTestHarness {
     // DownloadPrefs (which requires a full download-service stack).
     const base::FilePath download_dir = temp_dir_.GetPath();
     controller_ = std::make_unique<ScreenshotController>(
-        profile(), base::BindRepeating([]() { return gfx::NativeWindow(); }),
+        user_data_host_, profile(),
+        base::BindRepeating([]() { return gfx::NativeWindow(); }),
         base::BindRepeating(&ScreenshotControllerTest::AutoConfirmPreview));
     controller_->set_download_dir_for_testing(download_dir);
   }
@@ -198,6 +168,7 @@ class ScreenshotControllerTest : public ChromeRenderViewHostTestHarness {
 
   base::ScopedTempDir temp_dir_;
   raw_ptr<ui::FakeSelectFileDialog::Factory> dialog_factory_ = nullptr;
+  ui::UnownedUserDataHost user_data_host_;
   std::unique_ptr<ScreenshotController> controller_;
 };
 
@@ -281,9 +252,10 @@ TEST_F(ScreenshotControllerTest,
         preview_shown.SetValue();
       });
 
+  ui::UnownedUserDataHost user_data_host;
   auto controller = std::make_unique<ScreenshotController>(
-      profile(), base::BindRepeating([]() { return gfx::NativeWindow(); }),
-      shower);
+      user_data_host, profile(),
+      base::BindRepeating([]() { return gfx::NativeWindow(); }), shower);
   controller->set_download_dir_for_testing(temp_dir_.GetPath());
 
   base::test::TestFuture<Result> future;
@@ -314,9 +286,10 @@ TEST_F(ScreenshotControllerTest,
         preview_shown.SetValue();
       });
 
+  ui::UnownedUserDataHost user_data_host;
   auto controller = std::make_unique<ScreenshotController>(
-      profile(), base::BindRepeating([]() { return gfx::NativeWindow(); }),
-      shower);
+      user_data_host, profile(),
+      base::BindRepeating([]() { return gfx::NativeWindow(); }), shower);
   controller->set_download_dir_for_testing(temp_dir_.GetPath());
 
   SkBitmap bitmap = MakeSolidBitmap(64, 64, SK_ColorBLUE);
@@ -357,13 +330,8 @@ TEST_F(ScreenshotControllerTest,
 TEST_F(ScreenshotControllerTest,
        CopyToClipboard_OffTheRecordProfile_MarksPrivacyBits) {
   // Swap the fixture-installed TestClipboard for our capturing fake, for the
-  // duration of this test only. TearDown() will destroy whichever clipboard
-  // is registered for this thread, regardless of concrete type, so no
-  // restoration is needed here.
-  ui::Clipboard::DestroyClipboardForCurrentThread();
-  auto fake_clipboard = std::make_unique<PrivacyCapturingTestClipboard>();
-  auto* fake_clipboard_ptr = fake_clipboard.get();
-  ui::Clipboard::SetClipboardForCurrentThread(std::move(fake_clipboard));
+  // duration of this test only.
+  brave::ScopedPrivacyCapturingTestClipboard fake_clipboard;
 
   Profile* otr_profile =
       profile()->GetPrimaryOTRProfile(/*create_if_needed=*/true);
@@ -382,9 +350,10 @@ TEST_F(ScreenshotControllerTest,
         preview_shown.SetValue();
       });
 
+  ui::UnownedUserDataHost user_data_host;
   auto controller = std::make_unique<ScreenshotController>(
-      otr_profile, base::BindRepeating([]() { return gfx::NativeWindow(); }),
-      shower);
+      user_data_host, otr_profile,
+      base::BindRepeating([]() { return gfx::NativeWindow(); }), shower);
   controller->set_download_dir_for_testing(temp_dir_.GetPath());
 
   base::test::TestFuture<Result> future;
@@ -399,7 +368,7 @@ TEST_F(ScreenshotControllerTest,
   Result result = future.Get();
   ASSERT_TRUE(result.has_value());
 
-  EXPECT_EQ(fake_clipboard_ptr->last_privacy_types(),
+  EXPECT_EQ(fake_clipboard.last_privacy_types(),
             static_cast<uint32_t>(ui::Clipboard::kNoCloudClipboard |
                                   ui::Clipboard::kNoLocalClipboardHistory));
 }
@@ -415,10 +384,7 @@ TEST_F(ScreenshotControllerTest,
 // TorProfileServiceFactory/TorLauncherFactory, to keep this test fast and
 // hermetic.
 TEST_F(ScreenshotControllerTest, CopyToClipboard_TorProfile_MarksPrivacyBits) {
-  ui::Clipboard::DestroyClipboardForCurrentThread();
-  auto fake_clipboard = std::make_unique<PrivacyCapturingTestClipboard>();
-  auto* fake_clipboard_ptr = fake_clipboard.get();
-  ui::Clipboard::SetClipboardForCurrentThread(std::move(fake_clipboard));
+  brave::ScopedPrivacyCapturingTestClipboard fake_clipboard;
 
   Profile* tor_profile = profile()->GetOffTheRecordProfile(
       Profile::OTRProfileID::TorID(), /*create_if_needed=*/true);
@@ -438,9 +404,10 @@ TEST_F(ScreenshotControllerTest, CopyToClipboard_TorProfile_MarksPrivacyBits) {
         preview_shown.SetValue();
       });
 
+  ui::UnownedUserDataHost user_data_host;
   auto controller = std::make_unique<ScreenshotController>(
-      tor_profile, base::BindRepeating([]() { return gfx::NativeWindow(); }),
-      shower);
+      user_data_host, tor_profile,
+      base::BindRepeating([]() { return gfx::NativeWindow(); }), shower);
   controller->set_download_dir_for_testing(temp_dir_.GetPath());
 
   base::test::TestFuture<Result> future;
@@ -455,7 +422,7 @@ TEST_F(ScreenshotControllerTest, CopyToClipboard_TorProfile_MarksPrivacyBits) {
   Result result = future.Get();
   ASSERT_TRUE(result.has_value());
 
-  EXPECT_EQ(fake_clipboard_ptr->last_privacy_types(),
+  EXPECT_EQ(fake_clipboard.last_privacy_types(),
             static_cast<uint32_t>(ui::Clipboard::kNoCloudClipboard |
                                   ui::Clipboard::kNoLocalClipboardHistory));
 }
@@ -464,10 +431,7 @@ TEST_F(ScreenshotControllerTest, CopyToClipboard_TorProfile_MarksPrivacyBits) {
 // is a regular (non-off-the-record) profile.
 TEST_F(ScreenshotControllerTest,
        CopyToClipboard_RegularProfile_DoesNotMarkPrivacyBits) {
-  ui::Clipboard::DestroyClipboardForCurrentThread();
-  auto fake_clipboard = std::make_unique<PrivacyCapturingTestClipboard>();
-  auto* fake_clipboard_ptr = fake_clipboard.get();
-  ui::Clipboard::SetClipboardForCurrentThread(std::move(fake_clipboard));
+  brave::ScopedPrivacyCapturingTestClipboard fake_clipboard;
 
   ASSERT_FALSE(profile()->IsOffTheRecord());
 
@@ -484,9 +448,10 @@ TEST_F(ScreenshotControllerTest,
         preview_shown.SetValue();
       });
 
+  ui::UnownedUserDataHost user_data_host;
   auto controller = std::make_unique<ScreenshotController>(
-      profile(), base::BindRepeating([]() { return gfx::NativeWindow(); }),
-      shower);
+      user_data_host, profile(),
+      base::BindRepeating([]() { return gfx::NativeWindow(); }), shower);
   controller->set_download_dir_for_testing(temp_dir_.GetPath());
 
   base::test::TestFuture<Result> future;
@@ -501,7 +466,7 @@ TEST_F(ScreenshotControllerTest,
   Result result = future.Get();
   ASSERT_TRUE(result.has_value());
 
-  EXPECT_EQ(fake_clipboard_ptr->last_privacy_types(),
+  EXPECT_EQ(fake_clipboard.last_privacy_types(),
             static_cast<uint32_t>(ui::Clipboard::kNone));
 }
 

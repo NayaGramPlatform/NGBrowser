@@ -10,16 +10,17 @@
 
 #include "base/functional/bind.h"
 #include "base/json/json_writer.h"
+#include "base/logging.h"
 #include "base/strings/strcat.h"
+#include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "base/values.h"
-#include "brave/components/psst/core/browser/pref_names.h"
 #include "brave/components/psst/core/browser/psst_rule.h"
 #include "brave/components/psst/core/browser/psst_rule_registry.h"
 #include "brave/components/psst/core/common/features.h"
-#include "components/prefs/pref_service.h"
+#include "components/sessions/content/session_tab_helper.h"
 #include "components/variations/service/variations_service.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/navigation_controller.h"
@@ -110,12 +111,13 @@ void PrepareParametersForPolicyExecution(
 
 // static
 std::unique_ptr<PsstTabWebContentsObserver>
-PsstTabWebContentsObserver::MaybeCreateForWebContents(
+PsstTabWebContentsObserver::MaybeCreate(
     tabs::TabInterface& tab,
     content::BrowserContext* browser_context,
     std::unique_ptr<PsstUiDelegate> ui_delegate,
     PsstSettingsService* psst_settings_service,
     variations::VariationsService* variations_service,
+    PsstLogService* log_service,
     const int32_t world_id) {
   CHECK(browser_context);
   CHECK(psst_settings_service);
@@ -129,7 +131,7 @@ PsstTabWebContentsObserver::MaybeCreateForWebContents(
   auto observer = base::WrapUnique<PsstTabWebContentsObserver>(
       new PsstTabWebContentsObserver(tab, PsstRuleRegistry::GetInstance(),
                                      psst_settings_service, variations_service,
-                                     std::move(ui_delegate)));
+                                     log_service, std::move(ui_delegate)));
 
   auto inject_script_callback = base::BindRepeating(
       [](base::WeakPtr<PsstTabWebContentsObserver> self, int32_t world_id,
@@ -181,18 +183,20 @@ PsstTabWebContentsObserver::PsstTabWebContentsObserver(
     PsstRuleRegistry* registry,
     PsstSettingsService* psst_settings_service,
     variations::VariationsService* variations_service,
+    PsstLogService* log_service,
     std::unique_ptr<PsstUiDelegate> ui_delegate)
     : tabs::ContentsObservingTabFeature(tab),
       registry_(registry),
       psst_settings_service_(psst_settings_service),
       variations_service_(variations_service),
+      log_service_(log_service),
       ui_delegate_(std::move(ui_delegate)) {
-  psst_settings_service_->AddObserver(this);
+  ui_delegate_->SetLogicalFlowCancelCallback(
+      base::BindRepeating(&PsstTabWebContentsObserver::CancelInFlightFlow,
+                     weak_factory_.GetWeakPtr()));
 }
 
-PsstTabWebContentsObserver::~PsstTabWebContentsObserver() {
-  psst_settings_service_->RemoveObserver(this);
-}
+PsstTabWebContentsObserver::~PsstTabWebContentsObserver() = default;
 
 PsstTabWebContentsObserver::PsstUiDelegate*
 PsstTabWebContentsObserver::GetPsstUiDelegate() const {
@@ -203,8 +207,21 @@ PsstTabWebContentsObserver::AsWeakPtr() {
   return weak_factory_.GetWeakPtr();
 }
 
-void PsstTabWebContentsObserver::PrimaryPageChanged(content::Page& page) {
-  CancelInFlightFlow();
+void PsstTabWebContentsObserver::Log(mojom::PsstLogLevel level,
+                                     std::string_view message,
+                                     std::optional<base::DictValue> data) {
+  if (!log_service_) {
+    return;
+  }
+  log_service_->AddNativeEntry(
+      level, sessions::SessionTabHelper::IdForTab(web_contents()).id(),
+      web_contents()->GetLastCommittedURL(), message, std::move(data));
+}
+
+void PsstTabWebContentsObserver::CancelInFlightFlow() {
+  Log(mojom::PsstLogLevel::kInfo, "Flow cancelled from the UI");
+  logical_flow_cancelled_ = true;
+  PageScopedReset();
 }
 
 void PsstTabWebContentsObserver::DidFinishNavigation(
@@ -228,7 +245,13 @@ void PsstTabWebContentsObserver::DocumentOnLoadCompletedInPrimaryMainFrame() {
   registry_->CheckIfMatch(
       web_contents()->GetLastCommittedURL(),
       base::BindOnce(&PsstTabWebContentsObserver::InsertUserScript,
+                     page_weak_factory_.GetWeakPtr()),
+      base::BindOnce(&PsstTabWebContentsObserver::NoRulesFoundHandler,
                      page_weak_factory_.GetWeakPtr()));
+}
+
+void PsstTabWebContentsObserver::PrimaryPageChanged(content::Page& page) {
+  PageScopedReset();
 }
 
 void PsstTabWebContentsObserver::InsertUserScript(
@@ -236,6 +259,10 @@ void PsstTabWebContentsObserver::InsertUserScript(
   if (!rule) {
     return;
   }
+  Log(mojom::PsstLogLevel::kInfo,
+      base::StrCat({"Matched rule '", rule->name(), "' (version ",
+                    base::NumberToString(rule->version()),
+                    "), injecting user script"}));
   const std::string user_script_with_param = MaybeAddParamsToScript(
       *rule, ScriptSourceType::kUserScript,
       base::DictValue().Set(
@@ -256,6 +283,14 @@ void PsstTabWebContentsObserver::OnUserScriptResult(
   // script result is not a dictionary
   if (!rule || rule->policy_script().empty() || !user_script_result.is_dict()) {
     ui_delegate_->UpdateTasks(100, {}, mojom::PsstStatus::kFailed);
+    DVLOG(1) << __func__
+             << " The policy script is unavailable or the user script returned "
+                "an unexpected format";
+    Log(mojom::PsstLogLevel::kError,
+        base::StrCat(
+            {"The policy script is unavailable or the user script returned an "
+             "unexpected format: ",
+             user_script_result.DebugString()}));
     return;
   }
 
@@ -263,12 +298,19 @@ void PsstTabWebContentsObserver::OnUserScriptResult(
       UserScriptResult::FromValue(user_script_result);
   if (!user_script_result_parsed) {
     ui_delegate_->UpdateTasks(100, {}, mojom::PsstStatus::kFailed);
+    DVLOG(1) << __func__ << " Failed to parse the user script result";
+    Log(mojom::PsstLogLevel::kError,
+        base::StrCat({"Failed to parse the user script result, value: ",
+                      user_script_result.DebugString()}));
     return;
   }
 
   // We should break the flow in case of signed-in user ID is not available
   if (user_script_result_parsed->user_id.empty()) {
     ui_delegate_->UpdateTasks(100, {}, mojom::PsstStatus::kFailed);
+    DVLOG(1) << __func__ << " User ID is not available";
+    Log(mojom::PsstLogLevel::kWarn,
+        "User ID is not available; the user is probably not signed in");
     return;
   }
 
@@ -276,6 +318,25 @@ void PsstTabWebContentsObserver::OnUserScriptResult(
   auto psst_settings = ui_delegate_->GetPsstWebsiteSettings(
       origin, user_script_result_parsed->user_id);
   if (psst_settings && psst_settings->consent_status == ConsentStatus::kBlock) {
+    DVLOG(1) << __func__ << " Psst is disabled for the current website";
+    Log(mojom::PsstLogLevel::kInfo,
+        "PSST is disabled for this site by the user");
+    return;
+  }
+
+  if (user_script_result_parsed->initial_execution.has_value() &&
+      user_script_result_parsed->initial_execution.value()) {
+    DVLOG(1) << __func__ << " Reset the cancellation flag for the logical flow";
+    Log(mojom::PsstLogLevel::kDebug,
+        "Initial execution: reset the flow cancellation flag");
+    // Reset the logical flow cancellation flag on initial execution
+    logical_flow_cancelled_ = false;
+  } else if (logical_flow_cancelled_) {
+    DVLOG(1) << __func__
+             << " Stop the execution of the logical flow, as it was cancelled";
+    Log(mojom::PsstLogLevel::kInfo,
+        "Stopping the flow because it was cancelled");
+    // Stop the logical flow
     return;
   }
 
@@ -318,6 +379,11 @@ void PsstTabWebContentsObserver::OnUserAcceptedPsstSettings(
   auto user_script_result_dict = std::move(user_script_result).TakeDict();
   PrepareParametersForPolicyExecution(user_script_result_dict, perform_for_uids,
                                       is_initial);
+  Log(mojom::PsstLogLevel::kInfo,
+      base::StrCat(
+          {"Injecting policy script for ",
+           base::NumberToString(perform_for_uids.size()),
+           " task(s), initial execution: ", is_initial ? "yes" : "no"}));
   RunWithTimeout(
       MaybeAddParamsToScript(*rule, ScriptSourceType::kPolicyScript,
                              std::move(user_script_result_dict)),
@@ -333,6 +399,9 @@ void PsstTabWebContentsObserver::OnPolicyScriptResult(
       PolicyScriptResult::FromValue(script_result);
   if (!script_result_parsed) {
     ui_delegate_->UpdateTasks(100, {}, mojom::PsstStatus::kFailed);
+    Log(mojom::PsstLogLevel::kError,
+        base::StrCat({"Failed to parse the policy script result, value: ",
+                      script_result.DebugString()}));
     return;
   }
 
@@ -341,6 +410,12 @@ void PsstTabWebContentsObserver::OnPolicyScriptResult(
                           : mojom::PsstStatus::kInProgress;
   ui_delegate_->UpdateTasks(script_result_parsed->psst.progress,
                             script_result_parsed->psst.applied_tasks, status);
+  Log(mojom::PsstLogLevel::kInfo,
+      base::StrCat({"Policy script progress: ",
+                    base::NumberToString(script_result_parsed->psst.progress),
+                    "%, applied tasks: ",
+                    base::NumberToString(
+                        script_result_parsed->psst.applied_tasks.size())}));
 
   auto next_url =
       (script_result_parsed->next_url.has_value() &&
@@ -350,6 +425,9 @@ void PsstTabWebContentsObserver::OnPolicyScriptResult(
 
   // Follow to the next URL only if it is valid URL
   if (next_url.has_value() && next_url->is_valid()) {
+    Log(mojom::PsstLogLevel::kInfo,
+        base::StrCat({"Following the policy script to the next step: ",
+                      next_url->path()}));
     web_contents()->GetController().LoadURL(
         next_url.value(), content::Referrer(), ui::PAGE_TRANSITION_LINK,
         std::string());
@@ -372,6 +450,11 @@ void PsstTabWebContentsObserver::RunWithTimeout(
 }
 
 void PsstTabWebContentsObserver::OnScriptTimeout() {
+  Log(mojom::PsstLogLevel::kError,
+      base::StrCat({"Script timed out after ",
+                    base::NumberToString(kScriptTimeout.InSeconds()),
+                    "s; aborting the flow"}));
+
   // Make sure any in-progress script that returns after the timeout is a no-op
   page_weak_factory_.InvalidateWeakPtrs();
 
@@ -390,17 +473,17 @@ void PsstTabWebContentsObserver::SetInjectAsyncScriptCallback(
   inject_async_script_callback_ = std::move(inject_async_script_callback);
 }
 
-void PsstTabWebContentsObserver::CancelInFlightFlow() {
+void PsstTabWebContentsObserver::PageScopedReset() {
+  timeout_timer_.Stop();
   script_injector_remote_.reset();
   page_weak_factory_.InvalidateWeakPtrs();
   should_process_current_page_ = false;
 }
 
-void PsstTabWebContentsObserver::OnPsstEnableChange(bool new_value) {
-  if (new_value) {
-    return;
-  }
-  CancelInFlightFlow();
+void PsstTabWebContentsObserver::NoRulesFoundHandler() {
+  Log(mojom::PsstLogLevel::kDebug, "No PSST rule matches this site");
+  ui_delegate_->HideAll();
+  PageScopedReset();
 }
 
 }  // namespace psst

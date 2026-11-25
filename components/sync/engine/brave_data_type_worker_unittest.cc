@@ -14,7 +14,6 @@
 #include "base/test/task_environment.h"
 #include "base/time/time_override.h"
 #include "components/sync/engine/cancelation_signal.h"
-#include "components/sync/nigori/cryptographer_impl.h"
 #include "components/sync/protocol/sync.pb.h"
 #include "components/sync/test/fake_cryptographer.h"
 #include "components/sync/test/mock_data_type_processor.h"
@@ -84,6 +83,9 @@ class BraveDataTypeWorkerTest : public ::testing::Test {
   }
 
  private:
+  // Pin the feature on so reset tests don't depend on its compiled default.
+  base::test::ScopedFeatureList feature_list_{
+      features::kBraveSyncResetProgressMarker};
   base::test::SingleThreadTaskEnvironment task_environment;
   const DataType data_type_;
   FakeCryptographer cryptographer_;

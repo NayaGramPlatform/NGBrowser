@@ -1,0 +1,43 @@
+diff --git a/chrome/browser/ui/browser_window/internal/embedder_browser_window_features.cc b/chrome/browser/ui/browser_window/internal/embedder_browser_window_features.cc
+index a2c0889f7003c1f1b70c76beb1e6b481d8ac649e..e53107c91a56378fa65bcbb788d542caee9ea40e 100644
+--- a/chrome/browser/ui/browser_window/internal/embedder_browser_window_features.cc
++++ b/chrome/browser/ui/browser_window/internal/embedder_browser_window_features.cc
+@@ -4,13 +4,16 @@
+ 
+ #include "chrome/browser/ui/browser_window/public/embedder_browser_window_features.h"
+ 
++#include "brave/browser/ui/browser_window/internal/brave_browser_window_features.h"
+ #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
+ #include "chrome/browser/ui/views/frame/browser_view.h"
+ 
+ DEFINE_USER_DATA(EmbedderBrowserWindowFeatures);
+ 
+ EmbedderBrowserWindowFeatures::EmbedderBrowserWindowFeatures(
+-    BrowserWindowInterface* browser) {}
++    BrowserWindowInterface* browser) {
++  brave_browser_window_features_ =
++      std::make_unique<BraveBrowserWindowFeatures>(*browser);}
+ 
+ EmbedderBrowserWindowFeatures::~EmbedderBrowserWindowFeatures() = default;
+ 
+@@ -21,11 +24,13 @@ EmbedderBrowserWindowFeatures* EmbedderBrowserWindowFeatures::From(
+ }
+ 
+ void EmbedderBrowserWindowFeatures::Init(BrowserWindowInterface* browser) {
++  brave_browser_window_features_->Init();
+   // Embedder implementation goes here.
+ }
+ 
+ void EmbedderBrowserWindowFeatures::InitPostWindowConstruction(
+     BrowserWindowInterface* browser) {
++  brave_browser_window_features_->InitPostWindowConstruction();
+   // Embedder implementation goes here.
+ }
+ 
+@@ -35,5 +40,6 @@ void EmbedderBrowserWindowFeatures::InitPostBrowserViewConstruction(
+ }
+ 
+ void EmbedderBrowserWindowFeatures::TearDownPreBrowserWindowDestruction() {
++  brave_browser_window_features_->TearDownPreBrowserWindowDestruction();
+   // Embedder implementation goes here.
+ }

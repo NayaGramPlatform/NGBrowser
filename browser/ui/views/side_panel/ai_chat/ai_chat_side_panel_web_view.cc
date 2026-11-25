@@ -10,16 +10,14 @@
 #include "base/functional/bind.h"
 #include "base/functional/callback_helpers.h"
 #include "brave/browser/ui/views/side_panel/ai_chat/ai_chat_movable_side_panel_web_view.h"
+#include "brave/browser/ui/views/side_panel/ai_chat/ai_chat_side_panel_link_opener.h"
 #include "brave/browser/ui/webui/ai_chat/ai_chat_ui.h"
 #include "brave/components/ai_chat/core/common/ai_chat_urls.h"
 #include "brave/components/ai_chat/core/common/features.h"
 #include "brave/components/constants/webui_url_constants.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_web_contents_delegate/browser_web_contents_delegate.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface_iterator.h"
-#include "chrome/browser/ui/navigator/browser_navigator.h"
-#include "chrome/browser/ui/navigator/browser_navigator_params.h"
 #include "chrome/browser/ui/side_panel/side_panel_entry_id.h"
 #include "chrome/browser/ui/side_panel/side_panel_ui.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
@@ -28,9 +26,10 @@
 #include "components/grit/brave_components_strings.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/web_contents_delegate.h"
+#include "content/public/common/referrer.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/base/mojom/window_open_disposition.mojom.h"
 #include "ui/base/page_transition_types.h"
-#include "ui/base/window_open_disposition.h"
 #include "ui/views/widget/widget.h"
 #include "url/gurl.h"
 
@@ -153,7 +152,7 @@ content::WebContents* AIChatSidePanelWebView::AddNewContents(
     content::WebContents* source,
     std::unique_ptr<content::WebContents> new_contents,
     const GURL& target_url,
-    WindowOpenDisposition disposition,
+    ui::mojom::WindowOpenDisposition disposition,
     const blink::mojom::WindowFeatures& window_features,
     bool user_gesture,
     bool* was_blocked) {
@@ -167,27 +166,22 @@ content::WebContents* AIChatSidePanelWebView::AddNewContents(
     return nullptr;
   }
 
-  // Rather than opening a new tab from the side panel we navigate the active
-  // tab next to the sidepanel.
-  auto* active_tab = browser->GetTabStripModel()->GetActiveWebContents();
-  NavigateParams params(browser, target_url, ui::PAGE_TRANSITION_LINK);
+  return ai_chat::OpenSidePanelLinkContents(browser, std::move(new_contents),
+                                            target_url, window_features,
+                                            user_gesture);
+}
 
-  // If the global side panel is enabled, open the url in the current active
-  // tab. Otherwise open in a new tab.
-  if (ai_chat::features::IsAIChatGlobalSidePanelEverywhereEnabled()) {
-    params.source_contents = active_tab;
-    params.disposition = WindowOpenDisposition::CURRENT_TAB;
-  } else {
-    // We open in a new foreground tab so we don't start a new conversation.
-    params.disposition = WindowOpenDisposition::NEW_FOREGROUND_TAB;
-  }
-
-  params.window_action = NavigateParams::WindowAction::kNoAction;
-  params.user_gesture = user_gesture;
-
-  Navigate(&params);
-
-  return params.navigated_or_inserted_contents;
+void AIChatSidePanelWebView::DidOpenRequestedURL(
+    content::WebContents* new_contents,
+    content::RenderFrameHost* source_render_frame_host,
+    const GURL& url,
+    const content::Referrer& referrer,
+    ui::mojom::WindowOpenDisposition disposition,
+    ui::PageTransition transition,
+    bool started_from_context_menu,
+    bool renderer_initiated) {
+  ai_chat::RecordSidePanelLinkOpener(new_contents, source_render_frame_host,
+                                     referrer);
 }
 
 void AIChatSidePanelWebView::RunFileChooser(
@@ -211,10 +205,12 @@ content::WebContents* AIChatSidePanelWebView::OpenURLFromTab(
         navigation_handle_callback) {
   auto* browser = FindNormalBrowser(source->GetBrowserContext());
   if (browser &&
-      (params.disposition == WindowOpenDisposition::NEW_FOREGROUND_TAB ||
-       params.disposition == WindowOpenDisposition::NEW_BACKGROUND_TAB ||
-       params.disposition == WindowOpenDisposition::NEW_WINDOW ||
-       params.disposition == WindowOpenDisposition::OFF_THE_RECORD)) {
+      (params.disposition ==
+           ui::mojom::WindowOpenDisposition::kNewForegroundTab ||
+       params.disposition ==
+           ui::mojom::WindowOpenDisposition::kNewBackgroundTab ||
+       params.disposition == ui::mojom::WindowOpenDisposition::kNewWindow ||
+       params.disposition == ui::mojom::WindowOpenDisposition::kOffTheRecord)) {
     return browser->OpenURL(params, std::move(navigation_handle_callback));
   }
   return WebUIContentsWrapper::Host::OpenURLFromTab(

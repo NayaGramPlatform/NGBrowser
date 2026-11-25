@@ -11,12 +11,12 @@
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/scoped_run_loop_timeout.h"
+#include "base/test/test_future.h"
 #include "brave/browser/brave_rewards/rewards_service_factory.h"
 #include "brave/browser/net/brave_network_audit_test_helper.h"
 #include "brave/components/brave_rewards/content/rewards_service_impl.h"
 #include "brave/components/brave_rewards/core/buildflags/buildflags.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/browser.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/prefs/pref_service.h"
@@ -64,9 +64,9 @@ class BraveRewardsNetworkAuditTest : public InProcessBrowserTest {
     // Create and start the Rewards service
     rewards_service_ = static_cast<brave_rewards::RewardsServiceImpl*>(
         brave_rewards::RewardsServiceFactory::GetForProfile(GetProfile()));
-    base::RunLoop run_loop;
-    rewards_service_->StartProcessForTesting(run_loop.QuitClosure());
-    run_loop.Run();
+    base::test::TestFuture<void> future;
+    rewards_service_->StartProcessForTesting(future.GetCallback());
+    ASSERT_TRUE(future.Wait());
   }
 
   void TearDownOnMainThread() override {
@@ -110,11 +110,15 @@ class BraveRewardsNetworkAuditTest : public InProcessBrowserTest {
 
             // Brave Ads production.
             "https://geo.ads.brave.com/v1/getstate",
+            "https://ohttp.ads.brave.com/v1/ohttp/gateway",
             "https://static.ads.brave.com/v9/catalog",
+            "https://static.ads.brave.com/v1/ohttp/hpkekeyconfig",
 
             // Brave Ads staging.
             "https://geo.ads.bravesoftware.com/v1/getstate",
+            "https://ohttp.ads.bravesoftware.com/v1/ohttp/gateway",
             "https://static.ads.bravesoftware.com/v9/catalog",
+            "https://static.ads.bravesoftware.com/v1/ohttp/hpkekeyconfig",
         });
   }
 

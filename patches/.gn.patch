@@ -1,0 +1,28 @@
+diff --git a/.gn b/.gn
+index 3f592ba2d538eecf63afff59f6cea44c6f84ca8c..adf68377814448e4fa20a05bfd2592746e092a28 100644
+--- a/.gn
++++ b/.gn
+@@ -2,11 +2,14 @@
+ # tree and to set startup options. For documentation on the values set in this
+ # file, run "gn help dotfile" at the command line.
+ 
++import("//brave/build/strict_deps_failures_brave.gni")
++import("//brave/build/circular_includes_brave.gni")
+ import("//build/circular_includes_bedrock.gni")
+ import("//build/circular_includes_untriaged.gni")
+ import("//build/strict_deps_failures.gni")
+ import("//build/dotfile_settings.gni")
+ import("//third_party/angle/dotfile_settings.gni")
++check_includes_strict_exceptions += brave_check_includes_strict_exceptions
+ 
+ # The location of the build configuration file.
+ buildconfig = "//build/config/BUILDCONFIG.gn"
+@@ -478,4 +481,5 @@ expand_directory_allowlist =
+ # entries in this list should be reviewed by a member of the chrome build team.
+ allow_circular_includes_from_allowlist =
+     allow_circular_includes_from_untriaged + project_bedrock_circular_includes +
+-    []
+\ No newline at end of file
++    []
++allow_circular_includes_from_allowlist += allow_circular_includes_from_brave
+\ No newline at end of file

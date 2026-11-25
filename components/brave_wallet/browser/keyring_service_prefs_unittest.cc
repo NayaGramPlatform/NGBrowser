@@ -9,7 +9,6 @@
 #include "brave/components/brave_wallet/browser/brave_wallet_utils.h"
 #include "brave/components/brave_wallet/browser/keyring_service.h"
 #include "brave/components/brave_wallet/browser/pref_names.h"
-#include "brave/components/brave_wallet/browser/test_utils.h"
 #include "brave/components/brave_wallet/common/brave_wallet.mojom.h"
 #include "components/sync_preferences/testing_pref_service_syncable.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -44,17 +43,16 @@ TEST_F(KeyringServicePrefsUnitTest, GenerateNextAccountIndex) {
     EXPECT_EQ(2u, GenerateNextAccountIndex(GetPrefs(), keyring_id));
   }
 
-  EXPECT_EQ(
-      3, *GetPrefs()
-              ->GetDict(kBraveWalletKeyrings)
-              .FindIntByDottedPath("bitcoin_import_test.next_account_index"));
+  EXPECT_EQ(3,
+            GetPrefs()
+                ->GetDict(kBraveWalletKeyrings)
+                .FindIntByDottedPath("bitcoin_import_test.next_account_index"));
 
   EXPECT_EQ(3u, GenerateNextAccountIndex(GetPrefs(),
                                          mojom::KeyringId::kBitcoinHardware));
-  EXPECT_EQ(4,
-            *GetPrefs()
-                 ->GetDict(kBraveWalletKeyrings)
-                 .FindIntByDottedPath("bitcoin_hardware.next_account_index"));
+  EXPECT_EQ(4, GetPrefs()
+                   ->GetDict(kBraveWalletKeyrings)
+                   .FindIntByDottedPath("bitcoin_hardware.next_account_index"));
 }
 
 TEST_F(KeyringServicePrefsUnitTest, HardwareAccountsForKeyring) {

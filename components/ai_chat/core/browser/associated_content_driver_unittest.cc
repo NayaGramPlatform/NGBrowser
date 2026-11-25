@@ -7,18 +7,16 @@
 
 #include <optional>
 #include <string_view>
-#include <tuple>
-#include <type_traits>
 #include <utility>
+#include <vector>
 
 #include "base/functional/bind.h"
 #include "base/location.h"
-#include "base/run_loop.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/test/bind.h"
 #include "base/test/gmock_callback_support.h"
-#include "base/test/mock_callback.h"
 #include "base/test/task_environment.h"
+#include "base/test/test_future.h"
 #include "base/test/values_test_util.h"
 #include "brave/components/ai_chat/core/browser/conversation_handler.h"
 #include "brave/components/ai_chat/core/browser/types.h"
@@ -47,6 +45,10 @@ class MockAssociatedContentDriver : public AssociatedContentDriver {
 
   void SetUrl(GURL url) { url_ = std::move(url); }
   void SetTitle(std::u16string title) { title_ = std::move(title); }
+
+  // OnNewPage is protected, and only a subclass may reach it. Republish it so
+  // tests can move content_id_ the way a navigation does.
+  using AssociatedContentDriver::OnNewPage;
 
   MOCK_METHOD(void,
               GetPageContent,
@@ -89,16 +91,11 @@ class AssociatedContentDriverUnitTest : public ::testing::Test {
 };
 
 TEST_F(AssociatedContentDriverUnitTest, GetContent) {
-  base::MockCallback<GetPageContentCallback> callback1;
-  base::MockCallback<GetPageContentCallback> callback2;
-  base::MockCallback<GetPageContentCallback> callback3;
-
-  EXPECT_CALL(callback1, Run(PageContent("content", false))).Times(1);
-  EXPECT_CALL(callback2, Run(PageContent("content", false))).Times(1);
-  EXPECT_CALL(callback3, Run(PageContent("content", false))).Times(1);
+  base::test::TestFuture<PageContent> future1;
+  base::test::TestFuture<PageContent> future2;
+  base::test::TestFuture<PageContent> future3;
 
   // Should only ask content once
-  base::RunLoop run_loop;
   EXPECT_CALL(*associated_content_driver_, GetPageContent(_, _))
       .WillOnce([&](AssociatedContentDriver::FetchPageContentCallback callback,
                     std::string_view invalidation_token) {
@@ -113,14 +110,15 @@ TEST_F(AssociatedContentDriverUnitTest, GetContent) {
       });
 
   // Test
-  associated_content_driver_->GetContent(callback1.Get());
-  associated_content_driver_->GetContent(callback2.Get());
-  associated_content_driver_->GetContent(callback3.Get());
+  associated_content_driver_->GetContent(future1.GetCallback());
+  associated_content_driver_->GetContent(future2.GetCallback());
+  associated_content_driver_->GetContent(future3.GetCallback());
 
   // Block until content is "fetched"
-  run_loop.RunUntilIdle();
-
-  task_environment_.RunUntilIdle();
+  const PageContent expected("content", mojom::ContentType::PageContent);
+  EXPECT_EQ(future1.Get(), expected);
+  EXPECT_EQ(future2.Get(), expected);
+  EXPECT_EQ(future3.Get(), expected);
   testing::Mock::VerifyAndClearExpectations(associated_content_driver_.get());
 }
 
@@ -133,17 +131,16 @@ TEST_F(AssociatedContentDriverUnitTest, GetStagedEntriesFromContent) {
   EXPECT_CALL(*associated_content_driver_, GetSearchSummarizerKey)
       .WillOnce(base::test::RunOnceCallback<0>("key"));
 
-  // Expect a result
-  base::MockCallback<GetStagedEntriesCallback> callback;
-  EXPECT_CALL(
-      callback,
-      Run(Optional(ElementsAre(Eq(SearchQuerySummary("query", "summary"))))))
-      .Times(1);
-
   // Test
-  associated_content_driver_->GetStagedEntriesFromContent(callback.Get());
+  base::test::TestFuture<std::optional<std::vector<SearchQuerySummary>>> future;
+  associated_content_driver_->GetStagedEntriesFromContent(
+      future.GetCallback<
+          const std::optional<std::vector<SearchQuerySummary>>&>());
 
-  task_environment_.RunUntilIdle();
+  // Expect a result
+  EXPECT_THAT(
+      future.Get(),
+      Optional(ElementsAre(Eq(SearchQuerySummary("query", "summary")))));
   testing::Mock::VerifyAndClearExpectations(associated_content_driver_.get());
 }
 
@@ -155,12 +152,12 @@ TEST_F(AssociatedContentDriverUnitTest,
   associated_content_driver_->SetUrl(GURL("https://search.brave.com"));
   EXPECT_CALL(*associated_content_driver_, GetSearchSummarizerKey).Times(0);
 
-  base::MockCallback<GetStagedEntriesCallback> callback;
-  EXPECT_CALL(callback, Run(Eq(std::nullopt))).Times(1);
+  base::test::TestFuture<std::optional<std::vector<SearchQuerySummary>>> future;
+  associated_content_driver_->GetStagedEntriesFromContent(
+      future.GetCallback<
+          const std::optional<std::vector<SearchQuerySummary>>&>());
 
-  associated_content_driver_->GetStagedEntriesFromContent(callback.Get());
-
-  task_environment_.RunUntilIdle();
+  EXPECT_EQ(future.Get(), std::nullopt);
   testing::Mock::VerifyAndClearExpectations(associated_content_driver_.get());
 }
 
@@ -170,12 +167,12 @@ TEST_F(AssociatedContentDriverUnitTest, GetStagedEntriesFromContent_NoKey) {
   EXPECT_CALL(*associated_content_driver_, GetSearchSummarizerKey)
       .WillOnce(base::test::RunOnceCallback<0>(std::nullopt));
 
-  base::MockCallback<GetStagedEntriesCallback> callback;
-  EXPECT_CALL(callback, Run(Eq(std::nullopt))).Times(1);
+  base::test::TestFuture<std::optional<std::vector<SearchQuerySummary>>> future;
+  associated_content_driver_->GetStagedEntriesFromContent(
+      future.GetCallback<
+          const std::optional<std::vector<SearchQuerySummary>>&>());
 
-  associated_content_driver_->GetStagedEntriesFromContent(callback.Get());
-
-  task_environment_.RunUntilIdle();
+  EXPECT_EQ(future.Get(), std::nullopt);
   testing::Mock::VerifyAndClearExpectations(associated_content_driver_.get());
 }
 
@@ -186,12 +183,12 @@ TEST_F(AssociatedContentDriverUnitTest, GetStagedEntriesFromContent_NoResult) {
   EXPECT_CALL(*associated_content_driver_, GetSearchSummarizerKey)
       .WillOnce(base::test::RunOnceCallback<0>("key"));
 
-  base::MockCallback<GetStagedEntriesCallback> callback;
-  EXPECT_CALL(callback, Run(Eq(std::nullopt))).Times(1);
+  base::test::TestFuture<std::optional<std::vector<SearchQuerySummary>>> future;
+  associated_content_driver_->GetStagedEntriesFromContent(
+      future.GetCallback<
+          const std::optional<std::vector<SearchQuerySummary>>&>());
 
-  associated_content_driver_->GetStagedEntriesFromContent(callback.Get());
-
-  task_environment_.RunUntilIdle();
+  EXPECT_EQ(future.Get(), std::nullopt);
   testing::Mock::VerifyAndClearExpectations(associated_content_driver_.get());
 }
 
@@ -222,6 +219,72 @@ TEST_F(AssociatedContentDriverUnitTest, ParseSearchQuerySummaryResponse) {
             base::test::ParseJson(test_case.response));
     EXPECT_EQ(query_summary, test_case.expected_query_summary);
   }
+}
+
+// A page change while a content fetch is in flight must still release every
+// waiter, otherwise callers wait forever.
+TEST_F(AssociatedContentDriverUnitTest, GetContentRunsCallbackOnPageChange) {
+  AssociatedContentDriver::FetchPageContentCallback captured_callback;
+  EXPECT_CALL(*associated_content_driver_, GetPageContent(_, _))
+      .WillOnce(
+          [&captured_callback](
+              AssociatedContentDriver::FetchPageContentCallback callback,
+              std::string_view) { captured_callback = std::move(callback); });
+
+  associated_content_driver_->OnNewPage(1);
+
+  base::test::TestFuture<PageContent> content_future;
+  associated_content_driver_->GetContent(
+      content_future.GetCallback<PageContent>());
+
+  // The page navigates before the in-flight fetch replies.
+  associated_content_driver_->OnNewPage(2);
+
+  // The stale fetch now completes against the old navigation id.
+  ASSERT_TRUE(captured_callback);
+  std::move(captured_callback).Run("stale content", false, "");
+
+  // The waiter must be released rather than left hanging.
+  ASSERT_TRUE(content_future.Wait());
+  EXPECT_TRUE(content_future.Get().content.empty());
+  // The stale reply must not be cached.
+  EXPECT_TRUE(
+      associated_content_driver_->cached_page_content().content.empty());
+}
+
+// After a fetch is abandoned by a page change, later fetches must not join a
+// dead event.
+TEST_F(AssociatedContentDriverUnitTest, GetContentWorksAfterAbandonedFetch) {
+  AssociatedContentDriver::FetchPageContentCallback first_callback;
+  EXPECT_CALL(*associated_content_driver_, GetPageContent(_, _))
+      .WillOnce([&first_callback](
+                    AssociatedContentDriver::FetchPageContentCallback callback,
+                    std::string_view) { first_callback = std::move(callback); })
+      .WillOnce([](AssociatedContentDriver::FetchPageContentCallback callback,
+                   std::string_view) {
+        std::move(callback).Run("fresh content", false, "");
+      });
+
+  associated_content_driver_->OnNewPage(1);
+
+  base::test::TestFuture<PageContent> abandoned_future;
+  associated_content_driver_->GetContent(
+      abandoned_future.GetCallback<PageContent>());
+
+  associated_content_driver_->OnNewPage(2);
+  ASSERT_TRUE(first_callback);
+  std::move(first_callback).Run("stale content", false, "");
+  ASSERT_TRUE(abandoned_future.Wait());
+
+  // A fetch for the new page must complete and deliver the new content.
+  base::test::TestFuture<PageContent> fresh_future;
+  associated_content_driver_->GetContent(
+      fresh_future.GetCallback<PageContent>());
+  ASSERT_TRUE(fresh_future.Wait());
+
+  EXPECT_EQ(fresh_future.Get().content, "fresh content");
+  EXPECT_EQ(associated_content_driver_->cached_page_content().content,
+            "fresh content");
 }
 
 }  // namespace ai_chat

@@ -1,0 +1,13 @@
+diff --git a/chrome/browser/ui/views/frame/browser_widget.cc b/chrome/browser/ui/views/frame/browser_widget.cc
+index 73fdb2336955bb202a847f5798f67b98bb124dad..485e5d697e9f7c5d29f1aff236391af65990ddbf 100644
+--- a/chrome/browser/ui/views/frame/browser_widget.cc
++++ b/chrome/browser/ui/views/frame/browser_widget.cc
+@@ -466,7 +466,7 @@ ui::MenuModel* BrowserWidget::GetSystemMenuModel() {
+   // TODO(b/271137301): Refactor this class to remove chromeos specific code to
+   // subclasses.
+   if (!menu_model_builder_.get()) {
+-    menu_model_builder_ = std::make_unique<SystemMenuModelBuilder>(
++    menu_model_builder_ = std::make_unique<BraveSystemMenuModelBuilder>(
+         browser_view_, browser_view_->browser());
+   }
+   menu_model_builder_->Init();

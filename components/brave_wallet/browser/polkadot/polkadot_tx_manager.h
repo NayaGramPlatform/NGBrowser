@@ -73,16 +73,17 @@ class PolkadotTxManager : public TxManager,
 
  private:
   friend class PolkadotTxManagerUnitTest;
-  FRIEND_TEST_ALL_PREFIXES(PolkadotTxManagerUnitTest, OnLatestBlock);
 
   PolkadotTxStateManager& GetPolkadotTxStateManager();
 
   void OnGetChainMetadataForUnapproved(
+      std::unique_ptr<PolkadotTxMeta> meta,
       mojom::NewPolkadotTransactionParamsPtr params,
       AddUnapprovedPolkadotTransactionCallback callback,
       base::expected<PolkadotChainMetadata, std::string> chain_metadata);
 
   void OnGetFeeForUnapproved(PolkadotChainMetadata chain_metadata,
+                             std::unique_ptr<PolkadotTxMeta> meta,
                              mojom::NewPolkadotTransactionParamsPtr params,
                              AddUnapprovedPolkadotTransactionCallback callback,
                              base::expected<PolkadotWalletService::FeeEstimate,

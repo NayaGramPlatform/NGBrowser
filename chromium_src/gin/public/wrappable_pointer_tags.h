@@ -15,7 +15,10 @@
   kSolanaProvider,                    \
   kSkusBindings,                      \
   SpeedreaderBindings,                \
-  kCardanoProvider
+  kCardanoProvider,                   \
+  kPolkadotProvider,                  \
+  kPolkadotInjected,                  \
+  kPsstBindings
 // clang-format on
 
 #include <gin/public/wrappable_pointer_tags.h>  // IWYU pragma: export

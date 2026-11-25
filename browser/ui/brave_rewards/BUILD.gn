@@ -3,18 +3,42 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at https://mozilla.org/MPL/2.0/.
 
+if (!is_android) {
+  source_set("brave_rewards") {
+    sources = [
+      "rewards_panel_coordinator.cc",
+      "rewards_panel_coordinator.h",
+    ]
+
+    public_deps = [
+      "//base",
+      "//brave/components/brave_rewards/core/buildflags",
+      "//ui/base/unowned_user_data",
+      "//url",
+    ]
+
+    deps = [
+      "//brave/components/constants",
+      "//chrome/browser/ui/browser_window",
+      "//ui/base",
+    ]
+  }
+}
+
 source_set("unit_tests") {
   testonly = true
 
   if (!is_android) {
     sources = [ "rewards_panel_coordinator_unittest.cc" ]
     deps = [
+      ":brave_rewards",
       "//base",
+      "//brave/browser/ui",
       "//brave/components/brave_rewards/core:features",
       "//brave/components/l10n/common:test_support",
-      "//chrome/browser/ui",
       "//chrome/browser/ui/browser_window",
       "//chrome/test:test_support",
+      "//chrome/test/base:browser_with_test_window_test",
     ]
   }
 }

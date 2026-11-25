@@ -25,10 +25,15 @@ class MockUntrustedConversationHandlerClient
 
   void Disconnect();
 
+  // Round-trips the pipe so any event the browser has already sent has been
+  // dispatched - including when the point is that it sent nothing.
+  void FlushForTesting();
+
   MOCK_METHOD(void,
               OnConversationHistoryUpdate,
               (mojom::ConversationTurnPtr),
               (override));
+  MOCK_METHOD(void, OnConversationThreadUpdate, (mojom::ThreadPtr), (override));
   MOCK_METHOD(void,
               OnToolUseEventOutput,
               (const std::string&, mojom::ToolUseEventPtr),

@@ -5,6 +5,34 @@
 
 substitutions:
   - description: |-
+      Declare the brave_base_feature_overridden parameter.
+
+      `set_blink_runtime_enabled_feature_state` marks the entries it
+      overrides with it, and features_generated.cc.tmpl generates them with
+      BASE_OVERRIDDEN_FEATURE.
+    regex:
+      pattern: |2-
+            copied_from_base_feature_if: {
+              valid_type: "str",
+              valid_values: ["enabled_or_overridden", "overridden"],
+              default: "enabled_or_overridden",
+            },
+      replace: |2-
+            copied_from_base_feature_if: {
+              valid_type: "str",
+              valid_values: ["enabled_or_overridden", "overridden"],
+              default: "enabled_or_overridden",
+            },
+
+            // Brave: the base::Feature has a default state Brave overrides at
+            // compile time, so it is reported as overridden and its state is
+            // always copied into the flag.
+            brave_base_feature_overridden: {
+              default: false,
+              value_type: "bool",
+            },
+
+  - description: |-
       Declare the Brave-only IsInTorContext runtime flag.
     regex:
       re_pattern: '(  data: \[.*)\n  \],\n\}'
@@ -32,7 +60,7 @@ substitutions:
               name: "CompositorTimelineTrigger",
               status: "experimental", // Brave: revert when crbug.com/541924666 is fixed.
 
-  # The three following entries are plastered to generate no `base::Feature` at
+  # The two following entries are plastered to generate no `base::Feature` at
   # all.
   - description:
       'Generate no base::Feature for FileSystemAccessAPIExperimental.'
@@ -47,12 +75,6 @@ substitutions:
       re_flags: [MULTILINE]
       replace: '\1\2\n\1base_feature: "none",'
 
-  - description: 'Generate no base::Feature for MiddleClickAutoscroll.'
-    regex:
-      re_pattern: '^( *)(name: "MiddleClickAutoscroll",)'
-      re_flags: [MULTILINE]
-      replace: '\1\2\n\1base_feature: "none",'
-
   # FencedFrames declares `base_feature: "none"` upstream, so the runtime flag
   # has no backing `base::Feature` and its state cannot be forced. Give it one
   # (a generated `kFencedFramesRuntime`, not the manual `kFencedFrames` in
@@ -64,10 +86,22 @@ substitutions:
       replace: '\1base_feature: "FencedFramesRuntime",'
 
   # These plaster override the `base::Feature` value for the blink runtime
-  # features. Keep them in alphabetical order.
-  - description: 'Ship the interest-group ad-targeting API disabled.'
+  # features, and with it the runtime flag. Each must be listed in
+  # brave/base/compile_overridden_features.inc. Keep them in alphabetical order.
+  - description: "Ship the Decision Model API's base feature disabled."
     set_blink_runtime_enabled_feature_state:
-      feature_name: AdInterestGroupAPI
+      feature_name: AIDecisionModelAPI
+      value: disabled
+
+  - description:
+      "Ship the Decision Model API's base feature for workers disabled."
+    set_blink_runtime_enabled_feature_state:
+      feature_name: AIDecisionModelAPIForWorkers
+      value: disabled
+
+  - description: "Ship the Embeddings API's base feature disabled."
+    set_blink_runtime_enabled_feature_state:
+      feature_name: AIEmbeddingsAPI
       value: disabled
 
   - description: "Ship the Prompt API's base feature disabled."
@@ -100,14 +134,23 @@ substitutions:
       feature_name: AIWriterAPI
       value: disabled
 
+  - description: |-
+      Ship approximate geolocation's accuracy mode enabled.
+
+      The flag also needs ApproximateGeolocationPermission, which the browser
+      process sets.
+    set_blink_runtime_enabled_feature_state:
+      feature_name: ApproximateGeolocationPermissionAccuracyMode
+      value: enabled
+
   - description: 'Ship the Controlled Frame tag disabled.'
     set_blink_runtime_enabled_feature_state:
       feature_name: ControlledFrame
       value: disabled
 
-  - description: 'Ship the Protected Audience ad auction API disabled.'
+  - description: 'Ship extension content script tagging disabled.'
     set_blink_runtime_enabled_feature_state:
-      feature_name: Fledge
+      feature_name: ExtensionScriptTagging
       value: disabled
 
   - description: 'Ship the fenced frames API disabled.'
@@ -115,19 +158,24 @@ substitutions:
       feature_name: FencedFrames
       value: disabled
 
+  - description: 'Ship the <install> element disabled.'
+    set_blink_runtime_enabled_feature_state:
+      feature_name: InstallElement
+      value: disabled
+
   - description: "Ship the Language Detection API's base feature disabled."
     set_blink_runtime_enabled_feature_state:
       feature_name: LanguageDetectionAPI
       value: disabled
 
-  - description: 'Ship the PARAKEET ad serving API disabled.'
-    set_blink_runtime_enabled_feature_state:
-      feature_name: Parakeet
-      value: disabled
-
   - description: 'Ship prerendering disabled.'
     set_blink_runtime_enabled_feature_state:
       feature_name: Prerender2
+      value: disabled
+
+  - description: "Ship the JS Self-Profiling API's base feature disabled."
+    set_blink_runtime_enabled_feature_state:
+      feature_name: ProfilerAPI
       value: disabled
 
   - description: |-
@@ -149,3 +197,18 @@ substitutions:
     set_blink_runtime_enabled_feature_state:
       feature_name: UserMediaElement
       value: disabled
+
+  - description: 'Ship the Web Install API (navigator.install()) disabled.'
+    set_blink_runtime_enabled_feature_state:
+      feature_name: WebAppInstallation
+      value: disabled
+
+  - description: 'Ship the WebMCP API base feature enabled.'
+    set_blink_runtime_enabled_feature_state:
+      feature_name: WebMCP
+      value: enabled
+
+  - description: 'Ship the WebMCP runtime flag stable.'
+    regex:
+      re_pattern: '(\bname: "WebMCP",[^}]*?status: )"experimental"'
+      replace: '\1"stable"'

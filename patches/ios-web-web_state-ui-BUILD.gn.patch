@@ -1,5 +1,5 @@
 diff --git a/ios/web/web_state/ui/BUILD.gn b/ios/web/web_state/ui/BUILD.gn
-index ed74a7a416959ff2338bf46c8801cabd2290f319..b3851b9b8e27ce753b4c8f990b3209648a9de0e4 100644
+index d4cc932202f2b0081a1611f3aa9f34878b62b6bd..d6f74b0aca19e779dad6c957791533e3cfb46c09 100644
 --- a/ios/web/web_state/ui/BUILD.gn
 +++ b/ios/web/web_state/ui/BUILD.gn
 @@ -2,6 +2,7 @@
@@ -10,7 +10,7 @@ index ed74a7a416959ff2338bf46c8801cabd2290f319..b3851b9b8e27ce753b4c8f990b320964
  import("//build/buildflag_header.gni")
  import("//build/config/ios/ios_sdk.gni")
  import("//ios/build/config.gni")
-@@ -59,6 +60,7 @@ source_set("ui") {
+@@ -60,6 +61,7 @@ source_set("ui") {
      "//ui/base",
      "//url",
    ]

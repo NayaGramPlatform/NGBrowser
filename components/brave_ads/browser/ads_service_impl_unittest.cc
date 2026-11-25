@@ -11,7 +11,6 @@
 #include "base/files/scoped_temp_dir.h"
 #include "base/functional/function_ref.h"
 #include "base/memory/raw_ptr.h"
-#include "base/numerics/safe_math.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/test/bind.h"
 #include "base/test/run_until.h"
@@ -39,9 +38,12 @@
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/testing_pref_service.h"
 #include "components/variations/pref_names.h"
+#include "net/base/mock_network_change_notifier.h"
+#include "net/base/network_change_notifier.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/base/idle/idle.h"
+#include "url/gurl.h"
 
 #if BUILDFLAG(IS_ANDROID)
 #include "brave/components/brave_rewards/core/features.h"
@@ -51,7 +53,7 @@
 #include "brave/components/brave_ads/browser/test/fake_rewards_service.h"
 #endif  // BUILDFLAG(ENABLE_BRAVE_REWARDS)
 
-// npm run test -- brave_unit_tests --filter=BraveAds*
+// pnpm test brave_unit_tests --filter=BraveAds*
 
 namespace brave_ads {
 
@@ -89,8 +91,11 @@ class BraveAdsAdsServiceImplTest : public testing::Test {
     auto shutdown_monitor = std::make_unique<test::FakeShutdownMonitor>();
     shutdown_monitor_ = shutdown_monitor.get();
 
+    auto delegate = std::make_unique<test::FakeAdsServiceDelegate>();
+    delegate_ = delegate.get();
+
     ads_service_ = std::make_unique<AdsServiceImpl>(
-        std::make_unique<test::FakeAdsServiceDelegate>(), prefs_, local_state_,
+        std::move(delegate), prefs_, local_state_,
         std::make_unique<brave_policy::PolicyInitializationWaiter>(
             /*policy_service=*/nullptr),
         /*http_client=*/nullptr,
@@ -105,6 +110,7 @@ class BraveAdsAdsServiceImplTest : public testing::Test {
         &rewards_service_,
 #endif  // BUILDFLAG(ENABLE_BRAVE_REWARDS)
         /*host_content_settings_map=*/nullptr);
+    ads_service_->Init();
   }
 
   void TearDown() override {
@@ -112,6 +118,7 @@ class BraveAdsAdsServiceImplTest : public testing::Test {
     device_id_ = nullptr;
     bat_ads_service_factory_ = nullptr;
     shutdown_monitor_ = nullptr;
+    delegate_ = nullptr;
     ads_service_->Shutdown();
     ads_service_.reset();
   }
@@ -125,8 +132,48 @@ class BraveAdsAdsServiceImplTest : public testing::Test {
 
   void Shutdown() { ads_service_->Shutdown(); }
 
+  void ShowReminder(mojom::ReminderType mojom_reminder_type) {
+    ads_service_->ShowReminder(mojom_reminder_type);
+  }
+
+  void OnNotificationAdShown(const std::string& placement_id) {
+    ads_service_->OnNotificationAdShown(placement_id);
+  }
+
+  void OnNotificationAdClosed(const std::string& placement_id, bool by_user) {
+    ads_service_->OnNotificationAdClosed(placement_id, by_user);
+  }
+
+  void OnNotificationAdClicked(const std::string& placement_id) {
+    ads_service_->OnNotificationAdClicked(placement_id);
+  }
+
+#if BUILDFLAG(ENABLE_BRAVE_REWARDS)
+  void OnExternalWalletConnected() {
+    ads_service_->OnExternalWalletConnected();
+  }
+#endif  // BUILDFLAG(ENABLE_BRAVE_REWARDS)
+
   void ClearData(ResultCallback callback) {
     ads_service_->ClearData(std::move(callback));
+  }
+
+  void TriggerSearchResultAdEvent(
+      mojom::CreativeSearchResultAdInfoPtr mojom_creative_ad,
+      mojom::SearchResultAdEventType mojom_ad_event_type,
+      ResultCallback callback) {
+    ads_service_->TriggerSearchResultAdEvent(
+        std::move(mojom_creative_ad), mojom_ad_event_type, std::move(callback));
+  }
+
+  void IsNetworkConnectionAvailable(base::OnceCallback<void(bool)> callback) {
+    ads_service_->IsNetworkConnectionAvailable(std::move(callback));
+  }
+
+  void ParseAndSaveNewTabPageAds(base::DictValue dict,
+                                 ResultCallback callback) {
+    ads_service_->ParseAndSaveNewTabPageAds(std::move(dict),
+                                            std::move(callback));
   }
 
   void NotifyBrowserWillShutdown() {
@@ -164,6 +211,8 @@ class BraveAdsAdsServiceImplTest : public testing::Test {
 
   raw_ptr<test::FakeShutdownMonitor> shutdown_monitor_;  // Not owned.
 
+  raw_ptr<test::FakeAdsServiceDelegate> delegate_;  // Not owned.
+
 #if BUILDFLAG(ENABLE_BRAVE_REWARDS)
   test::FakeRewardsService rewards_service_;
 #endif  // BUILDFLAG(ENABLE_BRAVE_REWARDS)
@@ -172,6 +221,42 @@ class BraveAdsAdsServiceImplTest : public testing::Test {
 
   std::unique_ptr<AdsServiceImpl> ads_service_;
 };
+
+TEST_F(BraveAdsAdsServiceImplTest, ConstructorDoesNotRunStartupLogic) {
+  // Arrange
+  TestingPrefServiceSimple local_state;
+  RegisterLocalStatePrefs(local_state.registry());
+  local_state.registry()->RegisterStringPref(
+      variations::prefs::kVariationsCountry, "");
+
+  auto ads_service = std::make_unique<AdsServiceImpl>(
+      std::make_unique<test::FakeAdsServiceDelegate>(), prefs_, local_state,
+      std::make_unique<brave_policy::PolicyInitializationWaiter>(
+          /*policy_service=*/nullptr),
+      /*http_client=*/nullptr,
+      std::make_unique<test::FakeVirtualPrefProviderDelegate>(),
+      /*channel_name=*/"foo", profile_dir_.GetPath(),
+      std::make_unique<test::FakeAdsTooltipsDelegate>(),
+      std::make_unique<test::FakeDeviceId>(),
+      std::make_unique<test::FakeBatAdsServiceFactory>(),
+      std::make_unique<ApplicationStateMonitor>(),
+      std::make_unique<test::FakeShutdownMonitor>(), mock_resource_component_,
+      /*history_service=*/nullptr,
+#if BUILDFLAG(ENABLE_BRAVE_REWARDS)
+      &rewards_service_,
+#endif  // BUILDFLAG(ENABLE_BRAVE_REWARDS)
+      /*host_content_settings_map=*/nullptr);
+
+  ASSERT_FALSE(local_state.HasPrefPath(prefs::kFirstRunAt));
+  ASSERT_FALSE(ads_service->IsIneligibleToStart());
+  ASSERT_FALSE(ads_service->IsInitialized());
+
+  // Act
+  ads_service->Init();
+
+  // Assert
+  EXPECT_TRUE(local_state.HasPrefPath(prefs::kFirstRunAt));
+}
 
 TEST_F(BraveAdsAdsServiceImplTest, ServiceStartsWhenSponsoredAdsAreEnabled) {
   // Arrange
@@ -368,6 +453,36 @@ TEST_F(BraveAdsAdsServiceImplTest,
 
   // Assert
   EXPECT_FALSE(prefs_.GetBoolean(prefs::kSponsoredEnabled));
+}
+
+TEST_F(BraveAdsAdsServiceImplTest,
+       InvalidatesFactoryWhenSponsoredAdsAreDisabledThenReenabled) {
+  // Arrange
+  prefs_.SetBoolean(prefs::kSponsoredEnabled, false);
+  Startup();
+  prefs_.SetBoolean(prefs::kSponsoredEnabled, true);
+  const size_t invalidate_count_before_opt_out =
+      bat_ads_service_factory_->invalidate_count();
+
+  // Act
+  prefs_.SetBoolean(prefs::kSponsoredEnabled, false);
+
+  // Assert
+  EXPECT_EQ(invalidate_count_before_opt_out + 1,
+            bat_ads_service_factory_->invalidate_count());
+}
+
+TEST_F(BraveAdsAdsServiceImplTest, InvalidatesFactoryOnProfileShutdown) {
+  // Arrange
+  prefs_.SetBoolean(prefs::kSponsoredEnabled, true);
+  Startup();
+  ASSERT_EQ(0U, bat_ads_service_factory_->invalidate_count());
+
+  // Act
+  Shutdown();
+
+  // Assert
+  EXPECT_EQ(1U, bat_ads_service_factory_->invalidate_count());
 }
 
 TEST_F(BraveAdsAdsServiceImplTest,
@@ -751,12 +866,27 @@ TEST_F(BraveAdsAdsServiceImplTest, ProcessIdleStateDoesNotNotifyActiveTwice) {
 }
 
 TEST_F(BraveAdsAdsServiceImplTest,
-       DoesNotClearNotificationAdsPrefOnShutdownIfNotificationAdsAreDisabled) {
+       ClearsNotificationAdsPrefWhenNotificationAdsAreDisabled) {
   // Arrange
+  prefs_.SetBoolean(brave_rewards::prefs::kEnabled, true);
+  prefs_.SetBoolean(prefs::kNotificationsEnabled, true);
   prefs_.SetList(prefs::kNotificationAds, base::ListValue().Append("foo"));
 
   // Act
-  Shutdown();
+  prefs_.SetBoolean(prefs::kNotificationsEnabled, false);
+
+  // Assert
+  EXPECT_THAT(prefs_.GetList(prefs::kNotificationAds), testing::IsEmpty());
+}
+
+TEST_F(BraveAdsAdsServiceImplTest,
+       DoesNotClearNotificationAdsPrefWhenNotificationAdsAreEnabled) {
+  // Arrange
+  prefs_.SetBoolean(brave_rewards::prefs::kEnabled, true);
+  prefs_.SetList(prefs::kNotificationAds, base::ListValue().Append("foo"));
+
+  // Act
+  prefs_.SetBoolean(prefs::kNotificationsEnabled, true);
 
   // Assert
   EXPECT_THAT(prefs_.GetList(prefs::kNotificationAds),
@@ -764,41 +894,10 @@ TEST_F(BraveAdsAdsServiceImplTest,
 }
 
 TEST_F(BraveAdsAdsServiceImplTest,
-       ClearsNotificationAdsPrefOnShutdownIfNotificationAdsAreEnabled) {
-  // Arrange
-  prefs_.SetBoolean(brave_rewards::prefs::kEnabled, true);
-  prefs_.SetBoolean(prefs::kNotificationsEnabled, true);
-  prefs_.SetList(prefs::kNotificationAds, base::ListValue().Append("foo"));
-
-  // Act
-  Shutdown();
-
-  // Assert
-  EXPECT_THAT(prefs_.GetList(prefs::kNotificationAds), testing::IsEmpty());
-}
-
-TEST_F(
-    BraveAdsAdsServiceImplTest,
-    DoesNotClearNotificationAdsPrefOnBrowserWillShutdownIfNotificationAdsAreDisabled) {
-  // Arrange
-  prefs_.SetList(prefs::kNotificationAds, base::ListValue().Append("foo"));
-
-  // Act
-  NotifyBrowserWillShutdown();
-
-  // Assert
-  EXPECT_THAT(prefs_.GetList(prefs::kNotificationAds),
-              testing::Not(testing::IsEmpty()));
-}
-
-TEST_F(
-    BraveAdsAdsServiceImplTest,
-    ClearsNotificationAdsPrefOnBrowserWillShutdownIfNotificationAdsAreEnabled) {
+       ClearsNotificationAdsPrefOnBrowserWillShutdown) {
   // Arrange: the browser can start quitting well before `Shutdown()` runs for
   // this profile, so notification ads must be closed as soon as
   // `OnBrowserWillShutdown()` fires rather than only at `Shutdown()`.
-  prefs_.SetBoolean(brave_rewards::prefs::kEnabled, true);
-  prefs_.SetBoolean(prefs::kNotificationsEnabled, true);
   prefs_.SetList(prefs::kNotificationAds, base::ListValue().Append("foo"));
 
   // Act
@@ -942,6 +1041,236 @@ TEST_F(BraveAdsAdsServiceImplTest,
   // Assert
   EXPECT_FALSE(prefs_.HasPrefPath(prefs::kSponsoredEnabled));
   EXPECT_TRUE(prefs_.GetBoolean(prefs::kSponsoredEnabled));
+}
+
+TEST_F(BraveAdsAdsServiceImplTest, DoNotTriggerInvalidSearchResultAdEvent) {
+  // Arrange
+  Startup();
+  ASSERT_TRUE(base::test::RunUntil(
+      [&] { return bat_ads_service_factory_->initialize_count() == 1U; }));
+
+  base::test::TestFuture<bool> test_future;
+
+  // Act
+  TriggerSearchResultAdEvent(/*mojom_creative_ad=*/nullptr,
+                             mojom::SearchResultAdEventType::kClicked,
+                             test_future.GetCallback());
+
+  // Assert
+  EXPECT_FALSE(test_future.Get());
+}
+
+TEST_F(BraveAdsAdsServiceImplTest, IsNetworkConnectionAvailable) {
+  net::test::ScopedMockNetworkChangeNotifier scoped_notifier;
+  for (int type = net::NetworkChangeNotifier::CONNECTION_UNKNOWN;
+       type <= net::NetworkChangeNotifier::CONNECTION_LAST; ++type) {
+    if (type == net::NetworkChangeNotifier::CONNECTION_NONE) {
+      continue;
+    }
+    // Arrange
+    scoped_notifier.mock_network_change_notifier()->SetConnectionType(
+        static_cast<net::NetworkChangeNotifier::ConnectionType>(type));
+
+    // Act
+    base::test::TestFuture<bool> test_future;
+    IsNetworkConnectionAvailable(test_future.GetCallback());
+
+    // Assert
+    EXPECT_TRUE(test_future.Get());
+  }
+}
+
+TEST_F(BraveAdsAdsServiceImplTest, IsNetworkConnectionUnavailable) {
+  // Arrange
+  net::test::ScopedMockNetworkChangeNotifier scoped_notifier;
+  scoped_notifier.mock_network_change_notifier()->SetConnectionType(
+      net::NetworkChangeNotifier::CONNECTION_NONE);
+
+  // Act
+  base::test::TestFuture<bool> test_future;
+  IsNetworkConnectionAvailable(test_future.GetCallback());
+
+  // Assert
+  EXPECT_FALSE(test_future.Get());
+}
+
+#if !BUILDFLAG(IS_ANDROID)
+TEST_F(BraveAdsAdsServiceImplTest, ShowReminderWhenAllowed) {
+  // Arrange
+  prefs_.SetBoolean(brave_rewards::prefs::kEnabled, true);
+  prefs_.SetBoolean(prefs::kNotificationsEnabled, true);
+  delegate_->set_can_show_notifications(true);
+
+  // Act
+  ShowReminder(mojom::ReminderType::kExternalWalletConnected);
+
+  // Assert
+  EXPECT_THAT(delegate_->last_shown_notification_ad_title(),
+              testing::Optional(testing::Not(testing::IsEmpty())));
+}
+
+TEST_F(BraveAdsAdsServiceImplTest,
+       DoNotShowReminderWhenNotificationAdsAreDisabled) {
+  // Arrange
+  prefs_.SetBoolean(brave_rewards::prefs::kEnabled, true);
+  prefs_.SetBoolean(prefs::kNotificationsEnabled, false);
+  delegate_->set_can_show_notifications(true);
+
+  // Act
+  ShowReminder(mojom::ReminderType::kExternalWalletConnected);
+
+  // Assert
+  EXPECT_FALSE(delegate_->last_shown_notification_ad_placement_id());
+}
+
+TEST_F(BraveAdsAdsServiceImplTest,
+       ClickingAReminderOpensItsTargetUrlAndClosesIt) {
+  // Arrange
+  prefs_.SetBoolean(brave_rewards::prefs::kEnabled, true);
+  prefs_.SetBoolean(prefs::kNotificationsEnabled, true);
+  delegate_->set_can_show_notifications(true);
+
+  ShowReminder(mojom::ReminderType::kExternalWalletConnected);
+  ASSERT_TRUE(delegate_->last_shown_notification_ad_placement_id());
+  const std::string placement_id =
+      *delegate_->last_shown_notification_ad_placement_id();
+
+  // Act
+  OnNotificationAdClicked(placement_id);
+
+  // Assert
+  ASSERT_TRUE(delegate_->last_opened_url());
+  EXPECT_TRUE(delegate_->last_opened_url()->is_valid());
+  EXPECT_THAT(delegate_->closed_notification_ad_ids(),
+              testing::ElementsAre(placement_id));
+}
+
+#if BUILDFLAG(ENABLE_BRAVE_REWARDS)
+TEST_F(BraveAdsAdsServiceImplTest,
+       ClickingAReminderAfterConnectingAWalletOpensItsTargetUrlAndClosesIt) {
+  // Arrange
+  prefs_.SetBoolean(prefs::kSponsoredEnabled, true);
+  prefs_.SetBoolean(brave_rewards::prefs::kEnabled, true);
+  prefs_.SetBoolean(prefs::kNotificationsEnabled, true);
+  delegate_->set_can_show_notifications(true);
+  Startup();
+  ASSERT_TRUE(base::test::RunUntil(
+      [&] { return bat_ads_service_factory_->initialize_count() == 1U; }));
+
+  OnExternalWalletConnected();
+  ASSERT_TRUE(base::test::RunUntil(
+      [&] { return bat_ads_service_factory_->initialize_count() == 2U; }));
+  ASSERT_TRUE(delegate_->last_shown_notification_ad_placement_id());
+  const std::string placement_id =
+      *delegate_->last_shown_notification_ad_placement_id();
+
+  // Act
+  OnNotificationAdClicked(placement_id);
+
+  // Assert
+  EXPECT_THAT(delegate_->last_opened_url(),
+              testing::Optional(GURL("https://support.brave.app/hc/en-us/"
+                                     "articles/14648356808845")));
+  EXPECT_THAT(delegate_->closed_notification_ad_ids(),
+              testing::ElementsAre(placement_id));
+}
+#endif  // BUILDFLAG(ENABLE_BRAVE_REWARDS)
+
+TEST_F(BraveAdsAdsServiceImplTest,
+       ClosingTheSamePlacementIdASecondTimeForwardsItAsANotificationAdEvent) {
+  // Arrange
+  prefs_.SetBoolean(prefs::kSponsoredEnabled, true);
+  prefs_.SetBoolean(brave_rewards::prefs::kEnabled, true);
+  prefs_.SetBoolean(prefs::kNotificationsEnabled, true);
+  delegate_->set_can_show_notifications(true);
+  Startup();
+  ASSERT_TRUE(base::test::RunUntil(
+      [&] { return bat_ads_service_factory_->initialize_count() == 1U; }));
+
+  ShowReminder(mojom::ReminderType::kExternalWalletConnected);
+  ASSERT_TRUE(delegate_->last_shown_notification_ad_placement_id());
+  const std::string placement_id =
+      *delegate_->last_shown_notification_ad_placement_id();
+
+  // Act
+  OnNotificationAdShown(placement_id);
+  OnNotificationAdClosed(placement_id, /*by_user=*/true);
+  OnNotificationAdClosed(placement_id, /*by_user=*/true);
+  ASSERT_TRUE(base::test::RunUntil([&] {
+    return bat_ads_service_factory_->trigger_notification_ad_event_count() ==
+           1U;
+  }));
+
+  // Assert
+  EXPECT_EQ(1U,
+            bat_ads_service_factory_->trigger_notification_ad_event_count());
+}
+
+TEST_F(BraveAdsAdsServiceImplTest,
+       ReminderEventsAreNotForwardedToTheAdsCoreAsAdEvents) {
+  // Arrange
+  prefs_.SetBoolean(prefs::kSponsoredEnabled, true);
+  prefs_.SetBoolean(brave_rewards::prefs::kEnabled, true);
+  prefs_.SetBoolean(prefs::kNotificationsEnabled, true);
+  delegate_->set_can_show_notifications(true);
+  Startup();
+  ASSERT_TRUE(base::test::RunUntil(
+      [&] { return bat_ads_service_factory_->initialize_count() == 1U; }));
+
+  ShowReminder(mojom::ReminderType::kExternalWalletConnected);
+  ASSERT_TRUE(delegate_->last_shown_notification_ad_placement_id());
+  const std::string placement_id =
+      *delegate_->last_shown_notification_ad_placement_id();
+
+  // Act
+  OnNotificationAdShown(placement_id);
+  OnNotificationAdClicked(placement_id);
+  OnNotificationAdClosed(placement_id, /*by_user=*/true);
+
+  // Arrives after the reminder's event, if any was forwarded.
+  OnNotificationAdClosed("other_placement_id", /*by_user=*/true);
+  ASSERT_TRUE(base::test::RunUntil([&] {
+    return bat_ads_service_factory_->trigger_notification_ad_event_count() ==
+           1U;
+  }));
+
+  // Assert
+  EXPECT_EQ(1U,
+            bat_ads_service_factory_->trigger_notification_ad_event_count());
+}
+#endif  // !BUILDFLAG(IS_ANDROID)
+
+TEST_F(BraveAdsAdsServiceImplTest,
+       ParseAndSaveNewTabPageAdsSucceedsWhenServiceIsNotRunning) {
+  // Arrange
+  ASSERT_EQ(0U, bat_ads_service_factory_->launch_count());
+
+  // Act
+  base::test::TestFuture<bool> test_future;
+  ParseAndSaveNewTabPageAds(base::DictValue(), test_future.GetCallback());
+
+  // Assert
+  EXPECT_TRUE(test_future.Get());
+}
+
+TEST_F(
+    BraveAdsAdsServiceImplTest,
+    ParseAndSaveNewTabPageAdsSucceedsWhenServiceShutsDownBeforeReplyArrives) {
+  // Arrange
+  prefs_.SetBoolean(prefs::kSponsoredEnabled, true);
+  Startup();
+  ASSERT_TRUE(base::test::RunUntil(
+      [&] { return bat_ads_service_factory_->initialize_count() == 1U; }));
+
+  base::test::TestFuture<bool> test_future;
+  ParseAndSaveNewTabPageAds(base::DictValue(), test_future.GetCallback());
+
+  // Act
+  prefs_.SetBoolean(prefs::kSponsoredEnabled, false);
+
+  // Assert
+  EXPECT_TRUE(test_future.IsReady());
+  EXPECT_TRUE(test_future.Get());
 }
 
 }  // namespace brave_ads

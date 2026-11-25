@@ -1,13 +1,104 @@
 diff --git a/chrome/browser/ui/views/frame/browser_view.h b/chrome/browser/ui/views/frame/browser_view.h
-index d786fede5da896d28046083eeca53e429d9df975..e5193bf8007b9b0b30e400b7b673e86e555c8f9b 100644
+index 39f1b1c4311eabf5253579509d7f6810a2c0e652..37bf4bba9a3194cf020b8f603138180c42426b21 100644
 --- a/chrome/browser/ui/views/frame/browser_view.h
 +++ b/chrome/browser/ui/views/frame/browser_view.h
-@@ -678,7 +678,7 @@ class BrowserView : public BrowserWindow,
+@@ -204,7 +204,7 @@ class BrowserView : public BrowserWindow,
+ 
+   // Returns information about elements that want to render in the top window
+   // frame area.
+-  ClientFrameElementInfo GetFrameElementInfo() const;
++  virtual ClientFrameElementInfo GetFrameElementInfo() const;
+ 
+   // Returns the preferred size of the Web App Frame Toolbar. Used for example
+   // to determine the height of the title bar.
+@@ -328,7 +328,7 @@ class BrowserView : public BrowserWindow,
+   TabSearchBubbleHost* GetTabSearchBubbleHost();
+ 
+   // Setter for the BrowserView's TabSearchBubbleHost instance.
+-  void UpdateTabSearchBubbleHost();
++  virtual void UpdateTabSearchBubbleHost();
+ 
+   // Accessor for the ExclusiveAccessBubble.
+   ExclusiveAccessBubbleViews* GetExclusiveAccessBubble();
+@@ -338,7 +338,7 @@ class BrowserView : public BrowserWindow,
+   GetExclusiveAccessBubbleViewsContextForTesting();
+ 
+   // Returns true if the top UI are visible on screen.
+-  bool GetTabStripVisible() const;
++  virtual bool GetTabStripVisible() const;
+ 
+   // Returns true if the top UI should be drawn.
+   // On macOS, it is possible that the top UI is drawn but hidden.
+@@ -351,7 +351,7 @@ class BrowserView : public BrowserWindow,
+   bool ShouldDrawWebAppFrameToolbar() const;
+ 
+   // Returns whether or not strokes should be drawn around and under the tabs.
+-  bool ShouldDrawTabStrokes() const;
++  virtual bool ShouldDrawTabStrokes() const;
+ 
+   // Returns whether the vertical tabstrip is collapsed.
+   bool IsVerticalTabStripCollapsed() const;
+@@ -692,7 +692,7 @@ class BrowserView : public BrowserWindow,
    views::ClientView* CreateClientView(views::Widget* widget) override;
-   views::View* CreateOverlayView() override;
+   std::unique_ptr<views::View> CreateOverlayView() override;
  #if BUILDFLAG(IS_MAC)
 -  views::View* CreateMacOverlayView();
 +  virtual views::View* CreateMacOverlayView();
  #endif
    void OnWindowBeginUserBoundsChange() override;
    void OnWindowEndUserBoundsChange() override;
+@@ -842,6 +842,7 @@ class BrowserView : public BrowserWindow,
+   void DeleteBrowserWindow() final;
+ 
+  private:
++  friend class BraveBrowserView;
+   // Do not friend BrowserViewLayout. Use the BrowserViewLayoutDelegate
+   // interface to keep these two classes decoupled and testable.
+   friend class BrowserViewLayoutDelegateImpl;
+@@ -873,11 +874,11 @@ class BrowserView : public BrowserWindow,
+ 
+   // Display the current active split view as a series of multiple side-by-side
+   // web contents.
+-  void ShowSplitView(bool focus_active_view);
++  virtual void ShowSplitView(bool focus_active_view);
+ 
+   // Display only the current active tab's web contents, hiding any previous
+   // side-by-side display.
+-  void HideSplitView();
++  virtual void HideSplitView();
+ 
+   // Update the index of the active split based on the active tab's web
+   // contents.
+@@ -936,12 +937,12 @@ class BrowserView : public BrowserWindow,
+ 
+   // Prepare and update the split view for the specified WebContents. Returns
+   // true if split view is updated and needs a layout.
+-  bool MaybeUpdateSplitView(content::WebContents* contents);
++  virtual bool MaybeUpdateSplitView(content::WebContents* contents);
+ 
+   // Prepare and update devtools for the specified WebContents or any devtools
+   // in a split with the specified WebContents. Returns true if devtools is
+   // updated and needs a layout.
+-  bool MaybeUpdateDevtools(content::WebContents* contents);
++  virtual bool MaybeUpdateDevtools(content::WebContents* contents);
+ 
+   // Updates various optional child Views, e.g. Bookmarks Bar, Info Bar
+   // in response to a change notification from the specified
+@@ -983,7 +984,7 @@ class BrowserView : public BrowserWindow,
+ 
+   // Copy the accelerator table from the app resources into something we can
+   // use.
+-  void LoadAccelerators();
++  virtual void LoadAccelerators();
+ 
+   // Retrieves the command id for the specified Windows app command.
+   int GetCommandIDForAppCommandID(int app_command_id) const;
+@@ -1013,7 +1014,7 @@ class BrowserView : public BrowserWindow,
+   void ReparentTopContainerForStartOfImmersive();
+ 
+   // Reparents |top_container_| to |main_container_|.
+-  void ReparentTopContainerForEndOfImmersive();
++  virtual void ReparentTopContainerForEndOfImmersive();
+ 
+   // In certain situations, such as immersive mode and touch ui mode on
+   // ChromeOS, the tab strip and PWA views must be parented to the top container

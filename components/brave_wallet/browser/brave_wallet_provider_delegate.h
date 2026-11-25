@@ -12,6 +12,7 @@
 
 #include "base/functional/callback.h"
 #include "brave/components/brave_wallet/common/brave_wallet.mojom-forward.h"
+#include "brave/components/brave_wallet/common/mojom/brave_wallet_common.mojom-forward.h"
 #include "url/origin.h"
 
 namespace brave_wallet {
@@ -26,7 +27,7 @@ class BraveWalletProviderDelegate {
   BraveWalletProviderDelegate(const BraveWalletProviderDelegate&) = delete;
   BraveWalletProviderDelegate& operator=(const BraveWalletProviderDelegate&) =
       delete;
-  virtual ~BraveWalletProviderDelegate() = default;
+  virtual ~BraveWalletProviderDelegate();
 
   virtual bool IsTabVisible() = 0;
   virtual void ShowPanel(const url::Origin& origin) = 0;
@@ -45,9 +46,6 @@ class BraveWalletProviderDelegate {
       mojom::CoinType type,
       const std::vector<std::string>& accounts) = 0;
   virtual bool IsPermissionDenied(mojom::CoinType type) = 0;
-  virtual void AddSolanaConnectedAccount(const std::string& account) {}
-  virtual void RemoveSolanaConnectedAccount(const std::string& account) {}
-  virtual bool IsSolanaAccountConnected(const std::string& account);
 };
 
 }  // namespace brave_wallet

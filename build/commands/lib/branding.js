@@ -6,9 +6,9 @@
 import fs from 'fs-extra'
 import path from 'node:path'
 import config from './config.ts'
-import l10nUtil from './l10nUtil.js'
+import l10nUtil from './l10nUtil.ts'
 import * as Log from './log.ts'
-import util from './util.js'
+import util from './util.ts'
 
 const update = () => {
   Log.progressStart('update branding')
@@ -98,8 +98,69 @@ const update = () => {
     path.join(chromeComponentsDir, 'strings'),
   ])
   fileMap.add([
+    path.join(config.braveCoreDir, 'extensions', 'strings'),
+    path.join(config.srcDir, 'extensions', 'strings'),
+  ])
+  fileMap.add([
     braveAndroidJavaStringsTranslationsDir,
     chromeAndroidJavaStringsTranslationsDir,
+  ])
+  fileMap.add([
+    path.join(
+      config.braveCoreDir,
+      'ui',
+      'android',
+      'java',
+      'strings',
+      'translations',
+    ),
+    path.join(
+      config.srcDir,
+      'ui',
+      'android',
+      'java',
+      'strings',
+      'translations',
+    ),
+  ])
+  fileMap.add([
+    path.join(
+      config.braveCoreDir,
+      'components',
+      'permissions',
+      'android',
+      'translations',
+    ),
+    path.join(
+      config.srcDir,
+      'components',
+      'permissions',
+      'android',
+      'translations',
+    ),
+  ])
+  fileMap.add([
+    path.join(
+      config.braveCoreDir,
+      'browser',
+      'keyboard_accessory',
+      'android',
+      'internal',
+      'java',
+      'strings',
+      'translations',
+    ),
+    path.join(
+      config.srcDir,
+      'chrome',
+      'browser',
+      'keyboard_accessory',
+      'android',
+      'internal',
+      'java',
+      'strings',
+      'translations',
+    ),
   ])
   fileMap.add([
     braveAndroidTabUiJavaStringsTranslationsDir,
@@ -263,7 +324,7 @@ const update = () => {
       config.braveCoreDir,
       'node_modules',
       '@brave',
-      'leo',
+      'nala',
       'icons',
       config.getBraveLogoIconName(),
     ),
@@ -282,7 +343,7 @@ const update = () => {
       config.braveCoreDir,
       'node_modules',
       '@brave',
-      'leo',
+      'nala',
       'icons',
       'browser-bookmark-normal.svg',
     ),
@@ -384,7 +445,7 @@ const update = () => {
           !== util.calculateFileChecksum(destinationFile)
       ) {
         fs.copySync(sourceFile, destinationFile)
-        console.log(sourceFile + ' copied to ' + destinationFile)
+        Log.detail(sourceFile + ' copied to ' + destinationFile)
       }
     }
   }
@@ -432,7 +493,7 @@ const update = () => {
           && !braveOverwrittenFiles.has(untrackedChromiumPath)
         ) {
           fs.removeSync(untrackedChromiumPath)
-          console.log(`Deleted not listed file: ${untrackedChromiumPath}`)
+          Log.detail(`Deleted not listed file: ${untrackedChromiumPath}`)
         }
       }
     }

@@ -8,19 +8,18 @@
 #include "base/features.h"
 #include "chrome/browser/browser_features.h"
 #include "chrome/browser/devtools/features.h"
-#include "chrome/browser/history_embeddings/history_embeddings_utils.h"
+#include "chrome/browser/glic/public/features.h"
 #include "chrome/browser/policy/policy_util.h"
 #include "chrome/browser/preloading/preloading_features.h"
-#include "chrome/browser/ttc/features.h"
+#include "chrome/browser/ttc/core/features.h"
 #include "chrome/browser/ui/omnibox/omnibox_next_features.h"
-#include "chrome/browser/ui/tabs/features.h"
 #include "chrome/browser/ui/ui_features.h"
 #include "chrome/common/chrome_features.h"
 #include "components/attribution_reporting/features.h"
 #include "components/autofill/core/common/autofill_debug_features.h"
 #include "components/autofill/core/common/autofill_features.h"
 #include "components/autofill/core/common/autofill_payments_features.h"
-#include "components/browser_actuator/internal/features.h"
+#include "components/browser_actuator/internal/transport/features.h"
 #include "components/browser_actuator/public/features.h"
 #include "components/commerce/core/commerce_feature_list.h"
 #include "components/compose/core/browser/compose_features.h"
@@ -32,7 +31,6 @@
 #include "components/history/core/browser/features.h"
 #include "components/history_clusters/core/features.h"
 #include "components/history_clusters/core/on_device_clustering_features.h"
-#include "components/history_embeddings/core/history_embeddings_features.h"
 #include "components/lens/lens_features.h"
 #include "components/manta/features.h"
 #include "components/metrics/metrics_features.h"
@@ -44,6 +42,7 @@
 #include "components/omnibox/browser/aim_eligibility_service_features.h"
 #include "components/omnibox/common/omnibox_features.h"
 #include "components/one_time_tokens/core/common/one_time_token_features.h"
+#include "components/optimization_guide/core/delivery/prediction_model_component_configs.h"
 #include "components/optimization_guide/core/optimization_guide_features.h"
 #include "components/page_info/core/features.h"
 #include "components/passage_embeddings/core/passage_embeddings_features.h"
@@ -87,6 +86,8 @@
 #include "components/feed/feed_feature_list.h"
 #include "components/security_interstitials/core/features.h"
 #else
+#include "chrome/browser/child_module/features.h"
+#include "chrome/browser/default_browser/default_browser_features.h"
 #include "chrome/browser/enterprise/data_protection/data_protection_features.h"
 #include "chrome/browser/sharing_hub/sharing_hub_features.h"
 #include "chrome/browser/ui/toasts/toast_features.h"
@@ -127,17 +128,6 @@ void ExpectCompileOverriddenFeatureDefault(const base::Feature& feature,
   EXPECT_EQ(base::FeatureList::GetStateIfOverridden(feature), enabled);
 }
 
-// Blink generates these from runtime_enabled_features.json5, where Brave's
-// value is the entry's own `base_feature_status`. Nothing overrides an
-// upstream default, so the feature is not, and must not be, reported as
-// overridden.
-void ExpectBlinkRuntimeEnabledFeatureDefault(const base::Feature& feature,
-                                             bool enabled) {
-  SCOPED_TRACE(feature.name);
-  EXPECT_FALSE(base::internal::IsCompileOverriddenFeature(feature.name));
-  EXPECT_EQ(base::FeatureList::IsEnabled(feature), enabled);
-}
-
 }  // namespace
 
 TEST(FeatureDefaultsTest, DisabledFeatures) {
@@ -153,10 +143,11 @@ TEST(FeatureDefaultsTest, DisabledFeatures) {
       &blink::features::kBackgroundResourceFetch,
       &blink::features::kFencedFrames,
       &blink::features::kPreloadingEagerViewportHeuristics,
+      &blink::features::kPreloadingModerateViewportHeuristics,
       &browser_actuator::kBrowserActuator,
-      &browser_actuator::kBrowserActuatorProtoStreamTransport,
-#if BUILDFLAG(IS_ANDROID)
-      &chrome::android::kAndroidPageInfoAsAppMenuItem,
+      &browser_actuator::transport::kBrowserActuatorProtoStreamTransport,
+#if !BUILDFLAG(IS_ANDROID)
+      &child_module::features::kDynamicPatching,
 #endif
 #if BUILDFLAG(ENABLE_PDF_SAVE_TO_DRIVE)
       &chrome_pdf::features::kPdfSaveToDrive,
@@ -173,6 +164,7 @@ TEST(FeatureDefaultsTest, DisabledFeatures) {
       &contextual_tasks::kContextualTasksCookiePrefetch,
       &critical_actions::features::kCriticalActionHistory,
 #if !BUILDFLAG(IS_ANDROID)
+      &default_browser::kDefaultBrowserPromptSurfaces,
       &enterprise_data_protection::kEnableForceDownloadToCloud,
       &extensions_features::kApiGlicPrivate,
 #endif
@@ -181,6 +173,7 @@ TEST(FeatureDefaultsTest, DisabledFeatures) {
 #endif
 #if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_APPLE) || BUILDFLAG(IS_LINUX)
       &feature_engagement::kIPHAutofillAccountNameEmailSuggestionFeature,
+      &feature_engagement::kIPHBookmarkBarSimplifiedFeature,
       &feature_engagement::kIPHDiscardRingFeature,
       &feature_engagement::kIPHGMCCastStartStopFeature,
       &feature_engagement::kIPHPasswordsManagementBubbleAfterSaveFeature,
@@ -208,9 +201,8 @@ TEST(FeatureDefaultsTest, DisabledFeatures) {
       &features::kDigitalGoodsApi,
       &features::kEmailVerificationProtocol,
       &features::kFedCm,
-#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
-      &features::kFewerUpdateConfirmations,
-#endif
+      &features::kGeic,
+      &features::kGlicTextSelectionContextMenu,
       &features::kHttpsFirstBalancedMode,
       &features::kIndigo,
 #if BUILDFLAG(IS_WIN)
@@ -225,6 +217,9 @@ TEST(FeatureDefaultsTest, DisabledFeatures) {
       &features::kPrivacySandboxAdsAPIsM1Override,
 #if !BUILDFLAG(IS_ANDROID)
       &features::kPwaNavigationCapturing,
+#endif
+#if !BUILDFLAG(IS_ANDROID)
+      &features::kReadAnythingOmniboxChip,
 #endif
       &features::kSCTAuditingHashdance,
       &features::kServiceWorkerAutoPreload,
@@ -248,12 +243,8 @@ TEST(FeatureDefaultsTest, DisabledFeatures) {
       &history_clusters::features::kOnDeviceClusteringKeywordFiltering,
       &history_clusters::internal::kHistoryClustersInternalsPage,
       &history_clusters::internal::kHistoryClustersNavigationContextClustering,
-      &history_clusters::internal::kJourneys,
       &history_clusters::internal::kJourneysImages,
       &history_clusters::internal::kOmniboxHistoryClusterProvider,
-      &history_embeddings::kHistoryEmbeddings,
-      &history_embeddings::kHistoryEmbeddingsAnswers,
-      &history_embeddings::kLaunchedHistoryEmbeddings,
       &lens::features::kLensOverlay,
       &lens::features::kLensOverlayOmniboxEntryPoint,
       &lens::features::kLensStandalone,
@@ -265,6 +256,8 @@ TEST(FeatureDefaultsTest, DisabledFeatures) {
       &net::features::kEnableWebTransportDraft07,
       &net::features::kTLSTrustAnchorIDs,
       &network::features::kBrowsingTopics,
+      &network::features::kCacheSharingForPervasiveResources,
+      &network::features::kPervasiveSharedDictionaries,
       &network_time::kNetworkTimeServiceQuerying,
       &ntp_features::kCustomizeChromeSidePanelExtensionsCard,
       &ntp_features::kCustomizeChromeWallpaperSearch,
@@ -283,17 +276,20 @@ TEST(FeatureDefaultsTest, DisabledFeatures) {
 #if BUILDFLAG(IS_ANDROID)
       &omnibox::kOmniboxMobileParityUpdateV2,
 #endif
+      &omnibox::kPlatformAgnosticXGeo,
       &omnibox::kRichAutocompletion,
       &omnibox::kStarterPackExpansion,
       &one_time_tokens::features::kGmailOtpRetrievalService,
+      &optimization_guide::kPredictionModelComponentDelivery,
       &optimization_guide::features::kOptimizationGuideFetchingForSRP,
       &optimization_guide::features::kOptimizationGuideModelExecution,
       &optimization_guide::features::kOptimizationHints,
       &passage_embeddings::kPassageEmbedder,
+      &password_manager::features::
+          kPasswordManagerOnDeviceEncryptionMetricsReporter,
       &permissions::features::kCpssUseTfliteSignatureRunner,
       &permissions::features::kPermissionsPromptSurvey,
       &permissions::features::kPermissionPredictionsV2,
-      &permissions::features::kShowRelatedWebsiteSetsPermissionGrants,
       &personal_context::features::kPersonalContext,
       &privacy_sandbox::kEnforcePrivacySandboxAttestations,
 #if !BUILDFLAG(IS_ANDROID)
@@ -307,6 +303,7 @@ TEST(FeatureDefaultsTest, DisabledFeatures) {
 #if BUILDFLAG(IS_ANDROID)
       &security_interstitials::features::kHttpsFirstDialogUi,
 #endif
+      &segmentation_platform::features::kAndroidTipsNotifications,
       &segmentation_platform::features::kSegmentationPlatformDeviceTier,
       &segmentation_platform::features::kSegmentationPlatformFeature,
       &segmentation_platform::features::kSegmentationPlatformTimeDelaySampling,
@@ -314,6 +311,10 @@ TEST(FeatureDefaultsTest, DisabledFeatures) {
       &subresource_filter::kAdTagging,
 #if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
       &switches::kFirstRunDesktopRefresh,
+#endif
+#if BUILDFLAG(IS_ANDROID)
+      &switches::kProfileDiscOnAllPages,
+      &switches::kSigninLevelUpButton,
 #endif
       &switches::kSyncEnableBookmarksInTransportMode,
       &syncer::kSyncAutofillValuableMetadata,
@@ -345,6 +346,7 @@ TEST(FeatureDefaultsTest, EnabledFeatures) {
     BUILDFLAG(IS_WIN)
       &password_manager::features::kSkipUndecryptablePasswords,
 #endif
+      &ntp_features::kNtpSimplificationBookmarkBar,
 #if !BUILDFLAG(IS_ANDROID)
       &sharing_hub::kDesktopScreenshots,
 #endif
@@ -359,7 +361,9 @@ TEST(FeatureDefaultsTest, EnabledFeatures) {
 TEST(FeatureDefaultsTest, DisabledBlinkRuntimeEnabledFeatures) {
   // Please, keep alphabetized.
   const base::Feature* disabled_features[] = {
-      &blink::features::kAdInterestGroupAPI,
+      &blink::features::kAIDecisionModelAPI,
+      &blink::features::kAIDecisionModelAPIForWorkers,
+      &blink::features::kAIEmbeddingsAPI,
       &blink::features::kAIProofreadingAPI,
       &blink::features::kAIPromptAPI,
       &blink::features::kAIPromptAPIMultimodalInput,
@@ -367,27 +371,32 @@ TEST(FeatureDefaultsTest, DisabledBlinkRuntimeEnabledFeatures) {
       &blink::features::kAISummarizationAPI,
       &blink::features::kAIWriterAPI,
       &blink::features::kControlledFrame,
-      &blink::features::kFledge,
+      &blink::features::kExtensionScriptTagging,
+      &blink::features::kFencedFramesRuntime,
+      &blink::features::kInstallElement,
       &blink::features::kLanguageDetectionAPI,
-      &blink::features::kParakeet,
       &blink::features::kPrerender2,
+      &blink::features::kProfilerAPI,
       &blink::features::kTranslationAPI,
       &blink::features::kUserMediaElement,
+      &blink::features::kWebAppInstallation,
   };
 
   for (const auto* feature : disabled_features) {
-    ExpectBlinkRuntimeEnabledFeatureDefault(*feature, false);
+    ExpectCompileOverriddenFeatureDefault(*feature, false);
   }
 }
 
 TEST(FeatureDefaultsTest, EnabledBlinkRuntimeEnabledFeatures) {
   // Please, keep alphabetized.
   const base::Feature* enabled_features[] = {
+      &blink::features::kApproximateGeolocationPermissionAccuracyMode,
       &blink::features::kReduceUserAgentMinorVersion,
+      &blink::features::kWebMCP,
   };
 
   for (const auto* feature : enabled_features) {
-    ExpectBlinkRuntimeEnabledFeatureDefault(*feature, true);
+    ExpectCompileOverriddenFeatureDefault(*feature, true);
   }
 }
 

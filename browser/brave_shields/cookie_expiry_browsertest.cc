@@ -8,11 +8,9 @@
 #include "base/functional/bind.h"
 #include "base/path_service.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/test/bind.h"
 #include "base/test/test_future.h"
 #include "brave/components/constants/brave_paths.h"
 #include "build/build_config.h"
-#include "chrome/browser/ui/browser.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "content/public/browser/browser_context.h"
@@ -117,22 +115,14 @@ class CookieExpirationTest : public InProcessBrowserTest {
 
   std::vector<net::CanonicalCookie> GetAllCookiesDirect(
       BrowserWindowInterface* browser) {
-    base::RunLoop run_loop;
-
-    std::vector<net::CanonicalCookie> cookies_out;
+    base::test::TestFuture<const std::vector<net::CanonicalCookie>&> future;
     browser->tab_strip_model()
         ->GetActiveWebContents()
         ->GetBrowserContext()
         ->GetDefaultStoragePartition()
         ->GetCookieManagerForBrowserProcess()
-        ->GetAllCookies(base::BindLambdaForTesting(
-            [&run_loop,
-             &cookies_out](const std::vector<net::CanonicalCookie>& cookies) {
-              cookies_out = cookies;
-              run_loop.Quit();
-            }));
-    run_loop.Run();
-    return cookies_out;
+        ->GetAllCookies(future.GetCallback());
+    return future.Take();
   }
 
  protected:

@@ -10,11 +10,7 @@
 #include <utility>
 #include <vector>
 
-#include "base/run_loop.h"
-#include "base/strings/string_number_conversions.h"
 #include "base/test/bind.h"
-#include "base/test/gmock_callback_support.h"
-#include "base/test/mock_callback.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_future.h"
@@ -105,13 +101,9 @@ class CardanoProviderImplUnitTest : public testing::Test {
   }
 
   void UnlockWallet() {
-    base::RunLoop run_loop;
-    keyring_service()->Unlock(
-        "brave", base::BindLambdaForTesting([&run_loop](bool success) {
-          ASSERT_TRUE(success);
-          run_loop.Quit();
-        }));
-    run_loop.Run();
+    TestFuture<bool> future;
+    keyring_service()->Unlock("brave", future.GetCallback());
+    ASSERT_TRUE(future.Get());
   }
 
   CardanoProviderImpl* provider() { return provider_.get(); }
@@ -294,18 +286,13 @@ TEST_F(CardanoProviderImplUnitTest, IsEnabled_NoAllowedAccounts) {
 
 TEST_F(CardanoProviderImplUnitTest, IsEnabled_WalletLocked) {
   CreateWallet();
-  keyring_service()->Lock();
+  // Account exists, so the locked state is what makes IsEnabled return false.
   auto added_account = AddAccount();
+  ASSERT_TRUE(added_account);
+  keyring_service()->Lock();
 
-  ON_CALL(*delegate(), GetAllowedAccounts(_, _))
-      .WillByDefault(
-          [&](mojom::CoinType coin, const std::vector<std::string>& accounts) {
-            EXPECT_EQ(coin, mojom::CoinType::ADA);
-            EXPECT_EQ(accounts.size(), 1u);
-            EXPECT_EQ(accounts[0], added_account->account_id->unique_key);
-            return std::vector<std::string>(
-                {added_account->account_id->unique_key});
-          });
+  // The lock check short-circuits before the permissions are queried.
+  EXPECT_CALL(*delegate(), GetAllowedAccounts(_, _)).Times(0);
 
   ON_CALL(*delegate(), IsTabVisible()).WillByDefault([&]() { return true; });
 
@@ -332,13 +319,10 @@ TEST_F(CardanoProviderImplUnitTest, Enable_OnWalletUnlock_PermissionApproved) {
 
   keyring_service()->Lock();
 
-  base::MockCallback<CardanoProviderImpl::EnableCallback> first_callback;
-  base::RunLoop main_run_loop;
-  EXPECT_CALL(
-      first_callback,
-      Run(testing::_, EqualsMojo(mojom::CardanoProviderErrorBundlePtr())))
-      .WillOnce(base::test::RunOnceClosure(main_run_loop.QuitClosure()));
-  provider()->Enable(first_callback.Get());
+  TestFuture<mojo::PendingRemote<mojom::CardanoApi>,
+             mojom::CardanoProviderErrorBundlePtr>
+      first_future;
+  provider()->Enable(first_future.GetCallback());
 
   {
     // Request will be rejected because it is still waiting for wallet unlock.
@@ -368,7 +352,8 @@ TEST_F(CardanoProviderImplUnitTest, Enable_OnWalletUnlock_PermissionApproved) {
 
   UnlockWallet();
 
-  main_run_loop.Run();
+  EXPECT_TRUE(first_future.Get<0>());
+  EXPECT_FALSE(first_future.Get<1>());
 }
 
 // The provider isn't injected without a wallet, but the request must still fail
@@ -376,6 +361,10 @@ TEST_F(CardanoProviderImplUnitTest, Enable_OnWalletUnlock_PermissionApproved) {
 TEST_F(CardanoProviderImplUnitTest, NoWallet) {
   ON_CALL(*delegate(), IsTabVisible()).WillByDefault([&]() { return true; });
   EXPECT_CALL(*delegate(), WalletInteractionDetected()).Times(1);
+  // Without a wallet there is nothing to create an account in or to ask
+  // permissions for.
+  EXPECT_CALL(*delegate(), ShowAccountCreation(_, _)).Times(0);
+  EXPECT_CALL(*delegate(), RequestPermissions(_, _, _, _)).Times(0);
 
   base::test::TestFuture<mojo::PendingRemote<mojom::CardanoApi>,
                          mojom::CardanoProviderErrorBundlePtr>
@@ -383,7 +372,10 @@ TEST_F(CardanoProviderImplUnitTest, NoWallet) {
   provider()->Enable(future.GetCallback());
 
   EXPECT_FALSE(future.Get<0>());
-  EXPECT_TRUE(future.Get<1>());
+  EXPECT_EQ(future.Get<1>(),
+            mojom::CardanoProviderErrorBundle::New(
+                -3, l10n_util::GetStringUTF8(IDS_WALLET_USER_REJECTED_REQUEST),
+                nullptr));
 }
 
 TEST_F(CardanoProviderImplUnitTest, AccCreation) {

@@ -1,14 +1,24 @@
 <style include="settings-shared md-select">
 </style>
 
+<template is="dom-if" if="[[accountState_]]">
+  <settings-section page-title="[[getBraveAccountSectionTitle_()]]">
+    <template is="dom-if" if="[[isLoggedOutWithoutVerification_]]">
+      <brave-account-logged-out-row
+          browser-proxy="[[accountBrowserProxy_]]"
+          state="[[accountState_.loggedOut]]">
+      </brave-account-logged-out-row>
+    </template>
+    <template is="dom-if" if="[[!isLoggedOutWithoutVerification_]]">
+      <brave-account-compact-row></brave-account-compact-row>
+    </template>
+  </settings-section>
+</template>
+
 <settings-section
   id="getStarted"
-  page-title="$i18n{braveGetStartedTitle}">
-  <template is="dom-if" if="[[isBraveAccountEnabled_]]">
-    <settings-brave-account-row></settings-brave-account-row>
-  </template>
+  page-title="$i18n{braveCustomizeBraveTitle}">
   <settings-people-page
-    prefs="{{prefs}}"
     page-visibility="[[pageVisibility]]">
   </settings-people-page>
   <div route-path="default">
@@ -18,7 +28,7 @@
     </if>
     <div class="settings-box">$i18n{onStartup}</div>
     <div class="settings-box continuation">
-      <settings-on-startup-page class="flex no-min-width" prefs="{{prefs}}">
+      <settings-on-startup-page class="flex no-min-width">
       </settings-on-startup-page>
     </div>
   </div>

@@ -17,7 +17,7 @@ from recipe_test_api import RecipeTestApi, TestData
 # Default simulated git cache directory.
 _GIT_CACHE = '/b/cache'
 
-# Default simulated mirror directory `git cache exists` resolves to.
+# Default simulated mirror directory `git cache populate` fetches into.
 _MIRROR_DIR = '/b/cache/chromium.googlesource.com-chromium-src'
 
 
@@ -33,20 +33,22 @@ class ChromiumCheckoutTestApi(RecipeTestApi):
         return self.m.path.files('b/src/chrome/VERSION')
 
     def git_cache_populated(self, mirror_dir: str = _MIRROR_DIR) -> TestData:
-        """Seed `clone`/`checkout_ref`'s `git cache exists` lookups.
+        """Seed the mirror `clone`/`checkout_ref` populate as *mirror_dir*.
 
-        Both `clone` and `checkout_ref` run a `git cache exists` step to
-        resolve the mirror directory `git cache populate` just fetched into;
-        required whenever either of them runs, since the simulated stdout is
-        an empty string unless seeded.
+        Both look the mirror up once `git cache populate` has created it;
+        required whenever either of them runs, since the simulated lookup
+        finds no mirror unless seeded.
         """
         stdout = self.m.raw_io.output_text(mirror_dir)
-        return (self.step_data('git cache exists', stdout=stdout) +
-                self.step_data('git cache exists for ref', stdout=stdout))
+        return self.step_data(
+            'git cache populate exists (after)', stdout=stdout
+        ) + self.step_data(
+            'git cache populate for ref exists (after)', stdout=stdout
+        )
 
-    def win_toolchain_hash(self,
-                           toolchain_hash: str = '',
-                           published_hash: str | None = None) -> TestData:
+    def win_toolchain_hash(
+        self, toolchain_hash: str = '', published_hash: str | None = None
+    ) -> TestData:
         """Seed `_pin_win_toolchain_hash`'s lookup result.
 
         This is `checkout_ref`'s own default for the `resolve win toolchain
@@ -54,16 +56,20 @@ class ChromiumCheckoutTestApi(RecipeTestApi):
         is published yet for the upstream hash, so `GYP_MSVS_HASH_*` stays
         unset -- matching what an unseeded step should report.
         """
-        return self.m.json.output({
-            'toolchain_hash': toolchain_hash,
-            'published_hash': published_hash,
-        })
+        return self.m.json.output(
+            {
+                'toolchain_hash': toolchain_hash,
+                'published_hash': published_hash,
+            }
+        )
 
-    def win_toolchain_published(self, toolchain_hash: str,
-                                published_hash: str) -> TestData:
+    def win_toolchain_published(
+        self, toolchain_hash: str, published_hash: str
+    ) -> TestData:
         """Simulate Brave having already republished a toolchain for the
         upstream *toolchain_hash*, resolving to *published_hash*.
         """
         return self.step_data(
             'resolve win toolchain hash',
-            self.win_toolchain_hash(toolchain_hash, published_hash))
+            self.win_toolchain_hash(toolchain_hash, published_hash),
+        )

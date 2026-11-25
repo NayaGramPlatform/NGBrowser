@@ -5,9 +5,9 @@
 
 #include "chrome/browser/ui/unload_controller.h"
 
+#include "brave/browser/ui/tabs/brave_tab_prefs.h"
 #include "brave/browser/ui/tabs/shared_pinned_tab_service.h"
 #include "brave/browser/ui/tabs/shared_pinned_tab_service_factory.h"
-#include "brave/components/constants/pref_names.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/tabs/features.h"
 #include "components/prefs/pref_service.h"
@@ -32,5 +32,14 @@ bool MaybeHandleSharedPinnedTabsClosing(BrowserWindowInterface* browser) {
 }
 
 }  // namespace
+
+namespace sidebar {
+
+// The web panel is backed by a pinned tab, so it must be closed before the
+// session service and the tab restore service snapshot the window. Otherwise
+// it comes back as an ordinary pinned tab on restore.
+void MaybeCloseWebPanelForShutdown(BrowserWindowInterface* browser);
+
+}  // namespace sidebar
 
 #include <chrome/browser/ui/unload_controller.cc>

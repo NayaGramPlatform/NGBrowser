@@ -28,6 +28,7 @@ nala_icons = [
   "leo.bar.chart.svg",
   "leo.biometric.login.svg",
   "leo.bitcoin.svg",
+  "leo.brave.ask.svg",
   "leo.brave.icon-monochrome.svg",
   "leo.brave.icon-outline.svg",
   "leo.browser.back.svg",
@@ -106,6 +107,7 @@ nala_icons = [
   "leo.help.outline.svg",
   "leo.history.svg",
   "leo.idea.svg",
+  "leo.image.svg",
   "leo.import.arrow.svg",
   "leo.info.filled.svg",
   "leo.info.ios-only.svg",
@@ -120,6 +122,7 @@ nala_icons = [
   "leo.leo.voice-input.svg",
   "leo.list.settings.svg",
   "leo.list.svg",
+  "leo.location.on.svg",
   "leo.lock.dots.svg",
   "leo.lock.open.svg",
   "leo.lock.plain.svg",
@@ -199,6 +202,7 @@ nala_icons = [
   "leo.rewind.filled.svg",
   "leo.rss.svg",
   "leo.safe.svg",
+  "leo.search.goggles.svg",
   "leo.search.history.svg",
   "leo.search.movie.svg",
   "leo.search.svg",
@@ -260,15 +264,14 @@ action("make_symbols_asset_catalog") {
   args = [
     "--output",
     rebase_path("$target_gen_dir/NalaSymbols.xcassets"),
-    "--leo_sf_symbols_directory",
-    rebase_path("//brave/node_modules/@brave/leo-sf-symbols"),
+    "--nala_sf_symbols_directory",
+    rebase_path("//brave/node_modules/@brave/nala/icons-sf"),
     "--icons",
     string_join(",", nala_icons),
   ]
   outputs = [ "$target_gen_dir/NalaSymbols.xcassets" ]
-  inputs = rebase_path(nala_icons,
-                       ".",
-                       "//brave/node_modules/@brave/leo-sf-symbols/symbols")
+  inputs =
+      rebase_path(nala_icons, ".", "//brave/node_modules/@brave/nala/icons-sf")
 }
 
 # Swift Package Manager cannot import a `.bundle` unfortunately so we have to
@@ -279,8 +282,8 @@ ios_swift_framework_bundle("nala_assets_framework") {
   info_plist = "Info.plist"
   deps = [ ":nala_assets" ]
   sources = [
-    "//brave/node_modules/@brave/leo/tokens/ios-swift/ColorSetAccessors.swift",
-    "//brave/node_modules/@brave/leo/tokens/ios-swift/Gradients.swift",
+    "//brave/node_modules/@brave/nala/tokens/ios-swift/ColorSetAccessors.swift",
+    "//brave/node_modules/@brave/nala/tokens/ios-swift/Gradients.swift",
     "nala_bundle.swift",
   ]
   frameworks = [ "Foundation.framework" ]
@@ -289,7 +292,7 @@ ios_swift_framework_bundle("nala_assets_framework") {
 bundle_data("nala_assets") {
   sources = get_target_outputs(":make_symbols_asset_catalog")
   sources += [ rebase_path(
-          "//brave/node_modules/@brave/leo/tokens/ios-swift/Colors.xcassets") ]
+          "//brave/node_modules/@brave/nala/tokens/ios-swift/Colors.xcassets") ]
   outputs = [ "{{bundle_contents_dir}}/{{source_file_part}}" ]
   public_deps = [ ":make_symbols_asset_catalog" ]
 }

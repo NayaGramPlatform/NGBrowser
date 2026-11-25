@@ -10,7 +10,6 @@
 #include <vector>
 
 #include "base/values.h"
-#include "brave/components/brave_news/common/brave_news.mojom-shared.h"
 #include "brave/components/brave_news/common/brave_news.mojom.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -64,7 +63,8 @@ TEST(BraveNewsCombinedFeedParsing, GetItemWithChannels) {
   std::vector<mojom::FeedItemPtr> feed_items =
       ParseFeedItems(std::move(json_value));
   // The single item should be successfully parsed to a FeedItem
-  EXPECT_EQ(feed_items.size(), 1u);
+  ASSERT_EQ(feed_items.size(), 1u);
+  ASSERT_TRUE(feed_items[0]->is_article());
 
   auto channels = feed_items[0]->get_article()->data->channels;
   EXPECT_EQ(3u, channels.size());

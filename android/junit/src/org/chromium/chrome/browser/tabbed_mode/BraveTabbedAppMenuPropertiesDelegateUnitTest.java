@@ -49,7 +49,6 @@ import org.chromium.base.test.util.Features.DisableFeatures;
 import org.chromium.base.test.util.Features.EnableFeatures;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.ActivityTabProvider;
-import org.chromium.chrome.browser.RecentlyClosedEntriesManager;
 import org.chromium.chrome.browser.app.appmenu.AppMenuPropertiesDelegateImpl.MenuGroup;
 import org.chromium.chrome.browser.bookmarks.BookmarkModel;
 import org.chromium.chrome.browser.bookmarks.PowerBookmarkUtils;
@@ -77,6 +76,7 @@ import org.chromium.chrome.browser.preferences.ChromeSharedPreferences;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.profiles.ProfileManager;
 import org.chromium.chrome.browser.readaloud.ReadAloudController;
+import org.chromium.chrome.browser.recent_tabs.RecentlyClosedEntriesManager;
 import org.chromium.chrome.browser.signin.services.IdentityServicesProvider;
 import org.chromium.chrome.browser.signin.services.SigninManager;
 import org.chromium.chrome.browser.sync.SyncServiceFactory;
@@ -101,7 +101,6 @@ import org.chromium.components.commerce.core.CommerceFeatureUtils;
 import org.chromium.components.commerce.core.CommerceFeatureUtilsJni;
 import org.chromium.components.commerce.core.ShoppingService;
 import org.chromium.components.content_settings.ContentSetting;
-import org.chromium.components.dom_distiller.core.DomDistillerFeatures;
 import org.chromium.components.power_bookmarks.PowerBookmarkMeta;
 import org.chromium.components.prefs.PrefService;
 import org.chromium.components.signin.identitymanager.IdentityManager;
@@ -126,17 +125,19 @@ import java.util.List;
 @RunWith(BaseRobolectricTestRunner.class)
 @DisableFeatures({
     BraveFeatureList.BRAVE_PLAYLIST,
-    ChromeFeatureList.ANDROID_PAGE_INFO_AS_APP_MENU_ITEM,
     ChromeFeatureList.FEED_AUDIO_OVERVIEWS,
     ChromeFeatureList.GLIC,
     ChromeFeatureList.LENS_OVERLAY_ANDROID,
     ChromeFeatureList.SUBMENUS_IN_APP_MENU,
     ChromeFeatureList.SUBMENUS_IN_APP_MENU_LFF,
-    DomDistillerFeatures.READER_MODE_DISTILL_IN_APP,
+    ChromeFeatureList.TTC,
+    BraveFeatureList.BRAVE_ANDROID_EXTENSIONS,
     BraveFeatureList.BRAVE_SHRED,
+    BraveFeatureList.BRAVE_ANDROID_MERGE_INSTALL_PWA_AND_CREATE_SHORTCUT,
 })
 @EnableFeatures({
     BraveFeatureList.AI_CHAT,
+    ChromeFeatureList.IN_APP_WINDOW_MANAGER_DEPRECATION,
 })
 public class BraveTabbedAppMenuPropertiesDelegateUnitTest {
     @Rule public final MockitoRule mMockitoRule = MockitoJUnit.rule();
@@ -150,7 +151,6 @@ public class BraveTabbedAppMenuPropertiesDelegateUnitTest {
     @Mock private TabModel mTabModel;
     @Mock private TabModel mIncognitoTabModel;
     @Mock private ToolbarManager mToolbarManager;
-    @Mock private View mDecorView;
     @Mock private LayoutStateProvider mLayoutStateProvider;
     @Mock private ManagedBrowserUtils.Natives mManagedBrowserUtilsJniMock;
     @Mock private Profile mProfile;
@@ -282,7 +282,7 @@ public class BraveTabbedAppMenuPropertiesDelegateUnitTest {
                         mMultiWindowModeStateDispatcher,
                         mTabModelSelector,
                         mToolbarManager,
-                        mDecorView,
+                        new View(context),
                         mAppMenuDelegate,
                         mLayoutStateProviderSupplier,
                         mBookmarkModelSupplier,
@@ -470,9 +470,7 @@ public class BraveTabbedAppMenuPropertiesDelegateUnitTest {
         assertEquals(MenuGroup.PAGE_MENU, mTabbedAppMenuPropertiesDelegate.getMenuGroup());
         MVCListAdapter.ModelList modelList = mTabbedAppMenuPropertiesDelegate.getMenuItems();
 
-        // AndroidPageInfoAsAppMenuItem feature is disabled for the whole class:
-        // info_menu_id and page_info_divider_line_id are not displayed.
-        assertFalse(ChromeFeatureList.sAndroidPageInfoAsAppMenuItem.isEnabled());
+        assertTrue(ChromeFeatureList.sAndroidPageInfoAsAppMenuItem.isEnabled());
 
         List<Integer> expectedItems = new ArrayList<>();
 
@@ -481,6 +479,8 @@ public class BraveTabbedAppMenuPropertiesDelegateUnitTest {
         expectedItems.add(R.id.add_to_group_menu_id);
         expectedItems.add(R.id.divider_line_id);
         expectedItems.add(R.id.open_history_menu_id);
+        expectedItems.add(R.id.info_menu_id);
+        expectedItems.add(R.id.page_info_divider_line_id);
         expectedItems.add(R.id.downloads_menu_id);
         expectedItems.add(R.id.all_bookmarks_menu_id);
         expectedItems.add(R.id.brave_wallet_id);
@@ -507,26 +507,6 @@ public class BraveTabbedAppMenuPropertiesDelegateUnitTest {
 
     @Test
     @Config(qualifiers = "sw320dp")
-    @EnableFeatures(ChromeFeatureList.ANDROID_PAGE_INFO_AS_APP_MENU_ITEM)
-    public void testBravePageMenuItems_RegularPage_EnabledAndroidPageInfoAsAppMenuItem() {
-        setUpMocksForPageMenu();
-        setMenuOptions(
-                new MenuOptions()
-                        .withShowTranslate()
-                        .withShowAddToHomeScreen()
-                        .withAutoDarkEnabled());
-
-        assertEquals(MenuGroup.PAGE_MENU, mTabbedAppMenuPropertiesDelegate.getMenuGroup());
-        MVCListAdapter.ModelList modelList = mTabbedAppMenuPropertiesDelegate.getMenuItems();
-
-        // The page info button is gone from the address bar, so the menu carries site controls.
-        assertTrue(menuContainsId(modelList, R.id.info_menu_id));
-        assertTrue(menuContainsId(modelList, R.id.page_info_divider_line_id));
-    }
-
-    @Test
-    @Config(qualifiers = "sw320dp")
-    @DisableFeatures(ChromeFeatureList.ENABLE_DOWNLOAD_SAVE_AS_CONTEXT_MENU)
     public void testBraveIconRowItems() {
         setUpMocksForPageMenu();
         setMenuOptions(new MenuOptions());
@@ -544,12 +524,12 @@ public class BraveTabbedAppMenuPropertiesDelegateUnitTest {
             }
         }
 
-        // Brave shows share instead of forward, and the row renders five icons at most.
+        // Brave shows share instead of back, and the row renders five icons at most.
         assertThat(
                 "Icon row items were: " + iconIds,
                 iconIds,
                 Matchers.contains(
-                        R.id.back_menu_id,
+                        R.id.forward_menu_id,
                         R.id.bookmark_this_page_id,
                         R.id.offline_page_id,
                         R.id.share_menu_id,
