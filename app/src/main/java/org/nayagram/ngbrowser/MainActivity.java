@@ -783,8 +783,7 @@ public class MainActivity extends AppCompatActivity {
         for (int i = 0; i < tabs.size(); i++) {
             TabItem t = tabs.get(i);
             String prefix = (i == currentTabIndex ? "▶ " : "") + (t.isPrivate() ? "[Private] " : "");
-            labels[i] = prefix + t.getTitle() + "
-" + (t.getUrl().startsWith("resource://") ? "New Tab" : t.getUrl());
+            labels[i] = prefix + t.getTitle() + "\n" + (t.getUrl().startsWith("resource://") ? "New Tab" : t.getUrl());
         }
 
         new AlertDialog.Builder(this)
@@ -801,14 +800,10 @@ public class MainActivity extends AppCompatActivity {
         int tabBlocked = tab != null ? tab.getBlockedCount() : 0;
         long totalBlocked = shieldsManager.getTotalBlockedCount();
 
-        String summary = "Engine: Gecko 140 Native Privacy Core
-" +
-                "Blocked on this tab: " + tabBlocked + "
-" +
-                "Total ads & trackers blocked: " + totalBlocked + "
-" +
-                "Protection Level: " + shieldsManager.getProtectionLabel() + "
-" +
+        String summary = "Engine: Gecko 140 Native Privacy Core\n" +
+                "Blocked on this tab: " + tabBlocked + "\n" +
+                "Total ads & trackers blocked: " + totalBlocked + "\n" +
+                "Protection Level: " + shieldsManager.getProtectionLabel() + "\n" +
                 "HTTPS-Only Mode: " + (shieldsManager.isHttpsOnly() ? "Enabled" : "Off");
 
         String[] options = {
@@ -868,8 +863,7 @@ public class MainActivity extends AppCompatActivity {
         }
         String[] labels = new String[list.size()];
         for (int i = 0; i < list.size(); i++) {
-            labels[i] = list.get(i).title + "
-" + list.get(i).url;
+            labels[i] = list.get(i).title + "\n" + list.get(i).url;
         }
         new AlertDialog.Builder(this)
                 .setTitle("Bookmarks (" + list.size() + ")")
@@ -886,8 +880,7 @@ public class MainActivity extends AppCompatActivity {
         }
         String[] labels = new String[list.size()];
         for (int i = 0; i < list.size(); i++) {
-            labels[i] = list.get(i).title + "
-" + list.get(i).url;
+            labels[i] = list.get(i).title + "\n" + list.get(i).url;
         }
         new AlertDialog.Builder(this)
                 .setTitle("History (" + list.size() + ")")
@@ -904,8 +897,7 @@ public class MainActivity extends AppCompatActivity {
         List<NGBrowserDbHelper.Item> list = dbHelper.getDownloads();
         String[] labels = new String[list.size()];
         for (int i = 0; i < list.size(); i++) {
-            labels[i] = list.get(i).title + "
-" + list.get(i).url;
+            labels[i] = list.get(i).title + "\n" + list.get(i).url;
         }
         AlertDialog.Builder builder = new AlertDialog.Builder(this)
                 .setTitle("Downloads (" + list.size() + ")")
@@ -944,15 +936,10 @@ public class MainActivity extends AppCompatActivity {
                         new AlertDialog.Builder(this)
                                 .setTitle("NG Browser v2.0.0")
                                 .setMessage(
-                                        "NayaGram Platform Official Browser
-
-" +
-                                        "• Standalone Native Engine: Mozilla GeckoView 140 ESR (C++/Rust)
-" +
-                                        "• Upstream Core Sync: Brave-Core 1.102.37 / Chromium 159
-" +
-                                        "• Built-in Enhanced Tracking Protection & Total Cookie Isolation
-" +
+                                        "NayaGram Platform Official Browser\n\n" +
+                                        "• Standalone Native Engine: Mozilla GeckoView 140 ESR (C++/Rust)\n" +
+                                        "• Upstream Core Sync: Brave-Core 1.102.37 / Chromium 159\n" +
+                                        "• Built-in Enhanced Tracking Protection & Total Cookie Isolation\n" +
                                         "• Package: org.nayagram.ngbrowser"
                                 )
                                 .setPositiveButton("OK", null)
