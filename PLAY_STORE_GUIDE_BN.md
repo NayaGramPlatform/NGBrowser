@@ -1,6 +1,6 @@
 # NG Browser v3.12.18 NG — Google Play Store পাবলিশিং গাইড
 
-**NayaGram Platform** · প্যাকেজ: `org.nayagram.ngbrowser` · ভার্সন: `v3.12.18 NG` (`versionCode: 31218`)
+**NayaGram Platform** · প্যাকেজ: `org.nayagram.ngbrowser` · ভার্সন: `v3.12.18 NG` (`versionCode: 3578`)
 
 ---
 
@@ -10,7 +10,7 @@
 |---|---|---|
 | **Package Name (applicationId)** | `org.nayagram.ngbrowser` | ✅ ইউনিক ও বৈধ |
 | **Version Name** | `v3.12.18 NG` | ✅ সেট করা হয়েছে |
-| **Version Code** | `31218` | ✅ প্লে স্টোর উপযোগী |
+| **Version Code** | `3578` | ✅ প্লে স্টোর উপযোগী |
 | **Target SDK / Compile SDK** | **API 36 (Android 16)** | ✅ ২০২৬ প্লে স্টোর নীতিমালায় ১০০% পাশ |
 | **Min SDK** | **API 21 (Android 5.0+)** | ✅ ৯৯.৮% অ্যান্ড্রয়েড ডিভাইস সাপোর্ট |
 | **16 KB Page Alignment** | `p_align = 0x4000` + `useLegacyPackaging = false` | ✅ Android 15+/16+ বাধ্যতামূলক শর্ত পূরণ |

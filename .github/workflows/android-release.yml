@@ -10,6 +10,7 @@ jobs:
   build:
     name: Build & Sign Native GeckoView Release (AAB + APK)
     runs-on: ubuntu-latest
+
     steps:
       - name: 1. Checkout repository
         uses: actions/checkout@v4
@@ -21,7 +22,7 @@ jobs:
           java-version: '17'
           cache: 'gradle'
 
-      - name: 4. Decode keystore
+      - name: 3. Decode & verify release keystore
         env:
           RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
           RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
@@ -60,22 +61,38 @@ jobs:
           echo "SAFE_KEY_ALIAS=$CLEAN_KEY_ALIAS" >> "$GITHUB_ENV"
           echo "SAFE_KEY_PASS=$FINAL_KEY_PASS" >> "$GITHUB_ENV"
 
-      - name: 5. Grant execute permissions on gradlew
+      - name: 4. Grant execute permissions on gradlew
         run: chmod +x ./gradlew
 
-      - name: 6. Build signed release
+      - name: 5. Build signed release AAB & APK
         env:
           RELEASE_STORE_FILE: ${{ env.KEYSTORE_PATH }}
           RELEASE_KEY_ALIAS: ${{ env.SAFE_KEY_ALIAS }}
           RELEASE_STORE_PASSWORD: ${{ env.SAFE_STORE_PASS }}
           RELEASE_KEY_PASSWORD: ${{ env.SAFE_KEY_PASS }}
         run: |
-          ./gradlew bundleRelease assembleRelease --no-daemon --stacktrace \
+          ./gradlew clean bundleRelease assembleRelease --no-daemon --stacktrace \
             "-PRELEASE_STORE_FILE=$KEYSTORE_PATH" \
             "-PRELEASE_KEY_ALIAS=$SAFE_KEY_ALIAS" \
             "-PRELEASE_STORE_PASSWORD=$SAFE_STORE_PASS" \
             "-PRELEASE_KEY_PASSWORD=$SAFE_KEY_PASS"
-          ls -lh app/build/outputs/bundle/release/ app/build/outputs/apk/release/
+
+      - name: 6. Verify signed AAB & APK outputs
+        run: |
+          AAB_FILE=$(ls app/build/outputs/bundle/release/*.aab | head -n 1)
+          APK_FILE=$(ls app/build/outputs/apk/release/*.apk | head -n 1)
+          if [ ! -f "$AAB_FILE" ]; then
+            echo "::error::Signed AAB file was not generated!"
+            exit 1
+          fi
+          if [ ! -f "$APK_FILE" ]; then
+            echo "::error::Signed APK file was not generated!"
+            exit 1
+          fi
+          ls -lh "$AAB_FILE" "$APK_FILE"
+          jarsigner -verify -verbose:summary "$AAB_FILE"
+          jarsigner -verify -verbose:summary "$APK_FILE"
+          sha256sum "$AAB_FILE" "$APK_FILE"
 
       - name: 7. Upload signed AAB artifact
         uses: actions/upload-artifact@v4
@@ -84,13 +101,13 @@ jobs:
           path: app/build/outputs/bundle/release/*.aab
           if-no-files-found: error
 
-      - name: 7. Upload signed APK artifact
+      - name: 8. Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: app-release-apk
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
 
-      - name: 8. Cleanup keystore
+      - name: 9. Cleanup keystore
         if: always()
         run: rm -f "$RUNNER_TEMP/ngbrowser-release.jks"

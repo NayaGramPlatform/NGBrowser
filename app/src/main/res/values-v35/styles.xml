@@ -4,8 +4,7 @@
         <item name="colorPrimary">@color/ng_cyan_primary</item>
         <item name="colorPrimaryDark">@color/ng_navy_dark</item>
         <item name="colorAccent">@color/ng_cyan_bright</item>
-        <item name="android:statusBarColor">@color/ng_navy_dark</item>
-        <item name="android:navigationBarColor">@color/ng_navy_bar</item>
-        <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
     </style>
 </resources>

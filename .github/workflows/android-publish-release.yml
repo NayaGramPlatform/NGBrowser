@@ -1,26 +1,28 @@
 name: Publish GitHub Release
 
 on:
-  workflow_dispatch:
-    inputs:
-      tag_name:
-        description: 'Release Tag (e.g. v3.12.18-NG)'
-        required: false
-        default: 'v3.12.18-NG'
-      release_title:
-        description: 'Release Title'
-        required: false
-        default: 'NG Browser v3.12.18 NG — Play Store Production Release'
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release tag name (e.g. v3.12.18-NG)'
+        required: true
+        default: 'v3.12.18-NG'
+      release_title:
+        description: 'Release title'
+        required: true
+        default: 'NG Browser v3.12.18 NG (Play Store Production)'
+
+permissions:
+  contents: write
 
 jobs:
-  publish:
-    name: Build Signed Native APK/AAB & Publish GitHub Release
+  publish-release:
+    name: Build, Verify & Publish Signed Release (AAB + APK)
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
+
     steps:
       - name: 1. Checkout repository
         uses: actions/checkout@v4
@@ -32,7 +34,7 @@ jobs:
           java-version: '17'
           cache: 'gradle'
 
-      - name: 3. Decode Keystore
+      - name: 3. Decode & verify release keystore
         env:
           RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
           RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
@@ -40,20 +42,18 @@ jobs:
           RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD_2 }}
         run: |
           if [ -z "$RELEASE_KEYSTORE_BASE64" ]; then
-            echo "::error::Secret RELEASE_KEYSTORE_BASE64 is missing!"
+            echo "::error::Secret RELEASE_KEYSTORE_BASE64 is empty!"
             exit 1
           fi
           echo "$RELEASE_KEYSTORE_BASE64" | tr -d '\r\n ' | base64 -d > "$RUNNER_TEMP/ngbrowser-release.jks"
           CLEAN_STORE_PASS=$(printf "%s" "$RELEASE_STORE_PASSWORD" | tr -d '\r\n')
           CLEAN_KEY_ALIAS=$(printf "%s" "$RELEASE_KEY_ALIAS" | tr -d '\r\n')
           CLEAN_KEY_PASS=$(printf "%s" "$RELEASE_KEY_PASSWORD" | tr -d '\r\n')
-
           if keytool -certreq -keystore "$RUNNER_TEMP/ngbrowser-release.jks" -storepass "$CLEAN_STORE_PASS" -alias "$CLEAN_KEY_ALIAS" -keypass "$CLEAN_KEY_PASS" -file /dev/null 2>/dev/null; then
             FINAL_KEY_PASS="$CLEAN_KEY_PASS"
           else
             FINAL_KEY_PASS="$CLEAN_STORE_PASS"
           fi
-
           echo "KEYSTORE_PATH=$RUNNER_TEMP/ngbrowser-release.jks" >> "$GITHUB_ENV"
           echo "SAFE_STORE_PASS=$CLEAN_STORE_PASS" >> "$GITHUB_ENV"
           echo "SAFE_KEY_ALIAS=$CLEAN_KEY_ALIAS" >> "$GITHUB_ENV"
@@ -62,20 +62,46 @@ jobs:
       - name: 4. Grant execute permissions on gradlew
         run: chmod +x ./gradlew
 
-      - name: 5. Build signed release APK & AAB
+      - name: 5. Build signed release AAB & APK
         env:
           RELEASE_STORE_FILE: ${{ env.KEYSTORE_PATH }}
           RELEASE_KEY_ALIAS: ${{ env.SAFE_KEY_ALIAS }}
           RELEASE_STORE_PASSWORD: ${{ env.SAFE_STORE_PASS }}
           RELEASE_KEY_PASSWORD: ${{ env.SAFE_KEY_PASS }}
         run: |
-          ./gradlew bundleRelease assembleRelease --no-daemon --stacktrace \
+          ./gradlew clean bundleRelease assembleRelease --no-daemon --stacktrace \
             "-PRELEASE_STORE_FILE=$KEYSTORE_PATH" \
             "-PRELEASE_KEY_ALIAS=$SAFE_KEY_ALIAS" \
             "-PRELEASE_STORE_PASSWORD=$SAFE_STORE_PASS" \
             "-PRELEASE_KEY_PASSWORD=$SAFE_KEY_PASS"
 
-      - name: 6. Create GitHub Release & Attach Assets
+      - name: 6. Verify signed AAB & APK outputs
+        run: |
+          AAB_FILE=$(ls app/build/outputs/bundle/release/*.aab | head -n 1)
+          APK_FILE=$(ls app/build/outputs/apk/release/*.apk | head -n 1)
+          if [ ! -f "$AAB_FILE" ] || [ ! -f "$APK_FILE" ]; then
+            echo "::error::Missing signed AAB or APK output!"
+            exit 1
+          fi
+          ls -lh "$AAB_FILE" "$APK_FILE"
+          jarsigner -verify -verbose:summary "$AAB_FILE"
+          jarsigner -verify -verbose:summary "$APK_FILE"
+
+      - name: 7. Upload signed AAB artifact to Actions
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-aab
+          path: app/build/outputs/bundle/release/*.aab
+          if-no-files-found: error
+
+      - name: 8. Upload signed APK artifact to Actions
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-apk
+          path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+
+      - name: 9. Create/Update GitHub Release & Attach Assets
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.event.inputs.tag_name != ''
         with:
@@ -83,23 +109,26 @@ jobs:
           name: ${{ github.event.inputs.release_title || github.ref_name }}
           body: |
             ## NG Browser v3.12.18 NG — Play Store Production Release
-            **NayaGram Platform** · Package: `org.nayagram.ngbrowser` · Version Code: `31218`
+
+            **NayaGram Platform** · Package: `org.nayagram.ngbrowser` · Version Code: `3578`
 
             ### Play Store Readiness Highlights
-            - **Target SDK 36 (Android 16)** & **16 KB Page-Size Aligned** native libraries
+            - **Target SDK 36 (Android 16)** with proper **Edge-to-Edge WindowInsets** support
+            - **16 KB Page-Size Aligned** native libraries (`useLegacyPackaging = false`)
             - **Standalone Native Engine:** Mozilla GeckoView 140 ESR (C++/Rust)
             - **Privacy First:** Strict Enhanced Tracking Protection, Total Cookie Isolation, HTTPS-Only mode, Private Tabs
+            - **ProGuard Rules & Verified Signing:** RSA 2048 JKS verified via `jarsigner`
             - **Upstream Core Sync:** `brave/brave-core 1.102.37` (Chromium 159)
 
             ### Download Assets
-            - **Release AAB (`app-release.aab`)**: Google Play Store upload bundle (~73 MB per-device delivery)
+            - **Release AAB (`app-release.aab`)**: Google Play Store upload bundle (~73 MB per-device delivery via ABI split)
             - **Release APK (`app-release.apk`)**: Direct Android installation (`arm64-v8a` + `armeabi-v7a`)
           files: |
-            app/build/outputs/apk/release/*.apk
             app/build/outputs/bundle/release/*.aab
+            app/build/outputs/apk/release/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: 7. Cleanup keystore
+      - name: 10. Cleanup keystore
         if: always()
         run: rm -f "$RUNNER_TEMP/ngbrowser-release.jks"

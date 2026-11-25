@@ -31,6 +31,11 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 
 import org.mozilla.geckoview.AllowOrDeny;
 import org.mozilla.geckoview.ContentBlocking;
@@ -97,6 +102,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        setupEdgeToEdgeInsets();
 
         shieldsManager = new ShieldsManager(this);
         dbHelper = new NGBrowserDbHelper(this);
@@ -107,6 +113,28 @@ public class MainActivity extends AppCompatActivity {
 
         String initialUrl = extractUrlFromIntent(getIntent());
         createNewTab(initialUrl != null ? initialUrl : SearchEngineHelper.HOME_URL, false);
+    }
+
+    private void setupEdgeToEdgeInsets() {
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+        WindowInsetsControllerCompat controller = WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+        if (controller != null) {
+            controller.setAppearanceLightStatusBars(false);
+            controller.setAppearanceLightNavigationBars(false);
+        }
+        View rootLayout = findViewById(R.id.root_layout);
+        if (rootLayout != null) {
+            ViewCompat.setOnApplyWindowInsetsListener(rootLayout, (v, windowInsets) -> {
+                Insets bars = windowInsets.getInsets(
+                        WindowInsetsCompat.Type.systemBars()
+                                | WindowInsetsCompat.Type.displayCutout()
+                                | WindowInsetsCompat.Type.ime()
+                );
+                v.setPadding(bars.left, bars.top, bars.right, bars.bottom);
+                return WindowInsetsCompat.CONSUMED;
+            });
+            ViewCompat.requestApplyInsets(rootLayout);
+        }
     }
 
     @Override
@@ -940,7 +968,7 @@ public class MainActivity extends AppCompatActivity {
                                         "• Standalone Native Engine: Mozilla GeckoView 140 ESR (C++/Rust)\n" +
                                         "• Upstream Core Sync: Brave-Core 1.102.37 / Chromium 159\n" +
                                         "• Built-in Enhanced Tracking Protection & Total Cookie Isolation\n" +
-                                        "• Version Code: 31218 (Android 16 / API 36 Ready · 16 KB Aligned)\n" +
+                                        "• Version Code: 3578 (Android 16 / API 36 Ready · 16 KB Aligned)\n" +
                                         "• Package: org.nayagram.ngbrowser"
                                 )
                                 .setPositiveButton("OK", null)

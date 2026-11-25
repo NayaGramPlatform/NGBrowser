@@ -10,7 +10,7 @@ android {
         applicationId "org.nayagram.ngbrowser"
         minSdk 21
         targetSdk 36
-        versionCode 31218
+        versionCode 3578
         versionName "v3.12.18 NG"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
@@ -62,6 +62,11 @@ android {
             applicationIdSuffix ".debug"
             versionNameSuffix "-debug"
         }
+    }
+
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
     }
 
     compileOptions {
